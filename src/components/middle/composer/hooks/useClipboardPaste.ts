@@ -31,8 +31,12 @@ const useClipboardPaste = (
   editedMessage: ApiMessage | undefined,
   shouldStripCustomEmoji?: boolean,
   onCustomEmojiStripped?: VoidFunction,
+  shouldUpdateAttachmentCompression?: boolean,
 ) => {
-  const { showNotification } = getActions();
+  const {
+    showNotification,
+    updateShouldSaveAttachmentsCompression,
+    applyDefaultAttachmentsCompression } = getActions();
   const lang = useLang();
 
   useEffect(() => {
@@ -127,6 +131,10 @@ const useClipboardPaste = (
       }
 
       if (shouldSetAttachments) {
+        if (shouldUpdateAttachmentCompression) {
+          updateShouldSaveAttachmentsCompression({ shouldSave: true });
+          applyDefaultAttachmentsCompression();
+        }
         setAttachments(editedMessage ? newAttachments : (attachments) => attachments.concat(newAttachments));
       }
 
@@ -146,7 +154,7 @@ const useClipboardPaste = (
     };
   }, [
     insertTextAndUpdateCursor, editedMessage, setAttachments, isActive, shouldStripCustomEmoji,
-    onCustomEmojiStripped, setNextText, lang,
+    onCustomEmojiStripped, setNextText, lang, shouldUpdateAttachmentCompression,
   ]);
 };
 

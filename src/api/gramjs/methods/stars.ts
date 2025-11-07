@@ -1,4 +1,3 @@
-import bigInt from 'big-integer';
 import { Api as GramJs } from '../../../lib/gramjs';
 
 import type { GiftProfileFilterOptions, ResaleGiftsFilterOptions } from '../../../types';
@@ -12,8 +11,11 @@ import type {
 } from '../../types';
 
 import { buildApiChatFromPreview } from '../apiBuilders/chats';
+import {
+  buildApiFormattedText,
+} from '../apiBuilders/common';
 import { buildApiResaleGifts, buildApiSavedStarGift, buildApiStarGift,
-  buildApiStarGiftAttribute, buildInputResaleGiftsAttributes } from '../apiBuilders/gifts';
+  buildApiStarGiftAttribute, buildApiStarGiftCollection, buildInputResaleGiftsAttributes } from '../apiBuilders/gifts';
 import {
   buildApiCurrencyAmount,
   buildApiStarsGiftOptions,
@@ -21,9 +23,11 @@ import {
   buildApiStarsSubscription,
   buildApiStarsTransaction,
   buildApiStarTopupOption,
+  buildApiUniqueStarGiftValueInfo,
 } from '../apiBuilders/payments';
 import { buildApiUser } from '../apiBuilders/users';
-import { buildInputPeer,
+import {
+  buildInputPeer,
   buildInputSavedStarGift,
   buildInputStarsAmount,
   buildInputUser,
@@ -31,6 +35,26 @@ import { buildInputPeer,
 import { checkErrorType, wrapError } from '../helpers/misc';
 import { invokeRequest } from './client';
 import { getPassword } from './twoFaSettings';
+
+export async function fetchCheckCanSendGift({ giftId }: { giftId: string }) {
+  const result = await invokeRequest(new GramJs.payments.CheckCanSendGift({
+    giftId: BigInt(giftId),
+  }));
+
+  if (!result) {
+    return undefined;
+  }
+
+  if (result instanceof GramJs.payments.CheckCanSendGiftResultOk) {
+    return { canSend: true };
+  }
+
+  if (result instanceof GramJs.payments.CheckCanSendGiftResultFail) {
+    return { canSend: false, reason: buildApiFormattedText(result.reason) };
+  }
+
+  return undefined;
+}
 
 export async function fetchStarsGiveawayOptions() {
   const result = await invokeRequest(new GramJs.payments.GetStarsGiveawayOptions());
@@ -56,7 +80,7 @@ export async function fetchStarGifts() {
 
   // Right now, only regular star gifts can be bought, but API are not specific
   const gifts
-   = result.gifts.map(buildApiStarGift).filter((gift): gift is ApiStarGiftRegular => gift.type === 'starGift');
+    = result.gifts.map(buildApiStarGift).filter((gift): gift is ApiStarGiftRegular => gift.type === 'starGift');
 
   return {
     gifts,
@@ -78,33 +102,33 @@ export async function fetchResaleGifts({
   attributesHash?: string;
   filter?: ResaleGiftsFilterOptions;
 }) {
-   type GetResaleStarGifts = ConstructorParameters<typeof GramJs.payments.GetResaleStarGifts>[0];
+  type GetResaleStarGifts = ConstructorParameters<typeof GramJs.payments.GetResaleStarGifts>[0];
 
-   const attributes: ApiStarGiftAttributeId[] = [
-     ...(filter?.backdropAttributes ?? []),
-     ...(filter?.modelAttributes ?? []),
-     ...(filter?.patternAttributes ?? []),
-   ];
+  const attributes: ApiStarGiftAttributeId[] = [
+    ...(filter?.backdropAttributes ?? []),
+    ...(filter?.modelAttributes ?? []),
+    ...(filter?.patternAttributes ?? []),
+  ];
 
-   const params: GetResaleStarGifts = {
-     giftId: bigInt(giftId),
-     offset,
-     limit,
-     attributesHash: attributesHash ? bigInt(attributesHash) : DEFAULT_PRIMITIVES.BIGINT,
-     attributes: buildInputResaleGiftsAttributes(attributes),
-     ...(filter && {
-       sortByPrice: filter.sortType === 'byPrice' || undefined,
-       sortByNum: filter.sortType === 'byNumber' || undefined,
-     } satisfies Partial<GetResaleStarGifts>),
-   };
+  const params: GetResaleStarGifts = {
+    giftId: BigInt(giftId),
+    offset,
+    limit,
+    attributesHash: attributesHash ? BigInt(attributesHash) : DEFAULT_PRIMITIVES.BIGINT,
+    attributes: buildInputResaleGiftsAttributes(attributes),
+    ...(filter && {
+      sortByPrice: filter.sortType === 'byPrice' || undefined,
+      sortByNum: filter.sortType === 'byNumber' || undefined,
+    } satisfies Partial<GetResaleStarGifts>),
+  };
 
-   const result = await invokeRequest(new GramJs.payments.GetResaleStarGifts(params));
+  const result = await invokeRequest(new GramJs.payments.GetResaleStarGifts(params));
 
-   if (!result) {
-     return undefined;
-   }
+  if (!result) {
+    return undefined;
+  }
 
-   return buildApiResaleGifts(result);
+  return buildApiResaleGifts(result);
 }
 
 export async function fetchSavedStarGifts({
@@ -112,11 +136,13 @@ export async function fetchSavedStarGifts({
   offset = DEFAULT_PRIMITIVES.STRING,
   limit = DEFAULT_PRIMITIVES.INT,
   filter,
+  collectionId,
 }: {
   peer: ApiPeer;
   offset?: string;
   limit?: number;
   filter?: GiftProfileFilterOptions;
+  collectionId?: number;
 }) {
   type GetSavedStarGiftsParams = ConstructorParameters<typeof GramJs.payments.GetSavedStarGifts>[0];
 
@@ -124,10 +150,12 @@ export async function fetchSavedStarGifts({
     peer: buildInputPeer(peer.id, peer.accessHash),
     offset,
     limit,
+    collectionId,
     ...(filter && {
       sortByValue: filter.sortType === 'byValue' || undefined,
       excludeUnlimited: !filter.shouldIncludeUnlimited || undefined,
-      excludeLimited: !filter.shouldIncludeLimited || undefined,
+      excludeUpgradable: !filter.shouldIncludeUpgradable || undefined,
+      excludeUnupgradable: !filter.shouldIncludeLimited || undefined,
       excludeUnique: !filter.shouldIncludeUnique || undefined,
       excludeSaved: !filter.shouldIncludeDisplayed || undefined,
       excludeUnsaved: !filter.shouldIncludeHidden || undefined,
@@ -171,7 +199,7 @@ export function convertStarGift({
   }));
 }
 
-export async function getStarsGiftOptions({
+export async function fetchStarsGiftOptions({
   chat,
 }: {
   chat?: ApiChat;
@@ -368,7 +396,7 @@ export async function fetchStarGiftUpgradePreview({
   giftId: string;
 }) {
   const result = await invokeRequest(new GramJs.payments.GetStarGiftUpgradePreview({
-    giftId: bigInt(giftId),
+    giftId: BigInt(giftId),
   }));
 
   if (!result) {
@@ -438,6 +466,18 @@ export function updateStarGiftPrice({
   });
 }
 
+export async function fetchUniqueStarGiftValueInfo({ slug }: { slug: string }) {
+  const result = await invokeRequest(new GramJs.payments.GetUniqueStarGiftValueInfo({
+    slug,
+  }));
+
+  if (!result) {
+    return undefined;
+  }
+
+  return buildApiUniqueStarGiftValueInfo(result);
+}
+
 export async function fetchStarGiftWithdrawalUrl({
   inputGift,
   password,
@@ -475,4 +515,25 @@ export async function fetchStarGiftWithdrawalUrl({
   }
 
   return undefined;
+}
+
+export async function fetchStarGiftCollections({
+  peer,
+  hash,
+}: {
+  peer: ApiPeer;
+  hash?: string;
+}) {
+  const result = await invokeRequest(new GramJs.payments.GetStarGiftCollections({
+    peer: buildInputPeer(peer.id, peer.accessHash),
+    hash: hash ? BigInt(hash) : DEFAULT_PRIMITIVES.BIGINT,
+  }));
+
+  if (!result || result instanceof GramJs.payments.StarGiftCollectionsNotModified) {
+    return undefined;
+  }
+
+  return {
+    collections: result.collections.map(buildApiStarGiftCollection).filter(Boolean),
+  };
 }

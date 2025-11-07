@@ -60,7 +60,7 @@ function preloadAvatars() {
     return undefined;
   }
 
-  return Promise.all(listIds.active.slice(0, AVATARS_TO_PRELOAD).map((chatId) => {
+  return Promise.all(listIds.active.slice(0, AVATARS_TO_PRELOAD).map(async (chatId) => {
     const chat = byId[chatId];
     if (!chat) {
       return undefined;
@@ -171,7 +171,7 @@ const UiLoader: FC<OwnProps & StateProps> = ({
 };
 
 export default withGlobal<OwnProps>(
-  (global, { isMobile }): StateProps => {
+  (global, { isMobile }): Complete<StateProps> => {
     const tabState = selectTabState(global);
 
     return {

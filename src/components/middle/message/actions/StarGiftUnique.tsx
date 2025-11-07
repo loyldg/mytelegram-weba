@@ -15,6 +15,7 @@ import { IS_TOUCH_ENV } from '../../../../util/browser/windowEnvironment.ts';
 import buildClassName from '../../../../util/buildClassName';
 import buildStyle from '../../../../util/buildStyle';
 import { getGiftAttributes, getStickerFromGift } from '../../../common/helpers/gifts';
+import { REM } from '../../../common/helpers/mediaDimensions.ts';
 import { renderPeerLink } from '../helpers/messageActions';
 
 import useFlag from '../../../../hooks/useFlag.ts';
@@ -96,8 +97,9 @@ const StarGiftAction = ({
         <RadialPatternBackground
           className={styles.uniqueBackground}
           backgroundColors={backgroundColors}
-          patternColor={backdrop.patternColor}
           patternIcon={pattern.sticker}
+          patternSize={14}
+          yPosition={5 * REM}
           clearBottomSector
         />
       </div>
@@ -151,7 +153,7 @@ const StarGiftAction = ({
 };
 
 export default memo(withGlobal<OwnProps>(
-  (global, { message, action }): StateProps => {
+  (global, { message, action }): Complete<StateProps> => {
     const currentUser = selectUser(global, global.currentUserId!);
     const canPlayAnimatedEmojis = selectCanPlayAnimatedEmojis(global);
     const messageSender = selectSender(global, message);

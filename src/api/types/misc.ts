@@ -5,6 +5,7 @@ import type { IconName } from '../../types/icons';
 import type { RegularLangFnParameters } from '../../util/localization';
 import type { ApiDocument, ApiPhoto, ApiReaction } from './messages';
 import type { ApiPremiumSection } from './payments';
+import type { ApiBotVerification } from './peers';
 import type { ApiStarsSubscriptionPricing } from './stars';
 import type { ApiUser } from './users';
 
@@ -206,7 +207,7 @@ export interface ApiAppConfig {
   autologinDomains: string[];
   urlAuthDomains: string[];
   whitelistedDomains: string[];
-  premiumInvoiceSlug: string;
+  premiumInvoiceSlug?: string;
   premiumBotUsername: string;
   isPremiumPurchaseBlocked: boolean;
   isGiveawayGiftsPurchaseAvailable: boolean;
@@ -220,7 +221,7 @@ export interface ApiAppConfig {
   topicsPinnedLimit: number;
   hiddenMembersMinCount: number;
   limits: Record<ApiLimitType, readonly [number, number]>;
-  canDisplayAutoarchiveSetting: boolean;
+  canDisplayAutoarchiveSetting?: boolean;
   storyViewersExpirePeriod: number;
   storyChangelogUserId: string;
   maxPinnedStoriesCount: number;
@@ -273,6 +274,7 @@ export interface ApiAppConfig {
   verifyAgeBotUsername?: string;
   verifyAgeCountry?: string;
   verifyAgeMin?: number;
+  contactNoteLimit?: number;
 }
 
 export interface ApiConfig {
@@ -285,17 +287,6 @@ export interface ApiConfig {
   maxMessageLength: number;
   editTimeLimit: number;
   maxForwardedCount: number;
-}
-
-export type ApiPeerColorSet = string[];
-
-export interface ApiPeerColors {
-  general: Record<number, {
-    isHidden?: true;
-    colors?: ApiPeerColorSet;
-    darkColors?: ApiPeerColorSet;
-  }>;
-  generalHash?: number;
 }
 
 export interface ApiTimezone {
@@ -341,21 +332,6 @@ export interface ApiCollectibleInfo {
   cryptoCurrency: string;
   purchaseDate: number;
   url: string;
-}
-
-export interface ApiPeerPhotos {
-  fallbackPhoto?: ApiPhoto;
-  personalPhoto?: ApiPhoto;
-  photos: ApiPhoto[];
-  count: number;
-  nextOffset?: number;
-  isLoading?: boolean;
-}
-
-export interface ApiBotVerification {
-  botId: string;
-  iconId: string;
-  description: string;
 }
 
 export type ApiLimitType =

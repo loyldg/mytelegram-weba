@@ -1,5 +1,4 @@
 import type { ElementRef, FC } from '../../lib/teact/teact';
-import type React from '../../lib/teact/teact';
 import {
   memo, useMemo, useRef, useState,
 } from '../../lib/teact/teact';
@@ -15,6 +14,7 @@ import renderText from './helpers/renderText';
 
 import useAppLayout from '../../hooks/useAppLayout';
 import useCanvasBlur from '../../hooks/useCanvasBlur';
+import useLang from '../../hooks/useLang';
 import useMediaTransitionDeprecated from '../../hooks/useMediaTransitionDeprecated';
 import useOldLang from '../../hooks/useOldLang';
 import useShowTransitionDeprecated from '../../hooks/useShowTransitionDeprecated';
@@ -27,6 +27,7 @@ import './File.scss';
 
 type OwnProps = {
   ref?: ElementRef<HTMLDivElement>;
+  id?: string;
   name: string;
   extension?: string;
   size: number;
@@ -48,6 +49,7 @@ type OwnProps = {
 
 const File: FC<OwnProps> = ({
   ref,
+  id,
   name,
   size,
   extension = '',
@@ -66,7 +68,8 @@ const File: FC<OwnProps> = ({
   onClick,
   onDateClick,
 }) => {
-  const lang = useOldLang();
+  const oldLang = useOldLang();
+  const lang = useLang();
   let elementRef = useRef<HTMLDivElement>();
   if (ref) {
     elementRef = ref;
@@ -101,7 +104,7 @@ const File: FC<OwnProps> = ({
   );
 
   return (
-    <div ref={elementRef} className={fullClassName} dir={lang.isRtl ? 'rtl' : undefined}>
+    <div id={id} ref={elementRef} className={fullClassName} dir={lang.isRtl ? 'rtl' : undefined}>
       {isSelectable && (
         <div className="message-select-control no-selection">
           {isSelected && <Icon name="select" />}
@@ -158,13 +161,13 @@ const File: FC<OwnProps> = ({
           {!sender && Boolean(timestamp) && (
             <>
               <span className="bullet" />
-              <Link onClick={onDateClick}>{formatMediaDateTime(lang, timestamp * 1000, true)}</Link>
+              <Link onClick={onDateClick}>{formatMediaDateTime(oldLang, timestamp * 1000, true)}</Link>
             </>
           )}
         </div>
       </div>
       {sender && Boolean(timestamp) && (
-        <Link onClick={onDateClick}>{formatPastTimeShort(lang, timestamp * 1000)}</Link>
+        <Link onClick={onDateClick}>{formatPastTimeShort(oldLang, timestamp * 1000)}</Link>
       )}
     </div>
   );

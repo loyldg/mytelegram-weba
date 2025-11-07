@@ -348,7 +348,7 @@ function PrivacySubsection({
   return (
     <>
       <div className="settings-item">
-        <h4 className="settings-item-header" dir={oldLang.isRtl ? 'rtl' : undefined}>{headerText}</h4>
+        <h4 className="settings-item-header" dir={lang.isRtl ? 'rtl' : undefined}>{headerText}</h4>
         <RadioGroup
           name={`visibility-${privacyKey}`}
           options={visibilityOptions}
@@ -356,12 +356,12 @@ function PrivacySubsection({
           selected={privacy?.visibility}
         />
         {descriptionText && (
-          <p className="settings-item-description-larger" dir={oldLang.isRtl ? 'rtl' : undefined}>{descriptionText}</p>
+          <p className="settings-item-description-larger" dir={lang.isRtl ? 'rtl' : undefined}>{descriptionText}</p>
         )}
       </div>
       {!isPremiumRequired && (primaryExceptionLists.shouldShowAllowed || primaryExceptionLists.shouldShowDenied) && (
         <div className="settings-item">
-          <h4 className="settings-item-header" dir={oldLang.isRtl ? 'rtl' : undefined}>
+          <h4 className="settings-item-header" dir={lang.isRtl ? 'rtl' : undefined}>
             {oldLang('PrivacyExceptions')}
           </h4>
           {primaryExceptionLists.shouldShowAllowed && (
@@ -402,7 +402,7 @@ function PrivacySubsection({
 }
 
 export default memo(withGlobal<OwnProps>(
-  (global, { screen }): StateProps => {
+  (global, { screen }): Complete<StateProps> => {
     let primaryPrivacy: ApiPrivacySettings | undefined;
     let secondaryPrivacy: ApiPrivacySettings | undefined;
 
@@ -468,7 +468,7 @@ export default memo(withGlobal<OwnProps>(
         currentUserId: currentUserId!,
         hasCurrentUserFullInfo: Boolean(currentUserFullInfo),
         currentUserFallbackPhoto: currentUserFullInfo?.fallbackPhoto,
-      };
+      } as Complete<StateProps>;
     }
 
     return {

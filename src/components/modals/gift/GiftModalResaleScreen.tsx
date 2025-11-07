@@ -69,7 +69,10 @@ const GiftModalResaleScreen: FC<OwnProps & StateProps> = ({
 
   const handleLoadMoreResellGifts = useLastCallback(() => {
     if (gift) {
-      loadResaleGifts({ giftId: gift.id });
+      const giftId = 'regularGiftId' in gift
+        ? gift.regularGiftId
+        : gift.id;
+      loadResaleGifts({ giftId });
     }
   });
 
@@ -133,10 +136,10 @@ const GiftModalResaleScreen: FC<OwnProps & StateProps> = ({
           preloadBackwards={RESALE_GIFTS_LIMIT}
           scrollContainerClosest={`.${styles.resaleScreenRoot}`}
         >
-          {resellGifts?.map((gift) => (
+          {resellGifts?.map((g) => (
             <GiftItemStar
-              key={gift.id}
-              gift={gift}
+              key={g.id}
+              gift={g}
               observeIntersection={observe}
               isResale
               onClick={onGiftClick}
@@ -148,7 +151,7 @@ const GiftModalResaleScreen: FC<OwnProps & StateProps> = ({
   );
 };
 
-export default memo(withGlobal<OwnProps>((global): StateProps => {
+export default memo(withGlobal<OwnProps>((global): Complete<StateProps> => {
   const {
     starGifts,
   } = global;

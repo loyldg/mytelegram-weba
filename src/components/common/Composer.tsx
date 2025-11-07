@@ -1,7 +1,5 @@
 import type { FC, TeactNode } from '../../lib/teact/teact';
-import {
-  memo, useEffect, useMemo, useRef, useSignal, useState,
-} from '../../lib/teact/teact';
+import { memo, useEffect, useMemo, useRef, useSignal, useState } from '../../lib/teact/teact';
 import { getActions, getGlobal, withGlobal } from '../../global';
 
 import type {
@@ -32,9 +30,7 @@ import type {
   ApiVideo,
   ApiWebPage,
 } from '../../api/types';
-import type {
-  GlobalState, TabState,
-} from '../../global/types';
+import type { GlobalState, TabState } from '../../global/types';
 import type {
   IAnchorPosition,
   InlineBotSettings,
@@ -80,6 +76,7 @@ import {
   selectChatMessage,
   selectChatType,
   selectCurrentMessageList,
+  selectCustomEmoji,
   selectDraft,
   selectEditingDraft,
   selectEditingMessage,
@@ -130,7 +127,6 @@ import applyIosAutoCapitalizationFix from '../middle/composer/helpers/applyIosAu
 import buildAttachment, { prepareAttachmentsToSend } from '../middle/composer/helpers/buildAttachment';
 import { buildCustomEmojiHtml } from '../middle/composer/helpers/customEmoji';
 import { isSelectionInsideInput } from '../middle/composer/helpers/selection';
-import { getPeerColorClass } from './helpers/peerColor';
 import renderText from './helpers/renderText';
 import { getTextWithEntitiesAsHtml } from './helpers/renderTextWithEntities';
 
@@ -144,6 +140,7 @@ import useGetSelectionRange from '../../hooks/useGetSelectionRange';
 import useLang from '../../hooks/useLang';
 import useLastCallback from '../../hooks/useLastCallback';
 import useOldLang from '../../hooks/useOldLang';
+import usePeerColor from '../../hooks/usePeerColor';
 import usePrevious from '../../hooks/usePrevious';
 import usePreviousDeprecated from '../../hooks/usePreviousDeprecated';
 import useSchedule from '../../hooks/useSchedule';
@@ -469,6 +466,8 @@ const Composer: FC<OwnProps & StateProps> = ({
     updateChatSilentPosting,
     updateInsertingPeerIdMention,
     updateDraftSuggestedPostInfo,
+    updateShouldSaveAttachmentsCompression,
+    applyDefaultAttachmentsCompression,
   } = getActions();
 
   const oldLang = useOldLang();
@@ -554,17 +553,25 @@ const Composer: FC<OwnProps & StateProps> = ({
   const hasAttachments = Boolean(attachments.length);
   const [nextText, setNextText] = useState<ApiFormattedText | undefined>(undefined);
 
+  useEffect(() => {
+    if (!attachments.length || !attachments) {
+      updateShouldSaveAttachmentsCompression({ shouldSave: false });
+    }
+  }, [attachments]);
+
   const {
     canSendStickers, canSendGifs, canAttachMedia, canAttachPolls, canAttachEmbedLinks, canAttachToDoLists,
     canSendVoices, canSendPlainText, canSendAudios, canSendVideos, canSendPhotos, canSendDocuments,
   } = useMemo(
-    () => getAllowedAttachmentOptions(chat,
+    () => getAllowedAttachmentOptions(
+      chat,
       chatFullInfo,
       isChatWithBot,
       isChatWithSelf,
       isInStoryViewer,
       paidMessagesStars,
-      isInScheduledList),
+      isInScheduledList,
+    ),
     [chat, chatFullInfo, isChatWithBot, isChatWithSelf, isInStoryViewer, paidMessagesStars, isInScheduledList],
   );
 
@@ -596,7 +603,9 @@ const Composer: FC<OwnProps & StateProps> = ({
     }
   }, [hasWebPagePreview]);
 
-  const insertHtmlAndUpdateCursor = useLastCallback((newHtml: string, inInputId: string = editableInputId) => {
+  const insertHtmlAndUpdateCursor = useLastCallback((
+    newHtml: string, inInputId: string = editableInputId, shouldPrepend = false,
+  ) => {
     if (inInputId === editableInputId && isComposerBlocked) return;
     const selection = window.getSelection()!;
     let messageInput: HTMLDivElement;
@@ -606,7 +615,7 @@ const Composer: FC<OwnProps & StateProps> = ({
       messageInput = document.getElementById(inInputId) as HTMLDivElement;
     }
 
-    if (selection.rangeCount) {
+    if (selection.rangeCount && !shouldPrepend) {
       const selectionRange = selection.getRangeAt(0);
       if (isSelectionInsideInput(selectionRange, inInputId)) {
         insertHtmlInSelection(newHtml);
@@ -615,7 +624,14 @@ const Composer: FC<OwnProps & StateProps> = ({
       }
     }
 
-    setHtml(`${getHtml()}${newHtml}`);
+    if (shouldPrepend) {
+      const newFirstWord = newHtml.split(' ')[0];
+      const shouldReplace = getHtml().startsWith(newFirstWord);
+
+      setHtml(shouldReplace ? newHtml : `${newHtml}${getHtml()}`);
+    } else {
+      setHtml(`${getHtml()}${newHtml}`);
+    }
 
     // If selection is outside of input, set cursor at the end of input
     requestNextMutation(() => {
@@ -633,10 +649,10 @@ const Composer: FC<OwnProps & StateProps> = ({
   });
 
   const insertFormattedTextAndUpdateCursor = useLastCallback((
-    text: ApiFormattedText, inInputId: string = editableInputId,
+    text: ApiFormattedText, inInputId: string = editableInputId, shouldPrepend = false,
   ) => {
     const newHtml = getTextWithEntitiesAsHtml(text);
-    insertHtmlAndUpdateCursor(newHtml, inInputId);
+    insertHtmlAndUpdateCursor(newHtml, inInputId, shouldPrepend);
   });
 
   const insertCustomEmojiAndUpdateCursor = useLastCallback((emoji: ApiSticker, inInputId: string = editableInputId) => {
@@ -965,6 +981,11 @@ const Composer: FC<OwnProps & StateProps> = ({
     }
   }, [chatId, handleStoryPickerContextMenuHide, isReactionPickerOpen, storyId, storyReactionPickerAnchor]);
 
+  const { className: peerColorClass, style: peerColorStyle } = usePeerColor({
+    peer: sendAsPeer || currentUser,
+    theme,
+  });
+
   useClipboardPaste(
     isForCurrentMessageList || isInStoryViewer,
     insertFormattedTextAndUpdateCursor,
@@ -973,6 +994,7 @@ const Composer: FC<OwnProps & StateProps> = ({
     editingMessage,
     !isCurrentUserPremium && !isChatWithSelf,
     showCustomEmojiPremiumNotification,
+    !attachments.length,
   );
 
   const handleEmbeddedClear = useLastCallback(() => {
@@ -1095,7 +1117,7 @@ const Composer: FC<OwnProps & StateProps> = ({
 
     lastMessageSendTimeSeconds.current = getServerTime();
 
-    clearDraft({ chatId, isLocalOnly: true });
+    clearDraft({ chatId, threadId, isLocalOnly: true });
 
     // Wait until message animation starts
     requestMeasure(() => {
@@ -1319,7 +1341,7 @@ const Composer: FC<OwnProps & StateProps> = ({
 
   useEffect(() => {
     if (requestedDraft) {
-      insertFormattedTextAndUpdateCursor(requestedDraft);
+      insertFormattedTextAndUpdateCursor(requestedDraft, undefined, true);
       resetOpenChatWithDraft();
 
       requestNextMutation(() => {
@@ -1335,6 +1357,15 @@ const Composer: FC<OwnProps & StateProps> = ({
       resetOpenChatWithDraft();
     }
   }, [handleFileSelect, requestedDraftFiles, resetOpenChatWithDraft]);
+
+  useEffect(() => {
+    if (requestedDraftFiles?.length) {
+      updateShouldSaveAttachmentsCompression({ shouldSave: true });
+      applyDefaultAttachmentsCompression();
+    } else {
+      updateShouldSaveAttachmentsCompression({ shouldSave: false });
+    }
+  }, [requestedDraftFiles, updateShouldSaveAttachmentsCompression, applyDefaultAttachmentsCompression]);
 
   const handleCustomEmojiSelect = useLastCallback((emoji: ApiSticker, inInputId?: string) => {
     const emojiSetId = 'id' in emoji.stickerSetInfo && emoji.stickerSetInfo.id;
@@ -1372,6 +1403,8 @@ const Composer: FC<OwnProps & StateProps> = ({
         resetComposer(true);
       });
     }
+
+    clearDraft({ chatId, threadId, isLocalOnly: true });
   });
 
   const handleStickerSelect = useLastCallback((
@@ -1432,24 +1465,28 @@ const Composer: FC<OwnProps & StateProps> = ({
 
     if (isInScheduledList || isScheduleRequested) {
       requestCalendar((scheduledAt) => {
-        handleActionWithPaymentConfirmation(handleMessageSchedule,
+        handleActionWithPaymentConfirmation(
+          handleMessageSchedule,
           {
             id: inlineResult.id,
             queryId: inlineResult.queryId,
             isSilent,
           },
           scheduledAt,
-          currentMessageList!);
+          currentMessageList!,
+        );
       });
     } else {
-      handleActionWithPaymentConfirmation(sendInlineBotResult,
+      handleActionWithPaymentConfirmation(
+        sendInlineBotResult,
         {
           id: inlineResult.id,
           queryId: inlineResult.queryId,
           threadId,
           chatId,
           isSilent,
-        });
+        },
+      );
     }
 
     const messageInput = document.querySelector<HTMLDivElement>(editableInputCssSelector);
@@ -1457,14 +1494,14 @@ const Composer: FC<OwnProps & StateProps> = ({
       applyIosAutoCapitalizationFix(messageInput);
     }
 
-    clearDraft({ chatId, isLocalOnly: true });
+    clearDraft({ chatId, threadId, isLocalOnly: true });
     requestMeasure(() => {
       resetComposer();
     });
   });
 
   const handleBotCommandSelect = useLastCallback(() => {
-    clearDraft({ chatId, isLocalOnly: true });
+    clearDraft({ chatId, threadId, isLocalOnly: true });
     requestMeasure(() => {
       resetComposer();
     });
@@ -1783,7 +1820,7 @@ const Composer: FC<OwnProps & StateProps> = ({
     }
 
     if (reaction.type === 'custom') {
-      const sticker = getGlobal().customEmojis.byId[reaction.documentId];
+      const sticker = selectCustomEmoji(getGlobal(), reaction.documentId);
       if (!sticker) {
         return;
       }
@@ -1845,10 +1882,12 @@ const Composer: FC<OwnProps & StateProps> = ({
   const handleSendScheduledAttachments = useLastCallback(
     (sendCompressed: boolean, sendGrouped: boolean, isInvertedMedia?: true) => {
       requestCalendar((scheduledAt) => {
-        handleActionWithPaymentConfirmation(handleMessageSchedule,
+        handleActionWithPaymentConfirmation(
+          handleMessageSchedule,
           { sendCompressed, sendGrouped, isInvertedMedia },
           scheduledAt,
-          currentMessageList!);
+          currentMessageList!,
+        );
       });
     },
   );
@@ -1864,7 +1903,7 @@ const Composer: FC<OwnProps & StateProps> = ({
   });
 
   const handleStopEffect = useLastCallback(() => {
-    hideEffectInComposer({ });
+    hideEffectInComposer({});
   });
 
   const onSend = useMemo(() => {
@@ -2005,8 +2044,16 @@ const Composer: FC<OwnProps & StateProps> = ({
               </filter>
             </defs>
             <g fill="none" fill-rule="evenodd">
-              <path d="M6 17H0V0c.193 2.84.876 5.767 2.05 8.782.904 2.325 2.446 4.485 4.625 6.48A1 1 0 016 17z" fill="#000" filter="url(#composerAppendix)" />
-              <path d="M6 17H0V0c.193 2.84.876 5.767 2.05 8.782.904 2.325 2.446 4.485 4.625 6.48A1 1 0 016 17z" fill="#FFF" className="corner" />
+              <path
+                d="M6 17H0V0c.193 2.84.876 5.767 2.05 8.782.904 2.325 2.446 4.485 4.625 6.48A1 1 0 016 17z"
+                fill="#000"
+                filter="url(#composerAppendix)"
+              />
+              <path
+                d="M6 17H0V0c.193 2.84.876 5.767 2.05 8.782.904 2.325 2.446 4.485 4.625 6.48A1 1 0 016 17z"
+                fill="#FFF"
+                className="corner"
+              />
             </g>
           </svg>
         )}
@@ -2041,7 +2088,7 @@ const Composer: FC<OwnProps & StateProps> = ({
             />
           </>
         )}
-        <div className={buildClassName('message-input-wrapper', getPeerColorClass(currentUser))}>
+        <div className={buildClassName('message-input-wrapper', peerColorClass)} style={peerColorStyle}>
           {isInMessageList && (
             <>
               {withBotMenuButton && (
@@ -2179,7 +2226,7 @@ const Composer: FC<OwnProps & StateProps> = ({
                         onClick={handleAllScheduledClick}
                         ariaLabel={lang('AriaComposerOpenScheduled')}
                       >
-                        <Icon name="schedule" />
+                        <Icon name="scheduled" />
                       </Button>
                     )}
                     {shouldShowGiftButton && (
@@ -2444,7 +2491,7 @@ const Composer: FC<OwnProps & StateProps> = ({
 export default memo(withGlobal<OwnProps>(
   (global, {
     chatId, threadId, storyId, messageListType, isMobile, type,
-  }): StateProps => {
+  }): Complete<StateProps> => {
     const appConfig = global.appConfig;
     const chat = selectChat(global, chatId);
     const chatBot = !isSystemBot(chatId) ? selectBot(global, chatId) : undefined;

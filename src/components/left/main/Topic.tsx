@@ -9,6 +9,7 @@ import type {
 import type { ObserveFn } from '../../../hooks/useIntersectionObserver';
 import type { ChatAnimationTypes } from './hooks';
 
+import { UNMUTE_TIMESTAMP } from '../../../config';
 import { groupStatefulContent } from '../../../global/helpers';
 import { getIsChatMuted } from '../../../global/helpers/notifications';
 import {
@@ -56,6 +57,7 @@ type OwnProps = {
   observeIntersection?: ObserveFn;
   orderDiff: number;
   animationType: ChatAnimationTypes;
+  onReorderAnimationEnd?: NoneToVoidFunction;
 };
 
 type StateProps = {
@@ -95,12 +97,15 @@ const Topic: FC<OwnProps & StateProps> = ({
   draft,
   wasTopicOpened,
   topics,
+  onReorderAnimationEnd,
 }) => {
   const {
     openThread,
     deleteTopic,
-    focusLastMessage,
+    scrollMessageListToBottom,
     setViewForumAsMessages,
+    updateTopicMutedState,
+    openQuickPreview,
   } = getActions();
 
   const lang = useOldLang();
@@ -129,6 +134,10 @@ const Topic: FC<OwnProps & StateProps> = ({
     openMuteModal();
   });
 
+  const handleUnmute = useLastCallback(() => {
+    updateTopicMutedState({ chatId, topicId: topic.id, mutedUntil: UNMUTE_TIMESTAMP });
+  });
+
   const { renderSubtitle, ref } = useChatListEntry({
     chat,
     chatId,
@@ -145,14 +154,21 @@ const Topic: FC<OwnProps & StateProps> = ({
     animationType,
     withInterfaceAnimations,
     orderDiff,
+    onReorderAnimationEnd,
   });
 
-  const handleOpenTopic = useLastCallback(() => {
+  const handleOpenTopic = useLastCallback((e: React.MouseEvent) => {
+    if (e.altKey) {
+      e.preventDefault();
+      openQuickPreview({ id: chatId, threadId: topic.id });
+      return;
+    }
+
     openThread({ chatId, threadId: topic.id, shouldReplaceHistory: true });
     setViewForumAsMessages({ chatId, isEnabled: false });
 
     if (canScrollDown) {
-      focusLastMessage();
+      scrollMessageListToBottom();
     }
   });
 
@@ -164,6 +180,7 @@ const Topic: FC<OwnProps & StateProps> = ({
     canDelete,
     handleDelete: handleOpenDeleteModal,
     handleMute,
+    handleUnmute,
   });
 
   return (
@@ -208,6 +225,7 @@ const Topic: FC<OwnProps & StateProps> = ({
             topic={topic}
             wasTopicOpened={wasTopicOpened}
             topics={topics}
+            isSelected={isSelected}
           />
         </div>
       </div>

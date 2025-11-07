@@ -49,12 +49,16 @@ import {
   buildMessageDraft,
 } from '../apiBuilders/messages';
 import {
-  buildApiPeerNotifySettings,
   buildLangStrings,
   buildPrivacyKey,
 } from '../apiBuilders/misc';
 import { buildApiCurrencyAmount } from '../apiBuilders/payments';
-import { buildApiEmojiStatus, buildApiPeerId, getApiChatIdFromMtpPeer } from '../apiBuilders/peers';
+import {
+  buildApiEmojiStatus,
+  buildApiPeerId,
+  buildApiPeerNotifySettings,
+  getApiChatIdFromMtpPeer,
+} from '../apiBuilders/peers';
 import {
   buildApiPaidReactionPrivacy,
   buildApiReaction,
@@ -803,7 +807,9 @@ export function updater(update: Update) {
 
     if (notifyPeer instanceof GramJs.NotifyPeer) {
       const peerId = getApiChatIdFromMtpPeer(notifyPeer.peer);
-      scheduleMutedChatUpdate(peerId, settings.mutedUntil, sendApiUpdate);
+      if (settings.mutedUntil) {
+        scheduleMutedChatUpdate(peerId, settings.mutedUntil, sendApiUpdate);
+      }
       sendApiUpdate({
         '@type': 'updateChatNotifySettings',
         chatId: peerId,
@@ -814,7 +820,9 @@ export function updater(update: Update) {
 
     if (notifyPeer instanceof GramJs.NotifyForumTopic) {
       const peerId = getApiChatIdFromMtpPeer(notifyPeer.peer);
-      scheduleMutedTopicUpdate(peerId, notifyPeer.topMsgId, settings.mutedUntil, sendApiUpdate);
+      if (settings.mutedUntil) {
+        scheduleMutedTopicUpdate(peerId, notifyPeer.topMsgId, settings.mutedUntil, sendApiUpdate);
+      }
       sendApiUpdate({
         '@type': 'updateTopicNotifySettings',
         chatId: peerId,
@@ -995,17 +1003,17 @@ export function updater(update: Update) {
     });
   } else if (update instanceof GramJs.UpdateConfig) {
     sendApiUpdate({ '@type': 'updateConfig' });
-  } else if (update instanceof GramJs.UpdateChannelPinnedTopic) {
+  } else if (update instanceof GramJs.UpdatePinnedForumTopic) {
     sendApiUpdate({
       '@type': 'updatePinnedTopic',
-      chatId: buildApiPeerId(update.channelId, 'channel'),
+      chatId: getApiChatIdFromMtpPeer(update.peer),
       topicId: update.topicId,
       isPinned: Boolean(update.pinned),
     });
-  } else if (update instanceof GramJs.UpdateChannelPinnedTopics) {
+  } else if (update instanceof GramJs.UpdatePinnedForumTopics) {
     sendApiUpdate({
       '@type': 'updatePinnedTopicsOrder',
-      chatId: buildApiPeerId(update.channelId, 'channel'),
+      chatId: getApiChatIdFromMtpPeer(update.peer),
       order: update.order || [],
     });
   } else if (update instanceof GramJs.UpdateRecentEmojiStatuses) {

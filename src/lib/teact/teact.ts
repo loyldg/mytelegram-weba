@@ -1,3 +1,4 @@
+/* eslint-disable react-x/no-unnecessary-use-prefix */
 import type { ReactElement } from 'react';
 
 import { DEBUG, DEBUG_MORE } from '../../config';
@@ -594,8 +595,8 @@ function forceUpdateComponent(componentInstance: ComponentInstance) {
 }
 
 export function useState<T>(): [T | undefined, StateHookSetter<T | undefined>];
-export function useState<T>(initial: T, debugKey?: string): [T, StateHookSetter<T>];
-export function useState<T>(initial?: T, debugKey?: string): [T, StateHookSetter<T>] {
+export function useState<T>(initial: T | (() => T), debugKey?: string): [T, StateHookSetter<T>];
+export function useState<T>(initial?: T | (() => T), debugKey?: string): [T, StateHookSetter<T>] {
   if (!renderingInstance.hooks) {
     renderingInstance.hooks = {};
   }
@@ -607,9 +608,10 @@ export function useState<T>(initial?: T, debugKey?: string): [T, StateHookSetter
   const componentInstance = renderingInstance;
 
   if (byCursor[cursor] === undefined) {
+    const initValue = typeof initial === 'function' ? (initial as () => T)() : initial;
     byCursor[cursor] = {
-      value: initial,
-      nextValue: initial,
+      value: initValue,
+      nextValue: initValue,
       setter: (newValue: ((current: T) => T) | T) => {
         if (componentInstance.mountState === MountState.Unmounted) {
           return;

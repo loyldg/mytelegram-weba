@@ -1,8 +1,5 @@
-import type { FC } from '../../../lib/teact/teact';
-import type React from '../../../lib/teact/teact';
-import {
-  memo, useEffect, useMemo, useRef, useState,
-} from '../../../lib/teact/teact';
+import type { FC } from '@teact';
+import { memo, useEffect, useMemo, useRef, useState } from '@teact';
 import { getActions } from '../../../global';
 
 import type { ApiSession } from '../../../api/types';
@@ -21,12 +18,12 @@ import {
 } from '../../../config';
 import { IS_APP, IS_MAC_OS } from '../../../util/browser/windowEnvironment';
 import buildClassName from '../../../util/buildClassName';
+import { onDragEnter, onDragLeave } from '../../../util/dragNDropHandlers.ts';
 import { getOrderKey, getPinnedChatsCount } from '../../../util/folderManager';
 import { getServerTime } from '../../../util/serverTime';
 
 import usePeerStoriesPolling from '../../../hooks/polling/usePeerStoriesPolling';
 import useTopOverscroll from '../../../hooks/scroll/useTopOverscroll';
-import useDebouncedCallback from '../../../hooks/useDebouncedCallback';
 import { useFolderManagerForOrderedIds } from '../../../hooks/useFolderManager';
 import { useHotkeys } from '../../../hooks/useHotkeys';
 import useInfiniteScroll from '../../../hooks/useInfiniteScroll';
@@ -53,12 +50,12 @@ type OwnProps = {
   sessions?: Record<string, ApiSession>;
   isAccountFrozen?: boolean;
   isMainList?: boolean;
-  foldersDispatch?: FolderEditDispatch;
   withTags?: boolean;
+  isStoryRibbonShown?: boolean;
+  foldersDispatch?: FolderEditDispatch;
 };
 
 const INTERSECTION_THROTTLE = 200;
-const DRAG_ENTER_DEBOUNCE = 500;
 const RESERVED_HOTKEYS = new Set(['9', '0']);
 
 const ChatList: FC<OwnProps> = ({
@@ -72,8 +69,9 @@ const ChatList: FC<OwnProps> = ({
   sessions,
   isAccountFrozen,
   isMainList,
-  foldersDispatch,
   withTags,
+  isStoryRibbonShown,
+  foldersDispatch,
 }) => {
   const {
     openChat,
@@ -84,7 +82,6 @@ const ChatList: FC<OwnProps> = ({
     openLeftColumnContent,
   } = getActions();
   const containerRef = useRef<HTMLDivElement>();
-  const shouldIgnoreDragRef = useRef(false);
   const [unconfirmedSessionHeight, setUnconfirmedSessionHeight] = useState(0);
 
   const isArchived = folderType === 'archived';
@@ -105,7 +102,7 @@ const ChatList: FC<OwnProps> = ({
     ? archiveSettings?.isMinimized ? ARCHIVE_MINIMIZED_HEIGHT : CHAT_HEIGHT_PX : 0;
   const frozenNotificationHeight = shouldShowFrozenAccountNotification ? 68 : 0;
 
-  const { orderDiffById, getAnimationType } = useOrderDiff(orderedIds);
+  const { orderDiffById, getAnimationType, onReorderAnimationEnd: onReorderAnimationEnd } = useOrderDiff(orderedIds);
 
   const [viewportIds, getMore] = useInfiniteScroll(undefined, orderedIds, undefined, CHAT_LIST_SLICE);
 
@@ -183,30 +180,6 @@ const ChatList: FC<OwnProps> = ({
     openFrozenAccountModal();
   });
 
-  const handleArchivedDragEnter = useLastCallback(() => {
-    if (shouldIgnoreDragRef.current) {
-      shouldIgnoreDragRef.current = false;
-      return;
-    }
-    handleArchivedClick();
-  });
-
-  const handleDragEnter = useDebouncedCallback((chatId: string) => {
-    if (shouldIgnoreDragRef.current) {
-      shouldIgnoreDragRef.current = false;
-      return;
-    }
-    openChat({ id: chatId, shouldReplaceHistory: true });
-  }, [openChat], DRAG_ENTER_DEBOUNCE, true);
-
-  const handleDragLeave = useLastCallback((e: React.DragEvent<HTMLDivElement>) => {
-    const rect = e.currentTarget.getBoundingClientRect();
-    const x = e.clientX - rect.left;
-    const y = e.clientY - rect.top;
-    if (x < rect.width || y < rect.y) return;
-    shouldIgnoreDragRef.current = true;
-  });
-
   const handleShowStoryRibbon = useLastCallback(() => {
     toggleStoryRibbon({ isShown: true, isArchived });
   });
@@ -215,7 +188,25 @@ const ChatList: FC<OwnProps> = ({
     toggleStoryRibbon({ isShown: false, isArchived });
   });
 
-  const renderedOverflowTrigger = useTopOverscroll(containerRef, handleShowStoryRibbon, handleHideStoryRibbon, isSaved);
+  const handleArchivedDragEnter = useLastCallback(() => {
+    onDragEnter(() => {
+      handleArchivedClick();
+    });
+  });
+
+  const handleChatDragEnter = useLastCallback((chatId: string) => {
+    onDragEnter(() => {
+      openChat({ id: chatId, shouldReplaceHistory: true });
+    });
+  });
+
+  useTopOverscroll({
+    containerRef,
+    onOverscroll: handleShowStoryRibbon,
+    onReset: handleHideStoryRibbon,
+    isDisabled: isSaved,
+    isOverscrolled: isStoryRibbonShown,
+  });
 
   function renderChats() {
     const viewportOffset = orderedIds!.indexOf(viewportIds![0]);
@@ -237,9 +228,11 @@ const ChatList: FC<OwnProps> = ({
           isSavedDialog={isSaved}
           animationType={getAnimationType(id)}
           orderDiff={orderDiffById[id]}
+          onReorderAnimationEnd={onReorderAnimationEnd}
           offsetTop={offsetTop}
           observeIntersection={observe}
-          onDragEnter={handleDragEnter}
+          onDragEnter={handleChatDragEnter}
+          onDragLeave={onDragLeave}
           withTags={withTags}
         />
       );
@@ -254,10 +247,8 @@ const ChatList: FC<OwnProps> = ({
       itemSelector=".ListItem:not(.chat-item-archive)"
       preloadBackwards={CHAT_LIST_SLICE}
       withAbsolutePositioning
-      beforeChildren={renderedOverflowTrigger}
       maxHeight={chatsHeight + archiveHeight + frozenNotificationHeight + unconfirmedSessionHeight}
       onLoadMore={getMore}
-      onDragLeave={handleDragLeave}
     >
       {shouldShowUnconfirmedSessions && (
         <UnconfirmedSession

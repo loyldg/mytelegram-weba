@@ -11,7 +11,7 @@ import type { ObserveFn } from '../../../hooks/useIntersectionObserver';
 import type { ChatTranslatedMessages } from '../../../types';
 import type { IconName } from '../../../types/icons';
 
-import { CONTENT_NOT_SUPPORTED, TON_CURRENCY_CODE } from '../../../config';
+import { TON_CURRENCY_CODE } from '../../../config';
 import {
   getMessageIsSpoiler,
   getMessageRoundVideo,
@@ -65,6 +65,7 @@ type OwnProps = {
   requestedChatTranslationLanguage?: string;
   isOpen?: boolean;
   isMediaNsfw?: boolean;
+  noCaptions?: boolean;
   observeIntersectionForLoading?: ObserveFn;
   observeIntersectionForPlaying?: ObserveFn;
   onClick: ((e: React.MouseEvent) => void);
@@ -90,6 +91,7 @@ const EmbeddedMessage: FC<OwnProps> = ({
   chatTranslations,
   requestedChatTranslationLanguage,
   isMediaNsfw,
+  noCaptions,
   observeIntersectionForLoading,
   observeIntersectionForPlaying,
   onClick,
@@ -199,6 +201,10 @@ const EmbeddedMessage: FC<OwnProps> = ({
       return customText || renderMediaContentType(containedMedia) || NBSP;
     }
 
+    if (noCaptions) {
+      return lang('EmbeddedMessageNoCaption');
+    }
+
     return (
       <MessageSummary
         message={message}
@@ -213,8 +219,8 @@ const EmbeddedMessage: FC<OwnProps> = ({
 
   function renderMediaContentType(media?: MediaContainer) {
     if (!media || media.content.text) return NBSP;
-    const description = getMediaContentTypeDescription(oldLang, media.content, {});
-    if (!description || description === CONTENT_NOT_SUPPORTED) return NBSP;
+    const description = getMediaContentTypeDescription(lang, media.content, {});
+    if (!description) return NBSP;
     return (
       <span>
         {renderText(description)}
@@ -299,6 +305,7 @@ const EmbeddedMessage: FC<OwnProps> = ({
       emojiIconClassName="EmbeddedMessage--background-icons"
       ref={ref}
       shouldReset
+      isReply={Boolean(replyInfo)}
       noUserColors={noUserColors}
       className={buildClassName(
         'EmbeddedMessage',

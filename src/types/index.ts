@@ -394,13 +394,14 @@ export type ProfileTabType =
   | 'links'
   | 'audio'
   | 'voice'
+  | 'gif'
   | 'stories'
   | 'storiesArchive'
   | 'similarChannels'
   | 'similarBots'
   | 'dialogs'
   | 'gifts';
-export type SharedMediaType = 'media' | 'documents' | 'links' | 'audio' | 'voice';
+export type SharedMediaType = 'media' | 'documents' | 'links' | 'audio' | 'voice' | 'gif';
 export type MiddleSearchType = 'chat' | 'myChats' | 'channels';
 export type MiddleSearchParams = {
   requestedQuery?: string;
@@ -649,11 +650,11 @@ export type ConfettiParams = OptionalCombine<{
   style?: ConfettiStyle;
   withStars?: boolean;
 }, {
-    top?: number;
-    left?: number;
-    width?: number;
-    height?: number;
-  }>;
+  top?: number;
+  left?: number;
+  width?: number;
+  height?: number;
+}>;
 
 export interface Size {
   width: number;
@@ -667,7 +668,9 @@ export interface Point {
 
 export type WebPageMediaSize = 'large' | 'small';
 
-export type StarGiftCategory = number | 'all' | 'limited' | 'stock' | 'resale';
+export type AttachmentCompression = 'compress' | 'original';
+
+export type StarGiftCategory = 'all' | 'myUnique' | 'collectible';
 
 export type CallSound = (
   'join' | 'allowTalk' | 'leave' | 'connecting' | 'incoming' | 'end' | 'connect' | 'busy' | 'ringing'
@@ -681,6 +684,7 @@ export type GiftProfileFilterOptions = {
   sortType: 'byDate' | 'byValue';
   shouldIncludeUnlimited: boolean;
   shouldIncludeLimited: boolean;
+  shouldIncludeUpgradable: boolean;
   shouldIncludeUnique: boolean;
   shouldIncludeDisplayed: boolean;
   shouldIncludeHidden: boolean;

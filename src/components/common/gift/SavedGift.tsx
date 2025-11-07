@@ -6,7 +6,7 @@ import type { ApiEmojiStatusType, ApiPeer, ApiSavedStarGift } from '../../../api
 import { STARS_CURRENCY_CODE, TON_CURRENCY_CODE } from '../../../config';
 import { getHasAdminRight } from '../../../global/helpers';
 import { selectChat, selectPeer, selectUser } from '../../../global/selectors';
-import { IS_TOUCH_ENV } from '../../../util/browser/windowEnvironment.ts';
+import { IS_TOUCH_ENV } from '../../../util/browser/windowEnvironment';
 import buildClassName from '../../../util/buildClassName';
 import { formatStarsAsIcon, formatTonAsIcon } from '../../../util/localization/format';
 import { CUSTOM_PEER_HIDDEN } from '../../../util/objects/customPeer';
@@ -14,7 +14,7 @@ import { formatIntegerCompact } from '../../../util/textFormat';
 import { getGiftAttributes, getStickerFromGift, getTotalGiftAvailability } from '../helpers/gifts';
 
 import useContextMenuHandlers from '../../../hooks/useContextMenuHandlers';
-import useFlag from '../../../hooks/useFlag.ts';
+import useFlag from '../../../hooks/useFlag';
 import { type ObserveFn } from '../../../hooks/useIntersectionObserver';
 import useLang from '../../../hooks/useLang';
 import useLastCallback from '../../../hooks/useLastCallback';
@@ -34,6 +34,7 @@ type OwnProps = {
   peerId: string;
   gift: ApiSavedStarGift;
   style?: string;
+  className?: string;
   observeIntersection?: ObserveFn;
 };
 
@@ -56,6 +57,7 @@ const SavedGift = ({
   hasAdminRights,
   collectibleEmojiStatuses,
   currentUserEmojiStatus,
+  className,
   observeIntersection,
 }: OwnProps & StateProps) => {
   const { openGiftInfoModal } = getActions();
@@ -130,14 +132,16 @@ const SavedGift = ({
     }
 
     const backdropColors = [backdrop.centerColor, backdrop.edgeColor];
-    const patternColor = backdrop.patternColor;
 
     return (
       <RadialPatternBackground
         className={styles.radialPattern}
         backgroundColors={backdropColors}
-        patternColor={patternColor}
         patternIcon={pattern.sticker}
+        patternSize={14}
+        ringsCount={1}
+        ovalFactor={1}
+        withAdaptiveHeight
       />
     );
   }, [backdrop, pattern]);
@@ -147,7 +151,7 @@ const SavedGift = ({
   return (
     <div
       ref={ref}
-      className={buildClassName('interactive-gift scroll-item', styles.root)}
+      className={buildClassName('interactive-gift scroll-item', styles.root, className)}
       style={style}
       onClick={handleClick}
       onContextMenu={handleContextMenu}
@@ -186,7 +190,8 @@ const SavedGift = ({
           className={styles.priceBadge}
           nonInteractive
           size="tiny"
-          withSparkleEffect={true}
+          withSparkleEffect
+          noSparkleAnimation
           pill
           fluid
         >
@@ -229,7 +234,7 @@ const SavedGift = ({
 };
 
 export default memo(withGlobal<OwnProps>(
-  (global, { peerId, gift }): StateProps => {
+  (global, { peerId, gift }): Complete<StateProps> => {
     const fromPeer = gift.fromId ? selectPeer(global, gift.fromId) : undefined;
     const chat = selectChat(global, peerId);
     const hasAdminRights = chat && getHasAdminRight(chat, 'postMessages');

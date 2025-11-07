@@ -2,7 +2,6 @@ import type { ChangeEvent } from 'react';
 import type { ElementRef, FC, TeactNode } from '../../../lib/teact/teact';
 import type React from '../../../lib/teact/teact';
 import {
-  getIsHeavyAnimating,
   memo, useEffect, useLayoutEffect,
   useRef, useState,
 } from '../../../lib/teact/teact';
@@ -15,15 +14,16 @@ import type {
 } from '../../../types';
 import type { Signal } from '../../../util/signals';
 
-import { EDITABLE_INPUT_ID } from '../../../config';
+import { EDITABLE_INPUT_ID, EDITABLE_INPUT_MODAL_ID } from '../../../config';
 import { requestForcedReflow, requestMutation } from '../../../lib/fasterdom/fasterdom';
 import { selectCanPlayAnimatedEmojis, selectDraft, selectIsInSelectMode } from '../../../global/selectors';
 import { selectSharedSettings } from '../../../global/selectors/sharedState';
+import { IS_TAURI } from '../../../util/browser/globalEnvironment';
 import {
   IS_ANDROID, IS_EMOJI_SUPPORTED, IS_IOS, IS_TOUCH_ENV,
 } from '../../../util/browser/windowEnvironment';
 import buildClassName from '../../../util/buildClassName';
-import captureKeyboardListeners from '../../../util/captureKeyboardListeners';
+import captureKeyboardListeners, { hasActiveHandler } from '../../../util/captureKeyboardListeners';
 import { getIsDirectTextInputDisabled } from '../../../util/directInputManager';
 import parseEmojiOnlyString from '../../../util/emoji/parseEmojiOnlyString';
 import focusEditableElement from '../../../util/focusEditableElement';
@@ -34,6 +34,7 @@ import { isSelectionInsideInput } from './helpers/selection';
 import useAppLayout from '../../../hooks/useAppLayout';
 import useDerivedState from '../../../hooks/useDerivedState';
 import useFlag from '../../../hooks/useFlag';
+import useLang from '../../../hooks/useLang';
 import useLastCallback from '../../../hooks/useLastCallback';
 import useOldLang from '../../../hooks/useOldLang';
 import useInputCustomEmojis from './hooks/useInputCustomEmojis';
@@ -44,8 +45,6 @@ import TextTimer from '../../ui/TextTimer';
 import TextFormatter from './TextFormatter.async';
 
 const CONTEXT_MENU_CLOSE_DELAY_MS = 100;
-// Focus slows down animation, also it breaks transition layout in Chrome
-const FOCUS_DELAY_MS = 350;
 const TRANSITION_DURATION_FACTOR = 50;
 
 const SCROLLER_CLASS = 'input-scroller';
@@ -169,6 +168,7 @@ const MessageInput: FC<OwnProps & StateProps> = ({
   const absoluteContainerRef = useRef<HTMLDivElement>();
 
   const oldLang = useOldLang();
+  const lang = useLang();
   const isContextMenuOpenRef = useRef(false);
   const [isTextFormatterOpen, openTextFormatter, closeTextFormatter] = useFlag();
   const [textFormatterAnchorPosition, setTextFormatterAnchorPosition] = useState<IAnchorPosition>();
@@ -247,6 +247,10 @@ const MessageInput: FC<OwnProps & StateProps> = ({
   useLayoutEffect(() => {
     const html = isActive ? getHtml() : '';
 
+    if (!isActive && inputRef.current) {
+      inputRef.current.blur();
+    }
+
     if (html !== inputRef.current!.innerHTML) {
       inputRef.current!.innerHTML = html;
     }
@@ -266,11 +270,6 @@ const MessageInput: FC<OwnProps & StateProps> = ({
   chatIdRef.current = chatId;
   const focusInput = useLastCallback(() => {
     if (!inputRef.current || isNeedPremium) {
-      return;
-    }
-
-    if (getIsHeavyAnimating()) {
-      setTimeout(focusInput, FOCUS_DELAY_MS);
       return;
     }
 
@@ -382,6 +381,22 @@ const MessageInput: FC<OwnProps & StateProps> = ({
     document.addEventListener('keydown', handleCloseContextMenu);
   }
 
+  const isSendShortcut = useLastCallback((e: KeyboardEvent | React.KeyboardEvent<HTMLDivElement>) => {
+    return e.key === 'Enter'
+      && !e.shiftKey
+      && !isMobileDevice
+      && (
+        (messageSendKeyCombo === 'enter' && !e.shiftKey)
+        || (messageSendKeyCombo === 'ctrl-enter' && (e.ctrlKey || e.metaKey))
+      );
+  });
+
+  const handleSendShortcut = useLastCallback((e: KeyboardEvent | React.KeyboardEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    closeTextFormatter();
+    onSend();
+  });
+
   function handleKeyDown(e: React.KeyboardEvent<HTMLDivElement>) {
     // https://levelup.gitconnected.com/javascript-events-handlers-keyboard-and-load-events-1b3e46a6b0c3#1960
     const { isComposing } = e;
@@ -397,19 +412,8 @@ const MessageInput: FC<OwnProps & StateProps> = ({
       }
     }
 
-    if (!isComposing && e.key === 'Enter' && !e.shiftKey) {
-      if (
-        !isMobileDevice
-        && (
-          (messageSendKeyCombo === 'enter' && !e.shiftKey)
-          || (messageSendKeyCombo === 'ctrl-enter' && (e.ctrlKey || e.metaKey))
-        )
-      ) {
-        e.preventDefault();
-
-        closeTextFormatter();
-        onSend();
-      }
+    if (!isComposing && isSendShortcut(e)) {
+      handleSendShortcut(e);
     } else if (!isComposing && e.key === 'ArrowUp' && !html && !e.metaKey && !e.ctrlKey && !e.altKey) {
       e.preventDefault();
       editLastMessage();
@@ -477,8 +481,7 @@ const MessageInput: FC<OwnProps & StateProps> = ({
   useEffect(() => {
     if (
       !chatId
-      || editableInputId !== EDITABLE_INPUT_ID
-      || noFocusInterception
+      || (editableInputId !== EDITABLE_INPUT_ID && editableInputId !== EDITABLE_INPUT_MODAL_ID)
       || isMobileDevice
       || isSelectModeActive
     ) {
@@ -486,18 +489,29 @@ const MessageInput: FC<OwnProps & StateProps> = ({
     }
 
     const handleDocumentKeyDown = (e: KeyboardEvent) => {
-      if (getIsDirectTextInputDisabled()) {
+      const target = e.target as HTMLElement | undefined;
+      const input = inputRef.current!;
+
+      const shouldHandleDocumentKeyDown =
+        isActive && input && target
+        && target !== input
+        && target.tagName !== 'INPUT'
+        && target.tagName !== 'TEXTAREA'
+        && !target.isContentEditable
+        && !hasActiveHandler('Enter');
+
+      if (!shouldHandleDocumentKeyDown) return;
+
+      if (isSendShortcut(e)) {
+        handleSendShortcut(e);
         return;
       }
 
       const { key } = e;
-      const target = e.target as HTMLElement | undefined;
-
-      if (!target || IGNORE_KEYS.includes(key)) {
+      if (noFocusInterception || getIsDirectTextInputDisabled() || IGNORE_KEYS.includes(key)) {
         return;
       }
 
-      const input = inputRef.current!;
       const isSelectionCollapsed = document.getSelection()?.isCollapsed;
 
       if (
@@ -507,18 +521,10 @@ const MessageInput: FC<OwnProps & StateProps> = ({
         return;
       }
 
-      if (
-        input
-        && target !== input
-        && target.tagName !== 'INPUT'
-        && target.tagName !== 'TEXTAREA'
-        && !target.isContentEditable
-      ) {
-        focusEditableElement(input, true, true);
+      focusEditableElement(input, true, true);
 
-        const newEvent = new KeyboardEvent(e.type, e as any);
-        input.dispatchEvent(newEvent);
-      }
+      const newEvent = new KeyboardEvent(e.type, e as any);
+      input.dispatchEvent(newEvent);
     };
 
     document.addEventListener('keydown', handleDocumentKeyDown, true);
@@ -526,7 +532,8 @@ const MessageInput: FC<OwnProps & StateProps> = ({
     return () => {
       document.removeEventListener('keydown', handleDocumentKeyDown, true);
     };
-  }, [chatId, editableInputId, isMobileDevice, isSelectModeActive, noFocusInterception]);
+  }, [chatId, editableInputId, isMobileDevice,
+    isActive, isSelectModeActive, noFocusInterception]);
 
   useEffect(() => {
     const captureFirstTab = debounce((e: KeyboardEvent) => {
@@ -567,7 +574,7 @@ const MessageInput: FC<OwnProps & StateProps> = ({
   const placeholderAriaLabel = typeof placeholder === 'string' ? placeholder : undefined;
 
   return (
-    <div id={id} onClick={shouldSuppressFocus ? onSuppressedFocus : undefined} dir={oldLang.isRtl ? 'rtl' : undefined}>
+    <div id={id} onClick={shouldSuppressFocus ? onSuppressedFocus : undefined} dir={lang.isRtl ? 'rtl' : undefined}>
       <div
         className={buildClassName('custom-scroll', SCROLLER_CLASS, isNeedPremium && 'is-need-premium')}
         onScroll={onScroll}
@@ -581,6 +588,7 @@ const MessageInput: FC<OwnProps & StateProps> = ({
             contentEditable={isAttachmentModalInput || canSendPlainText}
             role="textbox"
             dir="auto"
+            spellCheck={IS_TAURI ? false : undefined}
             tabIndex={0}
             onClick={focusInput}
             onChange={handleChange}
@@ -647,7 +655,7 @@ const MessageInput: FC<OwnProps & StateProps> = ({
 };
 
 export default memo(withGlobal<OwnProps>(
-  (global, { chatId, threadId }: OwnProps): StateProps => {
+  (global, { chatId, threadId }: OwnProps): Complete<StateProps> => {
     const { messageSendKeyCombo } = selectSharedSettings(global);
 
     return {

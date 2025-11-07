@@ -100,7 +100,6 @@ export const INITIAL_GLOBAL_STATE: GlobalState = {
   passcode: {},
   twoFaSettings: {},
   isAppUpdateAvailable: false,
-  isElectronUpdateAvailable: false,
   shouldShowContextMenuHint: true,
   appConfig: DEFAULT_APP_CONFIG,
 
@@ -165,6 +164,7 @@ export const INITIAL_GLOBAL_STATE: GlobalState = {
 
   stories: {
     byPeerId: {},
+    albumsByPeerId: {},
     orderedPeerIds: {
       archived: [],
       active: [],
@@ -180,6 +180,7 @@ export const INITIAL_GLOBAL_STATE: GlobalState = {
 
   attachmentSettings: {
     shouldCompress: true,
+    defaultAttachmentCompression: 'compress',
     shouldSendGrouped: true,
     isInvertedMedia: undefined,
     webPageMediaSize: undefined,
@@ -338,7 +339,6 @@ export const INITIAL_TAB_STATE: TabState = {
   id: 0,
   isMasterTab: false,
   isLeftColumnShown: true,
-  isChatInfoShown: false,
   newChatMembersProgress: NewChatMembersProgress.Closed,
   uiReadyState: 0,
   shouldInit: true,
@@ -389,11 +389,16 @@ export const INITIAL_TAB_STATE: TabState = {
     byChatId: {},
   },
 
+  chatInfo: {
+    isOpen: false,
+  },
+
   savedGifts: {
     filter: {
       ...DEFAULT_GIFT_PROFILE_FILTER_OPTIONS,
     },
-    giftsByPeerId: {},
+    collectionsByPeerId: {},
+    activeCollectionByPeerId: {},
   },
 
   resaleGifts: {

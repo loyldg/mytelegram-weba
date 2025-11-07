@@ -23,6 +23,7 @@ import useSelector from '../../../hooks/data/useSelector';
 import useInfiniteScroll from '../../../hooks/useInfiniteScroll';
 import useInputFocusOnOpen from '../../../hooks/useInputFocusOnOpen';
 import useKeyboardListNavigation from '../../../hooks/useKeyboardListNavigation';
+import useLang from '../../../hooks/useLang';
 import useLastCallback from '../../../hooks/useLastCallback';
 import useOldLang from '../../../hooks/useOldLang';
 
@@ -78,6 +79,7 @@ const ChatOrUserPicker: FC<OwnProps> = ({
   const { loadTopics } = getActions();
 
   const oldLang = useOldLang();
+  const lang = useLang();
   const containerRef = useRef<HTMLDivElement>();
   const topicContainerRef = useRef<HTMLDivElement>();
   const searchRef = useRef<HTMLInputElement>();
@@ -244,7 +246,7 @@ const ChatOrUserPicker: FC<OwnProps> = ({
   function renderTopicList() {
     return (
       <>
-        <div className="modal-header" dir={oldLang.isRtl ? 'rtl' : undefined}>
+        <div className="modal-header modal-header-condensed" dir={lang.isRtl ? 'rtl' : undefined}>
           <Button round color="translucent" size="smaller" ariaLabel={oldLang('Back')} onClick={handleHeaderBackClick}>
             <Icon name="arrow-left" />
           </Button>
@@ -291,7 +293,7 @@ const ChatOrUserPicker: FC<OwnProps> = ({
   function renderChatList() {
     return (
       <>
-        <div className="modal-header" dir={oldLang.isRtl ? 'rtl' : undefined}>
+        <div className="modal-header modal-header-condensed" dir={lang.isRtl ? 'rtl' : undefined}>
           <Button
             round
             color="translucent"
@@ -335,9 +337,9 @@ const ChatOrUserPicker: FC<OwnProps> = ({
     <Modal
       isOpen={isOpen}
       className={buildClassName('ChatOrUserPicker', className)}
+      isLowStackPriority={isLowStackPriority}
       onClose={onClose}
       onCloseAnimationEnd={onCloseAnimationEnd}
-      isLowStackPriority={isLowStackPriority}
     >
       <Transition activeKey={activeKey} name="slideFade" slideClassName="ChatOrUserPicker_slide">
         {() => {

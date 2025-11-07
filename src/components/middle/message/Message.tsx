@@ -1,5 +1,3 @@
-import type { FC } from '../../../lib/teact/teact';
-import type React from '../../../lib/teact/teact';
 import {
   memo,
   useCallback,
@@ -124,21 +122,22 @@ import {
   selectMessageTimestampableDuration,
 } from '../../../global/selectors/media';
 import { selectSharedSettings } from '../../../global/selectors/sharedState';
-import { IS_ANDROID, IS_ELECTRON, IS_TRANSLATION_SUPPORTED } from '../../../util/browser/windowEnvironment';
+import { IS_TAURI } from '../../../util/browser/globalEnvironment';
+import { IS_ANDROID, IS_TRANSLATION_SUPPORTED } from '../../../util/browser/windowEnvironment';
 import buildClassName from '../../../util/buildClassName';
+import buildStyle from '../../../util/buildStyle';
 import { isUserId } from '../../../util/entities/ids';
 import { getMessageKey } from '../../../util/keys/messageKey';
 import { getServerTime } from '../../../util/serverTime';
 import stopEvent from '../../../util/stopEvent';
 import { isElementInViewport } from '../../../util/visibility/isElementInViewport';
 import { calculateDimensionsForMessageMedia, getStickerDimensions, REM } from '../../common/helpers/mediaDimensions';
-import { getPeerColorClass } from '../../common/helpers/peerColor';
 import renderText from '../../common/helpers/renderText';
 import { getCustomEmojiSize } from '../composer/helpers/customEmoji';
 import { buildContentClassName } from './helpers/buildContentClassName';
 import { calculateAlbumLayout } from './helpers/calculateAlbumLayout';
 import getSingularPaidMedia from './helpers/getSingularPaidMedia';
-import { calculateMediaDimensions, getMinMediaWidth, MIN_MEDIA_WIDTH_WITH_TEXT } from './helpers/mediaDimensions';
+import { calculateMediaDimensions, getMinMediaWidth, getMinMediaWidthWithText } from './helpers/mediaDimensions';
 
 import useAppLayout from '../../../hooks/useAppLayout';
 import useContextMenuHandlers from '../../../hooks/useContextMenuHandlers';
@@ -149,12 +148,13 @@ import { useOnIntersect } from '../../../hooks/useIntersectionObserver';
 import useLang from '../../../hooks/useLang';
 import useLastCallback from '../../../hooks/useLastCallback';
 import useOldLang from '../../../hooks/useOldLang';
+import usePeerColor from '../../../hooks/usePeerColor';
 import usePreviousDeprecated from '../../../hooks/usePreviousDeprecated';
 import useMessageResizeObserver from '../../../hooks/useResizeMessageObserver';
 import useShowTransition from '../../../hooks/useShowTransition';
 import useTextLanguage from '../../../hooks/useTextLanguage';
 import useDetectChatLanguage from './hooks/useDetectChatLanguage';
-import useFocusMessage from './hooks/useFocusMessage';
+import useFocusMessageListElement from './hooks/useFocusMessageListElement';
 import useInnerHandlers from './hooks/useInnerHandlers';
 import useMessageTranslation from './hooks/useMessageTranslation';
 import useOuterHandlers from './hooks/useOuterHandlers';
@@ -296,7 +296,6 @@ type StateProps = {
   hasUnreadReaction?: boolean;
   isTranscribing?: boolean;
   transcribedText?: string;
-  isTranscriptionError?: boolean;
   isPremium: boolean;
   senderAdminMember?: ApiChatMember;
   messageTopic?: ApiTopic;
@@ -341,12 +340,11 @@ type QuickReactionPosition =
   | 'in-meta';
 
 const NBSP = '\u00A0';
-const NO_MEDIA_CORNERS_THRESHOLD = 18;
 const QUICK_REACTION_SIZE = 1.75 * REM;
 const EXTRA_SPACE_FOR_REACTIONS = 2.25 * REM;
 const MAX_REASON_LENGTH = 200;
 
-const Message: FC<OwnProps & StateProps> = ({
+const Message = ({
   message,
   observeIntersectionForBottom,
   observeIntersectionForLoading,
@@ -455,7 +453,7 @@ const Message: FC<OwnProps & StateProps> = ({
   minFutureTime,
   webPage,
   onIntersectPinnedMessage,
-}) => {
+}: OwnProps & StateProps) => {
   const {
     toggleMessageSelection,
     clickBotInlineButton,
@@ -464,7 +462,7 @@ const Message: FC<OwnProps & StateProps> = ({
     openSuggestedPostApprovalModal,
     disableContextMenuHint,
     animateUnreadReaction,
-    focusLastMessage,
+    focusMessage,
     markMentionsRead,
   } = getActions();
 
@@ -496,7 +494,7 @@ const Message: FC<OwnProps & StateProps> = ({
   } = useContextMenuHandlers(
     ref,
     (isTouchScreen && isInSelectMode) || isAccountFrozen,
-    !IS_ELECTRON,
+    !IS_TAURI,
     IS_ANDROID,
     getIsMessageListReady,
   );
@@ -584,7 +582,6 @@ const Message: FC<OwnProps & StateProps> = ({
     !(isContextMenuShown || isInSelectMode || isForwarding)
     && !isInDocumentGroupNotLast
     && !isStoryMention
-    && !((sticker || hasAnimatedEmoji) && asForwarded)
   );
   const canForward = isChannel && !isScheduled && message.isForwardingAllowed
     && !isChatProtected;
@@ -701,15 +698,24 @@ const Message: FC<OwnProps & StateProps> = ({
     requestEffect();
   });
 
+  const handleFocusSelf = useLastCallback(() => {
+    focusMessage({
+      chatId,
+      threadId,
+      messageId,
+      noHighlight: true,
+    });
+  });
+
   useEffect(() => {
     if (!isLastInList) {
       return;
     }
 
     if (withVoiceTranscription && transcribedText) {
-      focusLastMessage();
+      handleFocusSelf();
     }
-  }, [focusLastMessage, isLastInList, transcribedText, withVoiceTranscription]);
+  }, [isLastInList, transcribedText, withVoiceTranscription]);
 
   useEffect(() => {
     const element = ref.current;
@@ -757,7 +763,6 @@ const Message: FC<OwnProps & StateProps> = ({
     isJustAdded && 'is-just-added',
     (hasActiveReactions || shouldPlayEffect) && 'has-active-effect',
     isStoryMention && 'is-story-mention',
-    !canShowActionButton && 'no-action-button',
   );
 
   const text = textMessage && getMessageContent(textMessage).text;
@@ -792,18 +797,30 @@ const Message: FC<OwnProps & StateProps> = ({
 
   const phoneCall = action?.type === 'phoneCall' ? action : undefined;
 
-  const isMediaWithCommentButton = (repliesThreadInfo || (hasLinkedChat && isChannel && isLocal))
+  const commentsThreadInfo = repliesThreadInfo?.isCommentsInfo ? repliesThreadInfo : undefined;
+  const isLocalWithCommentButton = hasLinkedChat && isChannel && isLocal;
+
+  const isMediaWithCommentButton = (commentsThreadInfo || isLocalWithCommentButton)
     && !isInDocumentGroupNotLast
     && messageListType === 'thread'
     && !noComments;
-  const withCommentButton = repliesThreadInfo?.isCommentsInfo
+  const withCommentButton = (commentsThreadInfo || isLocalWithCommentButton)
     && !isInDocumentGroupNotLast && messageListType === 'thread'
     && !noComments;
   const withQuickReactionButton = !isTouchScreen && !phoneCall && !isInSelectMode && defaultReaction
     && !isInDocumentGroupNotLast && !isStoryMention && !hasTtl && !isAccountFrozen;
 
   const hasOutsideReactions = !withVoiceTranscription && hasReactions
-    && (isCustomShape || ((photo || video || storyData || (location?.mediaType === 'geo')) && !hasText));
+    && (isCustomShape || (
+      (photo || video || storyData || (location?.mediaType === 'geo')) && (!hasText || isInvertedMedia))
+    );
+
+  const { className: peerColorClass, style: peerColorStyle } = usePeerColor({
+    peer: messageColorPeer,
+    noUserColors,
+    shouldReset: true,
+    theme,
+  });
 
   const contentClassName = buildContentClassName(message, album, {
     poll,
@@ -815,17 +832,17 @@ const Message: FC<OwnProps & StateProps> = ({
     hasThread: hasThread && !noComments,
     forceSenderName,
     hasCommentCounter: hasThread && repliesThreadInfo.messagesCount > 0,
-    hasCommentButton: withCommentButton,
-    hasActionButton: canForward || canFocus,
+    hasBottomCommentButton: withCommentButton && !isCustomShape,
+    hasActionButton: canForward || canFocus || (withCommentButton && isCustomShape),
     hasReactions,
     isGeoLiveActive: location?.mediaType === 'geoLive' && !isGeoLiveExpired(message),
     withVoiceTranscription,
-    peerColorClass: getPeerColorClass(messageColorPeer, noUserColors, true),
+    peerColorClass,
     hasOutsideReactions,
   });
 
   const withAppendix = contentClassName.includes('has-appendix');
-  const emojiSize = getCustomEmojiSize(message.emojiOnlyCount);
+  const emojiSize = getCustomEmojiSize(text?.emojiOnlyCount);
 
   const paidMessageStarsInMeta = !isChatWithUser
     ? (isAlbum && paidMessageStars ? album.messages.length * paidMessageStars : paidMessageStars)
@@ -874,9 +891,8 @@ const Message: FC<OwnProps & StateProps> = ({
     replyStory,
   );
 
-  useFocusMessage({
+  useFocusMessageListElement({
     elementRef: ref,
-    chatId,
     isFocused,
     focusDirection,
     noFocusHighlight,
@@ -928,7 +944,6 @@ const Message: FC<OwnProps & StateProps> = ({
   const sizeCalculations = useMemo(() => {
     let calculatedWidth;
     let contentWidth: number | undefined;
-    let noMediaCorners = false;
     let style = '';
     let reactionsMaxWidth;
 
@@ -960,21 +975,14 @@ const Message: FC<OwnProps & StateProps> = ({
       }
 
       if (width) {
-        if (width < MIN_MEDIA_WIDTH_WITH_TEXT) {
+        if (width < getMinMediaWidthWithText(isMobile)) {
           contentWidth = width;
         }
-        calculatedWidth = Math.max(getMinMediaWidth(text?.text, isMediaWithCommentButton), width);
-        if (!asForwarded && invoice?.extendedMedia && calculatedWidth - width > NO_MEDIA_CORNERS_THRESHOLD) {
-          noMediaCorners = true;
-        }
+        calculatedWidth = Math.max(getMinMediaWidth(text?.text, isMobile, isMediaWithCommentButton), width);
       }
     } else if (albumLayout) {
-      calculatedWidth = Math.max(
-        getMinMediaWidth(text?.text, isMediaWithCommentButton), albumLayout.containerStyle.width,
-      );
-      if (calculatedWidth - albumLayout.containerStyle.width > NO_MEDIA_CORNERS_THRESHOLD) {
-        noMediaCorners = true;
-      }
+      const minWidth = getMinMediaWidth(text?.text, isMobile, isMediaWithCommentButton);
+      calculatedWidth = Math.max(minWidth, albumLayout.containerStyle.width);
     }
 
     if (calculatedWidth) {
@@ -987,7 +995,7 @@ const Message: FC<OwnProps & StateProps> = ({
     }
 
     return {
-      contentWidth, noMediaCorners, style, reactionsMaxWidth,
+      contentWidth, style, reactionsMaxWidth,
     };
   }, [
     albumLayout, asForwarded, extraPadding, hasSubheader, invoice?.extendedMedia, isAlbum, isMediaWithCommentButton,
@@ -995,8 +1003,10 @@ const Message: FC<OwnProps & StateProps> = ({
   ]);
 
   const {
-    contentWidth, noMediaCorners, style, reactionsMaxWidth,
+    contentWidth, style: sizeStyles, reactionsMaxWidth,
   } = sizeCalculations;
+
+  const contentStyle = buildStyle(peerColorStyle, sizeStyles);
 
   function renderMessageText(isForAnimation?: boolean) {
     if (!textMessage) return undefined;
@@ -1096,10 +1106,9 @@ const Message: FC<OwnProps & StateProps> = ({
       asForwarded && 'forwarded-message',
       hasForwardedCustomShape && 'forwarded-custom-shape',
       hasSubheader && 'with-subheader',
-      noMediaCorners && 'no-media-corners',
     );
     const hasCustomAppendix = isLastInGroup
-      && (!hasText || (isInvertedMedia && !hasFactCheck && !hasReactions)) && !withCommentButton;
+      && (!hasText || (isInvertedMedia && !hasFactCheck && reactionsPosition !== 'inside')) && !withCommentButton;
     const textContentClass = buildClassName(
       'text-content',
       'clearfix',
@@ -1719,7 +1728,7 @@ const Message: FC<OwnProps & StateProps> = ({
       >
         <div
           className={contentClassName}
-          style={style}
+          style={contentStyle}
           dir="auto"
         >
           {asForwarded && !isInDocumentGroupNotFirst && (
@@ -1738,8 +1747,8 @@ const Message: FC<OwnProps & StateProps> = ({
             >
               {withCommentButton && isCustomShape && (
                 <CommentButton
-                  threadInfo={repliesThreadInfo}
-                  disabled={noComments}
+                  threadInfo={commentsThreadInfo}
+                  disabled={noComments || !commentsThreadInfo}
                   isLoading={isLoadingComments}
                   isCustomShape
                   asActionButton
@@ -1763,7 +1772,7 @@ const Message: FC<OwnProps & StateProps> = ({
                   color="translucent-white"
                   round
                   size="tiny"
-                  ariaLabel="Focus message"
+                  ariaLabel={lang('FocusMessage')}
                   onClick={isPinnedList ? handleFocus : handleFocusForwarded}
                 >
                   <Icon name="arrow-right" />
@@ -1771,10 +1780,10 @@ const Message: FC<OwnProps & StateProps> = ({
               )}
             </div>
           )}
-          {withCommentButton && !(canShowActionButton && isCustomShape) && (
+          {withCommentButton && !isCustomShape && (
             <CommentButton
-              threadInfo={repliesThreadInfo}
-              disabled={noComments}
+              threadInfo={commentsThreadInfo}
+              disabled={noComments || !commentsThreadInfo}
               isLoading={isLoadingComments}
             />
           )}
@@ -1870,7 +1879,7 @@ const Message: FC<OwnProps & StateProps> = ({
 };
 
 export default memo(withGlobal<OwnProps>(
-  (global, ownProps): StateProps => {
+  (global, ownProps): Complete<StateProps> => {
     const {
       focusedMessage, forwardMessages, activeReactions, activeEmojiInteractions,
       loadingThread,
@@ -2087,16 +2096,14 @@ export default memo(withGlobal<OwnProps>(
         && loadingThread?.loadingChatId === repliesThreadInfo?.originChannelId
         && loadingThread?.loadingMessageId === repliesThreadInfo?.originMessageId,
       shouldWarnAboutFiles,
-      ...(isOutgoing && { outgoingStatus: selectOutgoingStatus(global, message, messageListType === 'scheduled') }),
-      ...(typeof uploadProgress === 'number' && { uploadProgress }),
-      ...(isFocused && {
-        focusDirection,
-        noFocusHighlight,
-        isResizingContainer,
-        focusedQuote,
-        focusedQuoteOffset,
-        scrollTargetPosition,
-      }),
+      outgoingStatus: isOutgoing ? selectOutgoingStatus(global, message, messageListType === 'scheduled') : undefined,
+      uploadProgress: typeof uploadProgress === 'number' ? uploadProgress : undefined,
+      focusDirection: isFocused ? focusDirection : undefined,
+      noFocusHighlight: isFocused ? noFocusHighlight : undefined,
+      isResizingContainer: isFocused ? isResizingContainer : undefined,
+      focusedQuote: isFocused ? focusedQuote : undefined,
+      focusedQuoteOffset: isFocused ? focusedQuoteOffset : undefined,
+      scrollTargetPosition: isFocused ? scrollTargetPosition : undefined,
       senderBoosts,
       tags: global.savedReactionTags?.byKey,
       canTranscribeVoice,

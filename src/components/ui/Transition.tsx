@@ -21,7 +21,7 @@ type AnimationName = (
   'none' | 'slide' | 'slideRtl' | 'slideFade' | 'zoomFade' | 'zoomBounceSemiFade' | 'slideLayers'
   | 'fade' | 'pushSlide' | 'reveal' | 'slideOptimized' | 'slideOptimizedRtl' | 'semiFade'
   | 'slideVertical' | 'slideVerticalFade' | 'slideFadeAndroid'
-  );
+);
 export type ChildrenFn = (isActive: boolean, isFrom: boolean, currentKey: number, activeKey: number) => React.ReactNode;
 export type TransitionProps = {
   ref?: ElementRef<HTMLDivElement>;
@@ -47,6 +47,9 @@ export type TransitionProps = {
   onScroll?: NoneToVoidFunction;
   onMouseDown?: (e: React.MouseEvent<HTMLDivElement>) => void;
   children: React.ReactNode | ChildrenFn;
+  'data-tauri-drag-region'?: true;
+  contentSelector?: string;
+  restoreHeightKey?: number;
 };
 
 const FALLBACK_ANIMATION_END = 1000;
@@ -89,6 +92,9 @@ function Transition({
   onScroll,
   onMouseDown,
   children,
+  'data-tauri-drag-region': dataTauriDragRegion,
+  contentSelector,
+  restoreHeightKey,
 }: TransitionProps) {
   const currentKeyRef = useRef<number>();
   // No need for a container to update on change
@@ -361,7 +367,10 @@ function Transition({
       return;
     }
 
-    const { clientHeight, clientWidth } = activeElement || {};
+    const contentElement = contentSelector
+      ? activeElement.querySelector<HTMLDivElement>(contentSelector) : activeElement;
+
+    const { clientHeight, clientWidth } = contentElement || activeElement || {};
     if (!clientHeight || !clientWidth) {
       return;
     }
@@ -373,7 +382,7 @@ function Transition({
         flexBasis: `${clientHeight}px`,
       });
     });
-  }, [shouldRestoreHeight, children]);
+  }, [shouldRestoreHeight, children, restoreHeightKey, contentSelector]);
 
   const asFastList = !renderCount;
   const renders = rendersRef.current;
@@ -399,6 +408,7 @@ function Transition({
       id={id}
       className={buildClassName('Transition', className)}
       teactFastList={asFastList}
+      data-tauri-drag-region={dataTauriDragRegion}
       onScroll={onScroll}
       onMouseDown={onMouseDown}
     >

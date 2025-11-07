@@ -3,22 +3,20 @@ import type React from '../../../lib/teact/teact.ts';
 import { useState } from '../../../lib/teact/teact.ts';
 import { memo } from '../../../lib/teact/teact.ts';
 
-import type { ApiChat } from '../../../api/types/index.ts';
-import type { ManagementScreens } from '../../../types/index.ts';
-import { ChatCreationProgress } from '../../../types/index.ts';
+import type { ApiChat } from '../../../api/types/index';
+import type { ManagementScreens } from '../../../types/index';
+import { ChatCreationProgress } from '../../../types/index';
 
-import { getActions, withGlobal } from '../../../global/index.ts';
-import { selectChat, selectTabState } from '../../../global/selectors/index.ts';
+import { getActions, withGlobal } from '../../../global/index';
+import { selectChat, selectTabState } from '../../../global/selectors/index';
 
 import useHistoryBack from '../../../hooks/useHistoryBack.ts';
 import useLang from '../../../hooks/useLang.ts';
 import useLastCallback from '../../../hooks/useLastCallback.ts';
 
-import Icon from '../../common/icons/Icon.tsx';
 import AvatarEditable from '../../ui/AvatarEditable.tsx';
 import FloatingActionButton from '../../ui/FloatingActionButton.tsx';
 import InputText from '../../ui/InputText.tsx';
-import Spinner from '../../ui/Spinner.tsx';
 
 type OwnProps = {
   chatId: string;
@@ -48,7 +46,7 @@ const NewDiscussionGroup: FC<OwnProps & StateProps> = ({
     onBack: onClose,
   });
 
-  const [title, setTitle] = useState(lang('NewDiscussionChatTitle', { name: chat?.title }));
+  const [title, setTitle] = useState(() => lang('NewDiscussionChatTitle', { name: chat?.title }));
   const [photo, setPhoto] = useState<File | undefined>();
   const [error, setError] = useState<string | undefined>();
 
@@ -113,13 +111,9 @@ const NewDiscussionGroup: FC<OwnProps & StateProps> = ({
             onClick={handleCreateGroup}
             disabled={isLoading}
             ariaLabel={lang('DiscussionCreateGroup')}
-          >
-            {isLoading ? (
-              <Spinner color="white" />
-            ) : (
-              <Icon name="arrow-right" />
-            )}
-          </FloatingActionButton>
+            iconName="arrow-right"
+            isLoading={isLoading}
+          />
         </div>
       </div>
     </div>
@@ -127,7 +121,7 @@ const NewDiscussionGroup: FC<OwnProps & StateProps> = ({
 };
 
 export default memo(withGlobal<OwnProps>(
-  (global, { chatId }): StateProps => {
+  (global, { chatId }): Complete<StateProps> => {
     const {
       progress: creationProgress,
       error: creationError,

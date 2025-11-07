@@ -5,14 +5,13 @@
 @use "mixins";
 @use "spacing";
 @use "forms";
-@use "icons";
+@use "icons.css";
+@use "icons" as iconsMixins;
 @use "common";
 @use "print";
-@use "fonts";
 
 html,
 body {
-
   --font-family: "Roboto", -apple-system, BlinkMacSystemFont, "Apple Color Emoji", "Segoe UI", Oxygen, Ubuntu,
   Cantarell, "Fira Sans", "Droid Sans", "Helvetica Neue", sans-serif;
   --font-family-monospace: "Cascadia Mono", "Roboto Mono", "Droid Sans Mono", 'SF Mono', "Menlo", "Ubuntu Mono",
@@ -92,8 +91,9 @@ body.is-ios {
   --border-radius-messages-small: 0.5rem;
 }
 
-body.is-electron {
+body.is-tauri {
   --custom-cursor: default;
+  --window-controls-width: 5rem;
 }
 
 body.cursor-grabbing {
@@ -171,7 +171,7 @@ body.cursor-ew-resize {
   width: 0;
   height: 0;
 
-  clip: rect(0, 0, 0, 0);
+  clip-path: inset(50%);
 }
 
 .custom-scroll,
@@ -223,6 +223,18 @@ body:not(.is-ios) {
   &::-webkit-scrollbar {
     display: none;
   }
+}
+
+.no-overscroll {
+  overscroll-behavior: none;
+}
+
+.no-touch {
+  touch-action: none;
+}
+
+.icon {
+  @include iconsMixins.icon;
 }
 
 .emoji-small {
@@ -483,13 +495,18 @@ body:not(.is-ios) {
   --color-chat-username: rgb(233, 238, 244);
 }
 
-/* stylelint-disable-next-line scss/at-rule-no-unknown */
 @view-transition {
-  /* stylelint-disable-next-line property-no-unknown */
   navigation: auto;
+  types: page;
 }
 
 :root {
+  view-transition-name: none;
+
+  @include mixins.with-vt-type('page');
+}
+
+@include mixins.on-active-vt('page') {
   &::view-transition-group(root) {
     animation-duration: 400ms;
   }

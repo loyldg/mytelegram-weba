@@ -1,5 +1,3 @@
-import BigInt from 'big-integer';
-
 import type TelegramClient from './TelegramClient';
 import type { SizeType } from './TelegramClient';
 
@@ -55,7 +53,7 @@ class FileView {
 
   private size?: number;
 
-  private buffer?: Buffer;
+  private buffer?: Buffer<ArrayBuffer>;
 
   private largeFile?: FileSystemFileHandle;
 
@@ -94,7 +92,7 @@ class FileView {
     }
   }
 
-  async getData(): Promise<Buffer | File> {
+  async getData(): Promise<Buffer<ArrayBuffer> | File> {
     if (this.type === 'opfs') {
       return this.largeFile!.getFile();
     } else {

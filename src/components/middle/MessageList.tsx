@@ -1,6 +1,6 @@
 import type { FC } from '@teact';
 import { beginHeavyAnimation, memo, useEffect, useMemo, useRef } from '@teact';
-import { addExtraClass, removeExtraClass } from '@teact/teact-dom.ts';
+import { addExtraClass, removeExtraClass } from '@teact/teact-dom';
 import { getActions, getGlobal, withGlobal } from '../../global';
 
 import type { ApiChatFullInfo, ApiMessage, ApiRestrictionReason, ApiTopic } from '../../api/types';
@@ -52,7 +52,7 @@ import {
   selectUserFullInfo,
 } from '../../global/selectors';
 import { selectIsChatRestricted } from '../../global/selectors/chats';
-import { selectActiveRestrictionReasons } from '../../global/selectors/messages';
+import { selectActiveRestrictionReasons, selectCurrentMessageList } from '../../global/selectors/messages';
 import animateScroll, { isAnimatingScroll, restartCurrentScrollAnimation } from '../../util/animateScroll';
 import buildClassName from '../../util/buildClassName';
 import { isUserId } from '../../util/entities/ids';
@@ -61,6 +61,7 @@ import { isLocalMessageId } from '../../util/keys/messageKey';
 import resetScroll from '../../util/resetScroll';
 import { debounce, onTickEnd } from '../../util/schedulers';
 import getOffsetToContainer from '../../util/visibility/getOffsetToContainer';
+import { REM } from '../common/helpers/mediaDimensions';
 import { groupMessages } from './helpers/groupMessages';
 import { preventMessageInputBlur } from './helpers/preventMessageInputBlur';
 
@@ -76,7 +77,7 @@ import useContainerHeight from './hooks/useContainerHeight';
 import useStickyDates from './hooks/useStickyDates';
 
 import Loading from '../ui/Loading';
-import Transition from '../ui/Transition.tsx';
+import Transition from '../ui/Transition';
 import ContactGreeting from './ContactGreeting';
 import MessageListAccountInfo from './MessageListAccountInfo';
 import MessageListContent from './MessageListContent';
@@ -96,9 +97,10 @@ type OwnProps = {
   withDefaultBg: boolean;
   isContactRequirePremium?: boolean;
   paidMessagesStars?: number;
-  onScrollDownToggle: BooleanToVoidFunction;
-  onNotchToggle: BooleanToVoidFunction;
-  onIntersectPinnedMessage: OnIntersectPinnedMessage;
+  isQuickPreview?: boolean;
+  onScrollDownToggle?: BooleanToVoidFunction;
+  onNotchToggle?: AnyToVoidFunction;
+  onIntersectPinnedMessage?: OnIntersectPinnedMessage;
 };
 
 type StateProps = {
@@ -142,15 +144,20 @@ type StateProps = {
   canTranslate?: boolean;
   translationLanguage?: string;
   shouldAutoTranslate?: boolean;
+  isActive?: boolean;
+  shouldScrollToBottom?: boolean;
 };
 
 enum Content {
+  // eslint-disable-next-line @typescript-eslint/no-shadow
   Loading,
   Restricted,
   StarsRequired,
   PremiumRequired,
   AccountInfo,
+  // eslint-disable-next-line @typescript-eslint/no-shadow
   ContactGreeting,
+  // eslint-disable-next-line @typescript-eslint/no-shadow
   NoMessages,
   MessageList,
 }
@@ -163,7 +170,7 @@ const BOTTOM_THRESHOLD = 50;
 const UNREAD_DIVIDER_TOP = 10;
 const SCROLL_DEBOUNCE = 200;
 const MESSAGE_ANIMATION_DURATION = 500;
-const BOTTOM_FOCUS_MARGIN = 20;
+const BOTTOM_FOCUS_MARGIN = 0.5 * REM;
 const SELECT_MODE_ANIMATION_DURATION = 200;
 const UNREAD_DIVIDER_CLASS = 'unread-divider';
 
@@ -180,6 +187,9 @@ const MessageList: FC<OwnProps & StateProps> = ({
   isChannelWithAvatars,
   canPost,
   isSynced,
+  isActive,
+  shouldScrollToBottom,
+  // eslint-disable-next-line @typescript-eslint/no-shadow
   isChatMonoforum,
   isReady,
   isChatWithSelf,
@@ -220,6 +230,7 @@ const MessageList: FC<OwnProps & StateProps> = ({
   canTranslate,
   translationLanguage,
   shouldAutoTranslate,
+  isQuickPreview,
   onIntersectPinnedMessage,
   onScrollDownToggle,
   onNotchToggle,
@@ -375,12 +386,12 @@ const MessageList: FC<OwnProps & StateProps> = ({
     threadId, isChatWithSelf, channelJoinInfo]);
 
   useInterval(() => {
-    if (!messageIds || !messagesById || type === 'scheduled' || isAccountFrozen) return;
+    if (!messageIds || !messagesById || type === 'scheduled' || isAccountFrozen || !isActive) return;
     if (!isChannelChat && !isGroupChat) return;
 
     const ids = messageIds.filter((id) => {
       const message = messagesById[id];
-      return message && message.reactions?.results.length && !message.content.action;
+      return message && message.reactions && !message.content.action;
     });
 
     if (!ids.length) return;
@@ -389,7 +400,7 @@ const MessageList: FC<OwnProps & StateProps> = ({
   }, MESSAGE_REACTIONS_POLLING_INTERVAL);
 
   useInterval(() => {
-    if (!messageIds || !messagesById || type === 'scheduled') {
+    if (!messageIds || !messagesById || type === 'scheduled' || !isActive) {
       return;
     }
     const storyDataList = messageIds.map((id) => messagesById[id]?.content.storyData).filter(Boolean);
@@ -411,7 +422,7 @@ const MessageList: FC<OwnProps & StateProps> = ({
   }, MESSAGE_STORY_POLLING_INTERVAL);
 
   useInterval(() => {
-    if (!messageIds || !messagesById || threadId !== MAIN_THREAD_ID || type === 'scheduled') {
+    if (!messageIds || !messagesById || threadId !== MAIN_THREAD_ID || type === 'scheduled' || !isActive) {
       return;
     }
     const global = getGlobal();
@@ -424,7 +435,7 @@ const MessageList: FC<OwnProps & StateProps> = ({
   }, MESSAGE_COMMENTS_POLLING_INTERVAL, true);
 
   useInterval(() => {
-    if (!messageIds || !messagesById || threadId !== MAIN_THREAD_ID || type === 'scheduled') {
+    if (!messageIds || !messagesById || threadId !== MAIN_THREAD_ID || type === 'scheduled' || !isActive) {
       return;
     }
     const ids = messageIds.filter((id) => messagesById[id]?.factCheck?.shouldFetch);
@@ -439,7 +450,12 @@ const MessageList: FC<OwnProps & StateProps> = ({
       return undefined;
     }
 
-    return debounce(() => loadViewportMessages({ direction: LoadMoreDirection.Around }), 1000, true, false);
+    return debounce(
+      () => loadViewportMessages({ direction: LoadMoreDirection.Around, chatId, threadId }),
+      1000,
+      true,
+      false,
+    );
     // eslint-disable-next-line react-hooks-static-deps/exhaustive-deps
   }, [loadViewportMessages, messageIds]);
 
@@ -465,7 +481,7 @@ const MessageList: FC<OwnProps & StateProps> = ({
 
       const isFocusing = Boolean(selectTabState(global).focusedMessage?.chatId);
       if (!isFocusing) {
-        onIntersectPinnedMessage({ shouldCancelWaiting: true });
+        onIntersectPinnedMessage?.({ shouldCancelWaiting: true });
       }
 
       if (!container.parentElement) {
@@ -474,7 +490,7 @@ const MessageList: FC<OwnProps & StateProps> = ({
 
       scrollOffsetRef.current = container.scrollHeight - container.scrollTop;
 
-      if (type === 'thread') {
+      if (type === 'thread' && !isQuickPreview) {
         setScrollOffset({ chatId, threadId, scrollOffset: scrollOffsetRef.current });
       }
     });
@@ -609,11 +625,11 @@ const MessageList: FC<OwnProps & StateProps> = ({
       if (wasMessageAdded && isAtBottom && !isAlreadyFocusing) {
         // Break out of `forceLayout`
         requestMeasure(() => {
-          const shouldScrollToBottom = !isBackgroundModeActive() || !firstUnreadElement;
+          const isScrollToBottom = !isBackgroundModeActive() || !firstUnreadElement;
           animateScroll({
             container,
-            element: shouldScrollToBottom ? lastItemElement : firstUnreadElement,
-            position: shouldScrollToBottom ? 'end' : 'start',
+            element: isScrollToBottom ? lastItemElement : firstUnreadElement,
+            position: isScrollToBottom ? 'end' : 'start',
             margin: BOTTOM_FOCUS_MARGIN,
             forceDuration: noMessageSendingAnimation ? 0 : undefined,
           });
@@ -713,7 +729,7 @@ const MessageList: FC<OwnProps & StateProps> = ({
   useEffect(() => {
     if (hasMessages) return;
 
-    onScrollDownToggle(false);
+    onScrollDownToggle?.(false);
   }, [hasMessages, onScrollDownToggle]);
 
   const activeKey = isRestricted ? (
@@ -786,10 +802,12 @@ const MessageList: FC<OwnProps & StateProps> = ({
         nameChangeDate={nameChangeDate}
         photoChangeDate={photoChangeDate}
         noAppearanceAnimation={!messageGroups || !shouldAnimateAppearanceRef.current}
+        isQuickPreview={isQuickPreview}
+        canPost={canPost}
+        shouldScrollToBottom={shouldScrollToBottom}
         onScrollDownToggle={onScrollDownToggle}
         onNotchToggle={onNotchToggle}
         onIntersectPinnedMessage={onIntersectPinnedMessage}
-        canPost={canPost}
       />
     ) : (
       <Loading color="white" backgroundColor="dark" />
@@ -812,12 +830,13 @@ const MessageList: FC<OwnProps & StateProps> = ({
 };
 
 export default memo(withGlobal<OwnProps>(
-  (global, { chatId, threadId, type }): StateProps => {
+  (global, { chatId, threadId, type }): Complete<StateProps> => {
+    const tabState = selectTabState(global);
     const currentUserId = global.currentUserId!;
     const chat = selectChat(global, chatId);
     const userFullInfo = selectUserFullInfo(global, chatId);
     if (!chat) {
-      return { currentUserId };
+      return { currentUserId } as Complete<StateProps>;
     }
 
     const messageIds = selectCurrentMessageIds(global, chatId, threadId, type);
@@ -831,7 +850,7 @@ export default memo(withGlobal<OwnProps>(
       threadId !== MAIN_THREAD_ID && !isSavedDialog && !chat?.isForum
       && !(messagesById && threadId && messagesById[Number(threadId)])
     ) {
-      return { currentUserId };
+      return { currentUserId } as Complete<StateProps>;
     }
 
     const isRestricted = selectIsChatRestricted(global, chatId);
@@ -865,7 +884,19 @@ export default memo(withGlobal<OwnProps>(
     const shouldAutoTranslate = chat?.hasAutoTranslation;
     const translationLanguage = selectTranslationLanguage(global);
 
+    const currentMessageList = selectCurrentMessageList(global);
+    const isActive = currentMessageList && currentMessageList.chatId === chatId
+      && currentMessageList.threadId === threadId && currentMessageList.type === type;
+
+    const {
+      chatId: focusedChatId,
+      threadId: focusedThreadId,
+      messageId: focusedMessageId,
+    } = tabState.focusedMessage || {};
+    const shouldScrollToBottom = focusedChatId === chatId && focusedThreadId === threadId && !focusedMessageId;
+
     return {
+      isActive,
       areAdsEnabled,
       isChatLoaded: true,
       isRestricted,
@@ -898,7 +929,7 @@ export default memo(withGlobal<OwnProps>(
       isEmptyThread,
       currentUserId,
       isChatProtected: selectIsChatProtected(global, chatId),
-      ...(withLastMessageWhenPreloading && { lastMessage }),
+      lastMessage: withLastMessageWhenPreloading ? lastMessage : undefined,
       isAccountFrozen,
       hasCustomGreeting,
       isAppConfigLoaded,
@@ -906,6 +937,7 @@ export default memo(withGlobal<OwnProps>(
       canTranslate,
       translationLanguage,
       shouldAutoTranslate,
+      shouldScrollToBottom,
     };
   },
 )(MessageList));

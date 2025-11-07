@@ -22,14 +22,12 @@ import useMedia from '../../../hooks/useMedia';
 import useOldLang from '../../../hooks/useOldLang';
 import usePreviousDeprecated from '../../../hooks/usePreviousDeprecated';
 
-import Icon from '../../common/icons/Icon';
 import ManageUsernames from '../../common/ManageUsernames';
 import SafeLink from '../../common/SafeLink';
 import UsernameInput from '../../common/UsernameInput';
 import AvatarEditable from '../../ui/AvatarEditable';
 import FloatingActionButton from '../../ui/FloatingActionButton';
 import InputText from '../../ui/InputText';
-import Spinner from '../../ui/Spinner';
 import TextArea from '../../ui/TextArea';
 
 type OwnProps = {
@@ -289,19 +287,15 @@ const SettingsEditProfile: FC<OwnProps & StateProps> = ({
         onClick={handleProfileSave}
         disabled={isLoading}
         ariaLabel={lang('Save')}
-      >
-        {isLoading ? (
-          <Spinner color="white" />
-        ) : (
-          <Icon name="check" />
-        )}
-      </FloatingActionButton>
+        iconName="check"
+        isLoading={isLoading}
+      />
     </div>
   );
 };
 
 export default memo(withGlobal<OwnProps>(
-  (global): StateProps => {
+  (global): Complete<StateProps> => {
     const { currentUserId } = global;
     const {
       progress, isUsernameAvailable, checkedUsername, error: editUsernameError,
@@ -310,23 +304,13 @@ export default memo(withGlobal<OwnProps>(
 
     const maxBioLength = selectCurrentLimit(global, 'aboutLength');
 
-    if (!currentUser) {
-      return {
-        progress,
-        checkedUsername,
-        isUsernameAvailable,
-        editUsernameError,
-        maxBioLength,
-      };
-    }
-
     const {
       firstName: currentFirstName,
       lastName: currentLastName,
       usernames,
-    } = currentUser;
+    } = currentUser || {};
     const currentUserFullInfo = currentUserId ? selectUserFullInfo(global, currentUserId) : undefined;
-    const currentAvatarHash = getChatAvatarHash(currentUser);
+    const currentAvatarHash = currentUser && getChatAvatarHash(currentUser);
 
     return {
       currentAvatarHash,

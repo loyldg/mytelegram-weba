@@ -6,17 +6,17 @@ import type { ApiPrivacySettings } from '../../../api/types';
 import type { GlobalState } from '../../../global/types';
 import { SettingsScreens } from '../../../types';
 
-import { ACCOUNT_TTL_OPTIONS } from '../../../config.ts';
+import { ACCOUNT_TTL_OPTIONS } from '../../../config';
 import {
   selectCanSetPasscode, selectIsCurrentUserFrozen,
   selectIsCurrentUserPremium,
 } from '../../../global/selectors';
 import { selectSharedSettings } from '../../../global/selectors/sharedState';
-import { getClosestEntry } from '../../../util/getClosestEntry.ts';
+import { getClosestEntry } from '../../../util/getClosestEntry';
 
 import useHistoryBack from '../../../hooks/useHistoryBack';
 import useLang from '../../../hooks/useLang';
-import useLastCallback from '../../../hooks/useLastCallback.ts';
+import useLastCallback from '../../../hooks/useLastCallback';
 import useOldLang from '../../../hooks/useOldLang';
 
 import StarIcon from '../../common/icons/StarIcon';
@@ -236,7 +236,7 @@ const SettingsPrivacy: FC<OwnProps & StateProps> = ({
       </div>
 
       <div className="settings-item">
-        <h4 className="settings-item-header" dir={oldLang.isRtl ? 'rtl' : undefined}>{oldLang('PrivacyTitle')}</h4>
+        <h4 className="settings-item-header" dir={lang.isRtl ? 'rtl' : undefined}>{oldLang('PrivacyTitle')}</h4>
 
         <ListItem
           narrow
@@ -391,7 +391,7 @@ const SettingsPrivacy: FC<OwnProps & StateProps> = ({
 
       {canChangeSensitive && (
         <div className="settings-item fluid-container">
-          <h4 className="settings-item-header" dir={oldLang.isRtl ? 'rtl' : undefined}>
+          <h4 className="settings-item-header" dir={lang.isRtl ? 'rtl' : undefined}>
             {oldLang('lng_settings_sensitive_title')}
           </h4>
           <Checkbox
@@ -419,7 +419,7 @@ const SettingsPrivacy: FC<OwnProps & StateProps> = ({
 
       {canDisplayAutoarchiveSetting && (
         <div className="settings-item">
-          <h4 className="settings-item-header" dir={oldLang.isRtl ? 'rtl' : undefined}>
+          <h4 className="settings-item-header" dir={lang.isRtl ? 'rtl' : undefined}>
             {oldLang('NewChatsFromNonContacts')}
           </h4>
           <Checkbox
@@ -432,7 +432,7 @@ const SettingsPrivacy: FC<OwnProps & StateProps> = ({
       )}
 
       <div className="settings-item">
-        <h4 className="settings-item-header" dir={oldLang.isRtl ? 'rtl' : undefined}>
+        <h4 className="settings-item-header" dir={lang.isRtl ? 'rtl' : undefined}>
           {oldLang('lng_settings_window_system')}
         </h4>
         <Checkbox
@@ -443,7 +443,7 @@ const SettingsPrivacy: FC<OwnProps & StateProps> = ({
       </div>
 
       <div className="settings-item">
-        <h4 className="settings-item-header" dir={oldLang.isRtl ? 'rtl' : undefined}>
+        <h4 className="settings-item-header" dir={lang.isRtl ? 'rtl' : undefined}>
           {lang('DeleteMyAccount')}
         </h4>
         <ListItem
@@ -461,7 +461,7 @@ const SettingsPrivacy: FC<OwnProps & StateProps> = ({
 };
 
 export default memo(withGlobal<OwnProps>(
-  (global): StateProps => {
+  (global): Complete<StateProps> => {
     const {
       settings: {
         byKey: {
@@ -481,15 +481,16 @@ export default memo(withGlobal<OwnProps>(
     const { canDisplayChatInTitle } = selectSharedSettings(global);
     const shouldChargeForMessages = Boolean(nonContactPeersPaidStars);
     const isCurrentUserFrozen = selectIsCurrentUserFrozen(global);
+    const isCurrentUserPremium = selectIsCurrentUserPremium(global);
 
     return {
-      isCurrentUserPremium: selectIsCurrentUserPremium(global),
+      isCurrentUserPremium,
       hasPassword,
       hasPasscode: Boolean(hasPasscode),
       blockedCount: blocked.totalCount,
       webAuthCount: global.activeWebSessions.orderedHashes.length,
       isSensitiveEnabled,
-      canDisplayAutoarchiveSetting: Boolean(appConfig.canDisplayAutoarchiveSetting),
+      canDisplayAutoarchiveSetting: appConfig.canDisplayAutoarchiveSetting || isCurrentUserPremium,
       shouldArchiveAndMuteNewNonContact,
       canChangeSensitive,
       shouldNewNonContactPeersRequirePremium,

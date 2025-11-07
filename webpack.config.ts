@@ -3,6 +3,7 @@ import 'dotenv/config';
 
 import WatchFilePlugin from '@mytonwallet/webpack-watch-file-plugin';
 import StatoscopeWebpackPlugin from '@statoscope/webpack-plugin';
+import { statSync } from 'fs';
 import { GitRevisionPlugin } from 'git-revision-webpack-plugin';
 import HtmlWebpackPlugin from 'html-webpack-plugin';
 import MiniCssExtractPlugin from 'mini-css-extract-plugin';
@@ -23,7 +24,6 @@ const {
   HEAD,
   APP_ENV = 'production',
   APP_MOCKED_CLIENT = '',
-  IS_PACKAGED_ELECTRON,
 } = process.env;
 
 const DEFAULT_APP_TITLE = `Telegram${APP_ENV !== 'production' ? ' Beta' : ''}`;
@@ -33,23 +33,25 @@ process.env.BASE_URL = process.env.BASE_URL || PRODUCTION_URL;
 
 const {
   BASE_URL,
-  ELECTRON_HOST_URL = 'https://telegram-a-host',
   APP_TITLE = DEFAULT_APP_TITLE,
 } = process.env;
 
 const CSP = `
   default-src 'self';
-  connect-src 'self' ws://192.168.1.100:30444 blob: http: https: ${APP_ENV === 'development' ? 'wss:' : ''};
+  connect-src 'self' ws://192.168.1.100:30444 blob: http: https: ${APP_ENV === 'development' ? 'wss: ipc:' : ''};
   script-src 'self' 'wasm-unsafe-eval' https://t.me/_websync_ https://telegram.me/_websync_;
   style-src 'self' 'unsafe-inline';
-  img-src 'self' data: blob: https://ss3.4sqi.net/img/categories_v2/
-  ${IS_PACKAGED_ELECTRON ? `${BASE_URL}/` : ''};
-  media-src 'self' blob: data: ${IS_PACKAGED_ELECTRON ? [`${BASE_URL}/`, ELECTRON_HOST_URL].join(' ') : ''};
+  img-src 'self' data: blob: https://ss3.4sqi.net/img/categories_v2/;
+  media-src 'self' blob: data:;
   object-src 'none';
-  frame-src http: https: mytonwallet-tc:;
+  frame-src http: https:
+    bitkeep: bnc: bybitapp: echooo: imtokenv2: mytonwallet-tc:
+    nicegram-tc: safepal-tc: tonkeeper-pro-tc: tonkeeper-tc:;
   base-uri 'none';
   form-action 'none';`
   .replace(/\s+/g, ' ').trim();
+
+const CHANGELOG_PATH = path.resolve(__dirname, 'src/versionNotification.txt');
 
 export default function createConfig(
   _: any,
@@ -209,13 +211,10 @@ export default function createConfig(
         // eslint-disable-next-line no-null/no-null
         APP_NAME: null,
         APP_TITLE,
-        RELEASE_DATETIME: Date.now(),
         TELEGRAM_API_ID: undefined,
         TELEGRAM_API_HASH: undefined,
         // eslint-disable-next-line no-null/no-null
         TEST_SESSION: null,
-        IS_PACKAGED_ELECTRON: false,
-        ELECTRON_HOST_URL,
         BASE_URL,
       }),
       // Updates each dev re-build to provide current git branch or commit hash
@@ -226,6 +225,11 @@ export default function createConfig(
           const shouldDisplayOnlyCommit = APP_ENV === 'staging' || !branch || branch === 'HEAD';
           return JSON.stringify(shouldDisplayOnlyCommit ? commit : `${branch}#${commit}`);
         }, mode === 'development' ? true : []),
+        CHANGELOG_DATETIME: DefinePlugin.runtimeValue(() => {
+          return JSON.stringify(statSync(CHANGELOG_PATH, { throwIfNoEntry: false })?.mtime.getTime());
+        }, {
+          fileDependencies: [CHANGELOG_PATH],
+        }),
       }),
       new ProvidePlugin({
         Buffer: ['buffer', 'Buffer'],
@@ -260,7 +264,7 @@ export default function createConfig(
       }),
     ],
 
-    devtool: APP_ENV === 'production' && IS_PACKAGED_ELECTRON ? undefined : 'source-map',
+    devtool: 'source-map',
 
     optimization: {
       splitChunks: {

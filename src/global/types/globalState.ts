@@ -28,14 +28,17 @@ import type {
   ApiReaction,
   ApiReactionKey,
   ApiSavedReactionTag,
+  ApiSavedStarGift,
   ApiSession,
   ApiSponsoredMessage,
+  ApiStarGiftCollection,
   ApiStarGiftRegular,
   ApiStarsAmount,
   ApiStarTopupOption,
   ApiStealthMode,
   ApiSticker,
   ApiStickerSet,
+  ApiStoryAlbum,
   ApiTimezone,
   ApiTonAmount,
   ApiTranscription,
@@ -52,6 +55,7 @@ import type {
 } from '../../api/types';
 import type {
   AccountSettings,
+  AttachmentCompression,
   BotAppPermissions,
   ChatListType,
   ChatTranslatedMessages,
@@ -90,7 +94,6 @@ export type GlobalState = {
   isSyncing?: boolean;
   isAppConfigLoaded?: boolean;
   isAppUpdateAvailable?: boolean;
-  isElectronUpdateAvailable?: boolean;
   isSynced?: boolean;
   isFetchingDifference?: boolean;
   leftColumnWidth?: number;
@@ -119,6 +122,7 @@ export type GlobalState = {
 
   attachmentSettings: {
     shouldCompress: boolean;
+    defaultAttachmentCompression: AttachmentCompression;
     shouldSendGrouped: boolean;
     isInvertedMedia?: true;
     webPageMediaSize?: WebPageMediaSize;
@@ -253,6 +257,7 @@ export type GlobalState = {
       archived: string[];
     };
     stealthMode: ApiStealthMode;
+    albumsByPeerId: Record<string, ApiStoryAlbum[]>;
   };
 
   groupCalls: {
@@ -306,6 +311,14 @@ export type GlobalState = {
   starGifts?: {
     byId: Record<string, ApiStarGiftRegular>;
     idsByCategory: Record<StarGiftCategory, string[]>;
+  };
+  myUniqueGifts?: {
+    byId: Record<string, ApiSavedStarGift>;
+    ids: string[];
+    nextOffset?: string;
+  };
+  starGiftCollections?: {
+    byPeerId: Record<string, ApiStarGiftCollection[]>;
   };
 
   stickers: {

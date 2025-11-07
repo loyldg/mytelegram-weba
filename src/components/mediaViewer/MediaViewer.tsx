@@ -18,7 +18,9 @@ import { type MediaViewerMedia, MediaViewerOrigin, type ThreadId } from '../../t
 import { ANIMATION_END_DELAY } from '../../config';
 import { requestMutation } from '../../lib/fasterdom/fasterdom';
 import {
-  getChatMediaMessageIds, getMessagePaidMedia, isChatAdmin,
+  getMediaSearchType,
+  getMessageContentIds,
+  getMessagePaidMedia, isChatAdmin,
 } from '../../global/helpers';
 import {
   selectChatMessage,
@@ -36,6 +38,8 @@ import {
   selectTabState,
 } from '../../global/selectors';
 import { stopCurrentAudio } from '../../util/audioPlayer';
+import { IS_TAURI } from '../../util/browser/globalEnvironment';
+import { IS_MAC_OS } from '../../util/browser/windowEnvironment';
 import captureEscKeyListener from '../../util/captureEscKeyListener';
 import { disableDirectTextInput, enableDirectTextInput } from '../../util/directInputManager';
 import { isUserId } from '../../util/entities/ids';
@@ -46,12 +50,11 @@ import selectViewableMedia from './helpers/getViewableMedia';
 import { animateClosing, animateOpening } from './helpers/ghostAnimation';
 
 import useAppLayout from '../../hooks/useAppLayout';
-import useElectronDrag from '../../hooks/useElectronDrag';
 import useFlag from '../../hooks/useFlag';
 import useForceUpdate from '../../hooks/useForceUpdate';
 import useLastCallback from '../../hooks/useLastCallback';
 import useOldLang from '../../hooks/useOldLang';
-import { exitPictureInPictureIfNeeded, usePictureInPictureSignal } from '../../hooks/usePictureInPicture';
+import { exitPictureInPictureIfNeeded, PICTURE_IN_PICTURE_SIGNAL } from '../../hooks/usePictureInPicture';
 import usePreviousDeprecated from '../../hooks/usePreviousDeprecated';
 import { dispatchPriorityPlaybackEvent } from '../../hooks/usePriorityPlaybackCheck';
 import { useMediaProps } from './hooks/useMediaProps';
@@ -155,7 +158,7 @@ const MediaViewer = ({
     bestData,
     dimensions,
     isGif,
-    isFromSharedMedia,
+    contentType,
   } = useMediaProps({
     media, isAvatar: Boolean(avatarOwner), origin, delay: isGhostAnimation && ANIMATION_DURATION,
   });
@@ -172,14 +175,14 @@ const MediaViewer = ({
   const messageMediaIds = useMemo(() => {
     return withDynamicLoading
       ? collectedMessageIds
-      : getChatMediaMessageIds(chatMessages || {}, collectedMessageIds || [], isFromSharedMedia);
-  }, [chatMessages, collectedMessageIds, isFromSharedMedia, withDynamicLoading]);
+      : getMessageContentIds(chatMessages || {}, collectedMessageIds || [], contentType || 'media');
+  }, [chatMessages, collectedMessageIds, contentType, withDynamicLoading]);
 
   if (isOpen && (!prevSenderId || prevSenderId !== senderId || animationKey.current === undefined)) {
     animationKey.current = isSingle ? 0 : (messageId || mediaIndex);
   }
 
-  const [getIsPictureInPicture] = usePictureInPictureSignal();
+  const [getIsPictureInPicture] = PICTURE_IN_PICTURE_SIGNAL;
 
   useEffect(() => {
     if (!isOpen || getIsPictureInPicture()) {
@@ -208,9 +211,6 @@ const MediaViewer = ({
       });
     }
   }, [isMobile, isOpen]);
-
-  const headerRef = useRef<HTMLDivElement>();
-  useElectronDrag(headerRef);
 
   const forceUpdate = useForceUpdate();
   useEffect(() => {
@@ -354,7 +354,7 @@ const MediaViewer = ({
     }
 
     const index = messageMediaIds?.indexOf(fromMessage.id);
-    if (index === undefined) return undefined;
+    if (index === undefined || index === -1) return undefined;
     const nextIndex = index + direction;
     const nextMessageId = messageMediaIds![nextIndex];
     const nextMessage = chatMessages?.[nextMessageId];
@@ -422,7 +422,11 @@ const MediaViewer = ({
       shouldAnimateFirstRender
       noCloseTransition={shouldSkipHistoryAnimations}
     >
-      <div className="media-viewer-head" dir={lang.isRtl ? 'rtl' : undefined} ref={headerRef}>
+      <div
+        className="media-viewer-head"
+        dir={lang.isRtl ? 'rtl' : undefined}
+        data-tauri-drag-region={IS_TAURI && IS_MAC_OS ? true : undefined}
+      >
         {isMobile && (
           <Button
             className="media-viewer-close"
@@ -486,7 +490,7 @@ const MediaViewer = ({
 };
 
 export default memo(withGlobal(
-  (global): StateProps => {
+  (global): Complete<StateProps> => {
     const { mediaViewer, shouldSkipHistoryAnimations } = selectTabState(global);
     const {
       chatId,
@@ -518,7 +522,7 @@ export default memo(withGlobal(
       const currentItem = getMediaViewerItem({
         avatarOwner, standaloneMedia, profilePhotos, mediaIndex,
       });
-      const viewableMedia = selectViewableMedia(global, currentItem);
+      const viewableMedia = selectViewableMedia(global, origin, currentItem);
 
       return {
         profilePhotos,
@@ -536,6 +540,14 @@ export default memo(withGlobal(
         isSynced,
         currentItem,
         viewableMedia,
+        chatId,
+        threadId,
+        messageId,
+        message: undefined,
+        collectedMessageIds: undefined,
+        chatMessages: undefined,
+        sponsoredMessage: undefined,
+        withDynamicLoading,
       };
     }
 
@@ -554,6 +566,11 @@ export default memo(withGlobal(
         sponsoredMessage = selectSponsoredMessage(global, chatId);
       }
     }
+
+    const currentItem = getMediaViewerItem({
+      message, standaloneMedia, mediaIndex, sponsoredMessage,
+    });
+    const viewableMedia = selectViewableMedia(global, origin, currentItem);
 
     let chatMessages: Record<number, ApiMessage> | undefined;
 
@@ -578,18 +595,15 @@ export default memo(withGlobal(
         collectedMessageIds = foundIds;
       } else if (origin === MediaViewerOrigin.SharedMedia) {
         const currentSearch = selectCurrentSharedMediaSearch(global);
-        const { foundIds } = (currentSearch && currentSearch.resultsByType && currentSearch.resultsByType.media) || {};
+        const resultsByType = currentSearch?.resultsByType;
+        const contentType = viewableMedia && getMediaSearchType(viewableMedia?.media);
+        const { foundIds } = (contentType && resultsByType?.[contentType]) || {};
         collectedMessageIds = foundIds;
       } else if (isOriginInline || isOriginAlbum) {
         const outlyingList = selectOutlyingListByMessageId(global, chatId, threadId, messageId);
         collectedMessageIds = outlyingList || selectListedIds(global, chatId, threadId);
       }
     }
-
-    const currentItem = getMediaViewerItem({
-      message, standaloneMedia, mediaIndex, sponsoredMessage,
-    });
-    const viewableMedia = selectViewableMedia(global, currentItem);
 
     return {
       chatId,
@@ -611,6 +625,10 @@ export default memo(withGlobal(
       isSynced,
       currentItem,
       viewableMedia,
+      canUpdateMedia: undefined,
+      avatar: undefined,
+      avatarOwner: undefined,
+      profilePhotos: undefined,
     };
   },
 )(MediaViewer));

@@ -6,7 +6,7 @@
       "dom",
       "dom.iterable",
       "webworker",
-      "es2021"
+      "es2022"
     ],
     "allowJs": true,
     "skipLibCheck": true,
@@ -26,20 +26,19 @@
     "paths": {
       "@teact": ["./src/lib/teact/teact.ts"],
       "@teact/*": ["./src/lib/teact/*"]
-    }
+    },
+    "incremental": true,
+    "tsBuildInfoFile": ".cache/.tsconfig.tsbuildinfo"
   },
   "include": [
     "src",
     "tests",
     "plugins",
     "dev",
-    "webpack.config.ts",
-    "webpack-electron.config.ts",
-    "babel.config.js",
-    "eslint.config.mjs",
+    "*.config.ts",
+    "*.config.js",
     ".fantasticonrc.cjs",
-    "playwright.config.ts",
-    "jest.config.js",
-    ".github/workflows/*.js"
+    ".github/workflows/*.js",
+    "deploy/*.js"
   ]
 }

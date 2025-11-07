@@ -26,11 +26,13 @@ export interface ApiStarGiftRegular {
   limitedPerUser?: true;
   perUserTotal?: number;
   perUserRemains?: number;
+  lockedUntilDate?: number;
 }
 
 export interface ApiStarGiftUnique {
   type: 'starGiftUnique';
   id: string;
+  regularGiftId: string;
   title: string;
   number: number;
   ownerId?: string;
@@ -45,6 +47,8 @@ export interface ApiStarGiftUnique {
   releasedByPeerId?: string;
   requirePremium?: true;
   resaleTonOnly?: true;
+  valueCurrency?: string;
+  valueAmount?: number;
 }
 
 export type ApiStarGift = ApiStarGiftRegular | ApiStarGiftUnique;
@@ -103,9 +107,11 @@ export interface ApiSavedStarGift {
   canTransferAt?: number;
   canResellAt?: number;
   isPinned?: boolean;
+  prepaidUpgradeHash?: string;
   isConverted?: boolean; // Local field, used for Action Message
   upgradeMsgId?: number; // Local field, used for Action Message
   localTag?: number; // Local field, used for key in list
+  dropOriginalDetailsStars?: number;
 }
 
 export type StarGiftAttributeIdModel = {
@@ -240,6 +246,8 @@ export interface ApiStarsTransaction {
   isGiftResale?: true;
   paidMessages?: number;
   isPostsSearch?: true;
+  isDropOriginalDetails?: true;
+  isPrepaidUpgrade?: true;
 }
 
 export interface ApiStarsSubscription {
@@ -280,4 +288,19 @@ export interface ApiDisallowedGiftsSettings {
   shouldDisallowLimitedStarGifts?: true;
   shouldDisallowUniqueStarGifts?: true;
   shouldDisallowPremiumGifts?: true;
+}
+
+export interface ApiStarGiftCollection {
+  collectionId: number;
+  title: string;
+  icon?: ApiSticker;
+  giftsCount: number;
+  hash: string;
+}
+
+export interface ApiStarsRating {
+  level: number;
+  currentLevelStars: number;
+  stars: number;
+  nextLevelStars?: number;
 }

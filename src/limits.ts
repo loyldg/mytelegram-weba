@@ -37,6 +37,7 @@ export const DEFAULT_LIMITS: Record<ApiLimitType, readonly [number, number]> = {
 };
 
 export const DEFAULT_MAX_MESSAGE_LENGTH = 4096;
+export const DEFAULT_MAX_NOTE_LENGTH = 128;
 
 export const DEFAULT_APP_CONFIG: ApiAppConfig = {
   hash: 0,
@@ -58,7 +59,6 @@ export const DEFAULT_APP_CONFIG: ApiAppConfig = {
     moreAccounts: DEFAULT_LIMITS.moreAccounts,
     maxReactions: DEFAULT_LIMITS.maxReactions,
   },
-  canDisplayAutoarchiveSetting: true,
   autologinDomains: [
     'instantview.telegram.org',
     'translations.telegram.org',
@@ -87,7 +87,6 @@ export const DEFAULT_APP_CONFIG: ApiAppConfig = {
   canLimitNewMessagesWithoutPremium: false,
   readDateExpiresAt: 604800,
   premiumBotUsername: 'PremiumBot',
-  premiumInvoiceSlug: 'abc',
   premiumPromoOrder: [
     'stories',
     'more_upload',

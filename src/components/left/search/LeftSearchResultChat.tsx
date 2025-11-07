@@ -1,22 +1,27 @@
-import type { FC } from '../../../lib/teact/teact';
-import type React from '../../../lib/teact/teact';
-import { memo, useCallback } from '../../../lib/teact/teact';
+import type { FC } from '@teact';
+import { memo, useCallback } from '@teact';
 import { getActions, withGlobal } from '../../../global';
 
 import type { ApiChat, ApiUser } from '../../../api/types';
 import { StoryViewerOrigin } from '../../../types';
 
+import { UNMUTE_TIMESTAMP } from '../../../config';
 import { getIsChatMuted } from '../../../global/helpers/notifications';
 import {
-  selectChat, selectIsChatPinned, selectNotifyDefaults, selectNotifyException, selectUser,
+  selectChat,
+  selectIsChatPinned,
+  selectNotifyDefaults,
+  selectNotifyException,
+  selectUser,
 } from '../../../global/selectors';
+import { onDragEnter, onDragLeave } from '../../../util/dragNDropHandlers.ts';
 import { isUserId } from '../../../util/entities/ids';
 import { extractCurrentThemeParams } from '../../../util/themeStyle';
 
 import useChatContextActions from '../../../hooks/useChatContextActions';
 import useFlag from '../../../hooks/useFlag';
+import useLang from '../../../hooks/useLang';
 import useLastCallback from '../../../hooks/useLastCallback';
-import useOldLang from '../../../hooks/useOldLang';
 import useSelectWithEnter from '../../../hooks/useSelectWithEnter';
 
 import GroupChatInfo from '../../common/GroupChatInfo';
@@ -52,8 +57,8 @@ const LeftSearchResultChat: FC<OwnProps & StateProps> = ({
   withOpenAppButton,
   onClick,
 }) => {
-  const { requestMainWebView } = getActions();
-  const oldLang = useOldLang();
+  const { requestMainWebView, updateChatMutedState, openQuickPreview } = getActions();
+  const lang = useLang();
 
   const [isMuteModalOpen, openMuteModal, closeMuteModal] = useFlag();
   const [isChatFolderModalOpen, openChatFolderModal, closeChatFolderModal] = useFlag();
@@ -70,6 +75,10 @@ const LeftSearchResultChat: FC<OwnProps & StateProps> = ({
     openMuteModal();
   }, [markRenderMuteModal, openMuteModal]);
 
+  const handleUnmute = useLastCallback(() => {
+    updateChatMutedState({ chatId, mutedUntil: UNMUTE_TIMESTAMP });
+  });
+
   const contextActions = useChatContextActions({
     chat,
     user,
@@ -77,10 +86,16 @@ const LeftSearchResultChat: FC<OwnProps & StateProps> = ({
     isMuted,
     canChangeFolder,
     handleMute,
+    handleUnmute,
     handleChatFolderChange,
   }, true);
 
-  const handleClick = useLastCallback(() => {
+  const handleClick = useLastCallback((e: React.MouseEvent) => {
+    if (e.altKey && chat && !chat.isForum) {
+      e.preventDefault();
+      openQuickPreview({ id: chatId });
+      return;
+    }
     onClick(chatId);
   });
 
@@ -95,14 +110,26 @@ const LeftSearchResultChat: FC<OwnProps & StateProps> = ({
     });
   });
 
-  const buttonRef = useSelectWithEnter(handleClick);
+  const handleDragEnter = useLastCallback((e) => {
+    e.preventDefault();
+
+    onDragEnter(() => {
+      onClick(chatId);
+    }, true);
+  });
+
+  const buttonRef = useSelectWithEnter(() => {
+    onClick(chatId);
+  });
 
   return (
     <ListItem
       className="chat-item-clickable search-result"
-      onClick={handleClick}
       contextActions={contextActions}
       buttonRef={buttonRef}
+      onClick={handleClick}
+      onDragEnter={handleDragEnter}
+      onDragLeave={onDragLeave}
     >
       {isUserId(chatId) ? (
         <PrivateChatInfo
@@ -123,13 +150,13 @@ const LeftSearchResultChat: FC<OwnProps & StateProps> = ({
       )}
       {withOpenAppButton && user?.hasMainMiniApp && (
         <Button
-          className="ChatBadge miniapp"
+          className="search-result-miniapp-button"
           pill
           fluid
           size="tiny"
           onClick={handleOpenApp}
         >
-          {oldLang('BotOpen')}
+          {lang('BotChatMiniAppOpen')}
         </Button>
       )}
       {shouldRenderMuteModal && (
@@ -153,7 +180,7 @@ const LeftSearchResultChat: FC<OwnProps & StateProps> = ({
 };
 
 export default memo(withGlobal<OwnProps>(
-  (global, { chatId }): StateProps => {
+  (global, { chatId }): Complete<StateProps> => {
     const chat = selectChat(global, chatId);
     const user = selectUser(global, chatId);
     const isPinned = selectIsChatPinned(global, chatId);

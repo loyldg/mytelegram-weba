@@ -1,4 +1,3 @@
-import bigInt from 'big-integer';
 import os from 'os';
 
 import type LocalUpdatePremiumFloodWait from '../../../api/gramjs/updates/UpdatePremiumFloodWait';
@@ -16,6 +15,7 @@ import type { DownloadFileParams, DownloadFileWithDcParams, DownloadMediaParams 
 import type { UploadFileParams } from './uploadFile';
 
 import Deferred from '../../../util/Deferred';
+import { toJSNumber } from '../../../util/numbers';
 import {
   FloodTestPhoneWaitError,
   FloodWaitError,
@@ -44,7 +44,7 @@ import { authFlow, checkAuthorization } from './auth';
 import { downloadFile } from './downloadFile';
 import { uploadFile } from './uploadFile';
 
-import { getRandomInt, sleep } from '../Helpers';
+import { generateRandomBigInt, sleep } from '../Helpers';
 import RequestState from '../network/RequestState';
 import Session from '../sessions/Abstract';
 import MemorySession from '../sessions/Memory';
@@ -370,14 +370,14 @@ class TelegramClient {
 
   async setForceHttpTransport(forceHttpTransport: boolean) {
     this._shouldForceHttpTransport = forceHttpTransport;
-    await this.disconnect();
+    this.disconnect();
     this._sender = undefined;
     await this.connect();
   }
 
   async setAllowHttpTransport(allowHttpTransport: boolean) {
     this._shouldAllowHttpTransport = allowHttpTransport;
-    await this.disconnect();
+    this.disconnect();
     this._sender = undefined;
     await this.connect();
   }
@@ -411,7 +411,7 @@ class TelegramClient {
             return undefined;
           }
           return sender.send(new Api.PingDelayDisconnect({
-            pingId: bigInt(getRandomInt(Number.MIN_SAFE_INTEGER, Number.MAX_SAFE_INTEGER)),
+            pingId: generateRandomBigInt(),
             disconnectDelay: PING_DISCONNECT_DELAY,
           }));
         };
@@ -467,26 +467,22 @@ class TelegramClient {
         lastPongAt = undefined;
       }
     }
-    await this.disconnect();
+    this.disconnect();
   }
 
   /**
      * Disconnects from the Telegram server
      * @returns {Promise<void>}
      */
-  async disconnect() {
+  disconnect() {
     this._sender?.disconnect();
 
-    await Promise.all(
-      Object.values(this._exportedSenderPromises)
-        .map((promises) => {
-          return Object.values(promises).map((promise) => {
-            return promise?.then((sender) => {
-              return sender?.disconnect();
-            });
-          });
-        }).flat(),
-    );
+    Object.values(this._exportedSenderPromises)
+      .forEach((promises) => {
+        Object.values(promises).forEach((promise) => {
+          promise?.then((sender) => sender?.disconnect());
+        });
+      });
 
     Object.values(this._exportedSenderReleaseTimeouts).forEach((timeouts) => {
       Object.values(timeouts).forEach((releaseTimeout) => {
@@ -503,11 +499,11 @@ class TelegramClient {
      * Disconnects all senders and removes all handlers
      * @returns {Promise<void>}
      */
-  async destroy() {
+  destroy() {
     this._destroyed = true;
 
     try {
-      await this.disconnect();
+      this.disconnect();
       this._sender?.destroy();
     } catch (err) {
       // Do nothing
@@ -531,7 +527,7 @@ class TelegramClient {
     await this._sender.authKey.setKey(undefined);
     this.session.setAuthKey(undefined);
     this._isSwitchingDc = true;
-    await this.disconnect();
+    this.disconnect();
     this._sender = undefined;
     return this.connect();
   }
@@ -839,7 +835,7 @@ class TelegramClient {
     return this.downloadFile(loc, {
       dcId,
       isPriority: true,
-    }) as Promise<Buffer | undefined>; // Profile photo cannot be larger than 2GB, right?
+    }) as Promise<Buffer<ArrayBuffer> | undefined>; // Profile photo cannot be larger than 2GB, right?
   }
 
   downloadStickerSetThumb(stickerSet: Api.StickerSet) {
@@ -859,7 +855,7 @@ class TelegramClient {
           thumbVersion,
         }),
         { dcId: stickerSet.thumbDcId! },
-      ) as Promise<Buffer | undefined>; // Sticker thumb cannot be larger than 2GB, right?
+      ) as Promise<Buffer<ArrayBuffer> | undefined>; // Sticker thumb cannot be larger than 2GB, right?
     }
 
     return this.invoke(new Api.messages.GetCustomEmojiDocuments({
@@ -877,9 +873,9 @@ class TelegramClient {
         thumbSize: '',
       }),
       {
-        fileSize: doc.size.toJSNumber(),
+        fileSize: toJSNumber(doc.size),
         dcId: doc.dcId,
-      }) as Promise<Buffer | undefined>; // Sticker thumb cannot be larger than 2GB, right?
+      }) as Promise<Buffer<ArrayBuffer> | undefined>; // Sticker thumb cannot be larger than 2GB, right?
     });
   }
 
@@ -905,7 +901,7 @@ class TelegramClient {
     return undefined;
   }
 
-  _downloadCachedPhotoSize(size: Api.PhotoCachedSize | Api.PhotoStrippedSize) {
+  _downloadCachedPhotoSize(size: Api.PhotoCachedSize | Api.PhotoStrippedSize): Buffer<ArrayBuffer> {
     // No need to download anything, simply write the bytes
     let data;
     if (size instanceof Api.PhotoStrippedSize) {
@@ -995,7 +991,7 @@ class TelegramClient {
         thumbSize: size && 'type' in size ? size.type : '',
       }),
       {
-        fileSize: size && 'size' in size ? size.size : doc.size.toJSNumber(),
+        fileSize: size && 'size' in size ? size.size : toJSNumber(doc.size),
         progressCallback: args.progressCallback,
         start: args.start,
         end: args.end,
@@ -1055,7 +1051,7 @@ class TelegramClient {
   }
 
   async downloadStaticMap(
-    accessHash: bigInt.BigInteger,
+    accessHash: bigint,
     long: number,
     lat: number,
     w: number,
@@ -1191,7 +1187,7 @@ class TelegramClient {
 
           state.after = undefined;
         } else if (e instanceof RPCError && e.errorMessage === 'CONNECTION_NOT_INITED') {
-          await this.disconnect();
+          this.disconnect();
           await sleep(2000);
           await this.connect();
         } else if (e instanceof TimedOutError) {
@@ -1250,10 +1246,11 @@ class TelegramClient {
     }
   }
 
-  async start(authParams: UserAuthParams) {
+  async start(authParams: UserAuthParams, onConnected?: NoneToVoidFunction) {
     if (!this.isConnected()) {
       await this.connect();
     }
+    onConnected?.();
 
     this.loadConfig();
 
@@ -1339,7 +1336,7 @@ class TelegramClient {
   }
 }
 
-function timeout(cb: () => void, ms: number) {
+function timeout(cb: () => void | Promise<unknown>, ms: number) {
   let isResolved = false;
 
   return Promise.race([
@@ -1350,7 +1347,7 @@ function timeout(cb: () => void, ms: number) {
   });
 }
 
-async function attempts(cb: () => Promise<void> | void, times: number, pause: number) {
+async function attempts(cb: () => Promise<unknown> | void, times: number, pause: number) {
   for (let i = 0; i < times; i++) {
     try {
       // We need to `return await` here so it can be caught locally

@@ -427,9 +427,8 @@ const GroupCall: FC<OwnProps & StateProps> = ({
           onClick={handleInviteMember}
           className={styles.addParticipantButton}
           ariaLabel={lang('VoipGroupInviteMember')}
-        >
-          <Icon name="add-user-filled" />
-        </FloatingActionButton>
+          iconName="add-user-filled"
+        />
       </div>
 
       <div className={styles.mainVideoContainer}>
@@ -552,7 +551,7 @@ const GroupCall: FC<OwnProps & StateProps> = ({
 };
 
 export default memo(withGlobal<OwnProps>(
-  (global, { groupCallId }): StateProps => {
+  (global, { groupCallId }): Complete<StateProps> => {
     const {
       connectionState, title, participants, participantsCount, chatId,
     } = selectGroupCall(global, groupCallId) || {};

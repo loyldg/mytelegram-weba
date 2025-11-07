@@ -1,5 +1,5 @@
-import type { ApiMessage, ApiSponsoredMessage } from '../../api/types';
-import type { PerformanceTypeKey, ThemeKey } from '../../types';
+import type { ApiMessage, ApiPeer, ApiSponsoredMessage } from '../../api/types';
+import type { CustomPeer, PerformanceTypeKey, ThemeKey } from '../../types';
 import type { GlobalState, TabArgs } from '../types';
 import { NewChatMembersProgress, RightColumnContent } from '../../types';
 
@@ -59,7 +59,7 @@ export function selectRightColumnContentKey<T extends GlobalState>(
     RightColumnContent.GifSearch
   ) : tabState.newChatMembersProgress !== NewChatMembersProgress.Closed ? (
     RightColumnContent.AddingMembers
-  ) : tabState.isChatInfoShown && tabState.messageLists.length ? (
+  ) : tabState.chatInfo.isOpen && tabState.messageLists.length ? (
     RightColumnContent.ChatInfo
   ) : undefined;
 }
@@ -185,4 +185,15 @@ export function selectSettingsScreen<T extends GlobalState>(
   global: T, ...[tabId = getCurrentTabId()]: TabArgs<T>
 ) {
   return selectTabState(global, tabId).leftColumn.settingsScreen;
+}
+
+export function selectPeerProfileColor<T extends GlobalState>(global: T, peer: ApiPeer | CustomPeer) {
+  const isCustomPeer = 'isCustomPeer' in peer;
+  const peerColorId = isCustomPeer ? peer.peerColorId : undefined;
+  const profileColor = !isCustomPeer ? peer.profileColor : undefined;
+  if (profileColor?.type === 'collectible') return undefined;
+
+  const key = profileColor?.color ?? peerColorId;
+  if (key === undefined) return undefined;
+  return global.peerColors?.profile?.[key];
 }

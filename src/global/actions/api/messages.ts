@@ -115,6 +115,7 @@ import {
   selectCurrentChat,
   selectCurrentMessageList,
   selectCurrentViewedStory,
+  selectCustomEmoji,
   selectDraft,
   selectEditingId,
   selectEditingMessage,
@@ -168,6 +169,7 @@ addActionHandler('loadViewportMessages', (global, actions, payload): ActionRetur
     direction = LoadMoreDirection.Around,
     isBudgetPreload = false,
     shouldForceRender = false,
+    forceLastSlice = false,
     onLoaded,
     onError,
     tabId = getCurrentTabId(),
@@ -198,7 +200,9 @@ addActionHandler('loadViewportMessages', (global, actions, payload): ActionRetur
   const listedIds = selectListedIds(global, chatId, threadId);
 
   if (!viewportIds || !viewportIds.length || direction === LoadMoreDirection.Around) {
-    const offsetId = selectFocusedMessageId(global, chatId, tabId) || selectRealLastReadId(global, chatId, threadId);
+    const offsetId = !forceLastSlice ? (
+      selectFocusedMessageId(global, chatId, tabId) || selectRealLastReadId(global, chatId, threadId)
+    ) : undefined;
     const isOutlying = Boolean(offsetId && listedIds && !listedIds.includes(offsetId));
     const historyIds = (isOutlying
       ? selectOutlyingListByMessageId(global, chatId, threadId, offsetId!)
@@ -221,17 +225,19 @@ addActionHandler('loadViewportMessages', (global, actions, payload): ActionRetur
       onLoaded?.();
     }
   } else {
-    const offsetId = direction === LoadMoreDirection.Backwards ? viewportIds[0] : viewportIds[viewportIds.length - 1];
+    const offsetId = !forceLastSlice ? (
+      direction === LoadMoreDirection.Backwards ? viewportIds[0] : viewportIds[viewportIds.length - 1]
+    ) : undefined;
 
     // Prevent requests with local offsets
-    if (isLocalMessageId(offsetId)) return;
+    if (offsetId && isLocalMessageId(offsetId)) return;
 
     // Prevent unnecessary requests in threads
     if (offsetId === threadId && direction === LoadMoreDirection.Backwards) return;
 
-    const isOutlying = Boolean(listedIds && !listedIds.includes(offsetId));
+    const isOutlying = Boolean(listedIds && offsetId && !listedIds.includes(offsetId));
     const historyIds = (isOutlying
-      ? selectOutlyingListByMessageId(global, chatId, threadId, offsetId) : listedIds)!;
+      ? selectOutlyingListByMessageId(global, chatId, threadId, offsetId!) : listedIds)!;
     if (historyIds?.length) {
       const {
         newViewportIds, areSomeLocal, areAllLocal,
@@ -558,7 +564,7 @@ addActionHandler('sendInviteMessages', async (global, actions, payload): Promise
   await Promise.all(userIds.map((userId) => {
     const chat = selectChat(global, userId);
     if (!chat) {
-      return undefined;
+      return Promise.resolve(undefined);
     }
     const userFullName = getUserFullName(selectUser(global, userId));
     if (userFullName) {
@@ -1360,7 +1366,7 @@ addActionHandler('toggleTodoCompleted', (global, actions, payload): ActionReturn
     content: newContent,
   };
 
-  global = updateWithLocalMedia(global, chatId, message.id, messageUpdate);
+  global = updateWithLocalMedia(global, chatId, message.id, false, messageUpdate);
   setGlobal(global);
 
   callApi('toggleTodoCompleted', { chat, messageId: message.id, completedIds, incompletedIds });
@@ -1552,7 +1558,7 @@ addActionHandler('transcribeAudio', async (global, actions, payload): Promise<vo
 addActionHandler('loadCustomEmojis', async (global, actions, payload): Promise<void> => {
   const { ids, ignoreCache } = payload;
   const newCustomEmojiIds = ignoreCache ? ids
-    : unique(ids.filter((documentId) => !global.customEmojis.byId[documentId]));
+    : unique(ids.filter((documentId) => !selectCustomEmoji(global, documentId)));
   const customEmoji = await callApi('fetchCustomEmoji', {
     documentId: newCustomEmojiIds,
   });

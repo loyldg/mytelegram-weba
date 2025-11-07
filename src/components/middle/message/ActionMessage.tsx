@@ -27,7 +27,8 @@ import {
   selectTabState,
   selectTheme,
 } from '../../../global/selectors';
-import { IS_ANDROID, IS_ELECTRON, IS_FLUID_BACKGROUND_SUPPORTED } from '../../../util/browser/windowEnvironment';
+import { IS_TAURI } from '../../../util/browser/globalEnvironment';
+import { IS_ANDROID, IS_FLUID_BACKGROUND_SUPPORTED } from '../../../util/browser/windowEnvironment';
 import buildClassName from '../../../util/buildClassName';
 import { isLocalMessageId } from '../../../util/keys/messageKey';
 import { isElementInViewport } from '../../../util/visibility/isElementInViewport';
@@ -43,7 +44,7 @@ import useMessageResizeObserver from '../../../hooks/useResizeMessageObserver';
 import useShowTransition from '../../../hooks/useShowTransition';
 import { type OnIntersectPinnedMessage } from '../hooks/usePinnedMessage';
 import useFluidBackgroundFilter from './hooks/useFluidBackgroundFilter';
-import useFocusMessage from './hooks/useFocusMessage';
+import useFocusMessageListElement from './hooks/useFocusMessageListElement';
 
 import ActionMessageText from './ActionMessageText';
 import ChannelPhoto from './actions/ChannelPhoto';
@@ -175,9 +176,8 @@ const ActionMessage = ({
     replyMessage,
     id,
   );
-  useFocusMessage({
+  useFocusMessageListElement({
     elementRef: ref,
-    chatId,
     isFocused,
     focusDirection,
     noFocusHighlight,
@@ -199,7 +199,7 @@ const ActionMessage = ({
   } = useContextMenuHandlers(
     ref,
     (isTouchScreen && isInSelectMode) || isAccountFrozen,
-    !IS_ELECTRON,
+    !IS_TAURI,
     IS_ANDROID,
     getIsMessageListReady,
   );
@@ -516,7 +516,7 @@ const ActionMessage = ({
 };
 
 export default memo(withGlobal<OwnProps>(
-  (global, { message, threadId }): StateProps => {
+  (global, { message, threadId }): Complete<StateProps> => {
     const tabState = selectTabState(global);
     const { themes } = global.settings;
 

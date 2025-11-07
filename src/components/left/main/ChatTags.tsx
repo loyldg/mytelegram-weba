@@ -1,41 +1,32 @@
-import { memo, useMemo } from '../../../lib/teact/teact';
+import { memo } from '../../../lib/teact/teact';
 
 import type { ApiChatFolder } from '../../../api/types';
 
-import { ALL_FOLDER_ID } from '../../../config';
 import buildClassName from '../../../util/buildClassName';
-import { getApiPeerColorClass } from '../../common/helpers/peerColor';
+import { REM } from '../../common/helpers/mediaDimensions';
 import { renderTextWithEntities } from '../../common/helpers/renderTextWithEntities';
+
+import { getPeerColorClass } from '../../../hooks/usePeerColor';
 
 import styles from './ChatTags.module.scss';
 
 const MAX_VISIBLE_TAGS = 3;
+const CUSTOM_EMOJI_SIZE = 0.875 * REM;
 
 type OwnProps = {
-  folderIds?: number[];
-  orderedIds?: number[];
+  orderedFolderIds?: number[];
   chatFoldersById?: Record<number, ApiChatFolder>;
-  activeChatFolder?: number;
+  itemClassName?: string;
 };
 
 const ChatTags = ({
-  folderIds,
-  orderedIds,
+  orderedFolderIds,
   chatFoldersById,
-  activeChatFolder,
+  itemClassName,
 }: OwnProps) => {
-  const activeFolderId = activeChatFolder !== undefined && orderedIds ? orderedIds[activeChatFolder] : undefined;
-
-  const orderedFolderIds = useMemo(() => orderedIds?.filter((id) => {
-    const isFolder = folderIds?.includes(id);
-    const isActive = id === activeFolderId;
-    const isAll = id === ALL_FOLDER_ID;
-
-    const folder = chatFoldersById?.[id];
-    const hasColor = folder?.color !== undefined && folder.color !== -1;
-
-    return isFolder && !isActive && !isAll && hasColor;
-  }) || [], [orderedIds, folderIds, activeFolderId, chatFoldersById]);
+  if (!orderedFolderIds) {
+    return undefined;
+  }
 
   const visibleFolderIds = orderedFolderIds.slice(0, MAX_VISIBLE_TAGS);
   const remainingCount = orderedFolderIds.length - visibleFolderIds.length;
@@ -48,22 +39,22 @@ const ChatTags = ({
           <div
             key={folder.id}
             className={buildClassName(
-              'ChatTags',
               styles.tag,
-              getApiPeerColorClass({ color: folder.color }),
+              folder.color !== undefined && folder.color !== -1 && getPeerColorClass(folder.color),
+              itemClassName,
             )}
           >
             {renderTextWithEntities({
               text: folder.title.text,
               entities: folder.title.entities,
               noCustomEmojiPlayback: folder.noTitleAnimations,
-              emojiSize: 12,
+              emojiSize: CUSTOM_EMOJI_SIZE,
             })}
           </div>
         );
       })}
       {remainingCount > 0 && (
-        <div className={`ChatTags ${styles.tag} ${styles.tagColorMore}`}>
+        <div className={buildClassName(styles.tag, styles.tagColorMore, itemClassName)}>
           +
           {remainingCount}
         </div>

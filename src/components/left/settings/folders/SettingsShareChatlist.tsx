@@ -24,11 +24,9 @@ import useLastCallback from '../../../../hooks/useLastCallback';
 import useOldLang from '../../../../hooks/useOldLang';
 
 import AnimatedIcon from '../../../common/AnimatedIcon';
-import Icon from '../../../common/icons/Icon';
 import LinkField from '../../../common/LinkField';
 import PeerPicker from '../../../common/pickers/PeerPicker';
 import FloatingActionButton from '../../../ui/FloatingActionButton';
-import Spinner from '../../../ui/Spinner';
 
 type OwnProps = {
   isActive?: boolean;
@@ -198,19 +196,15 @@ const SettingsShareChatlist: FC<OwnProps & StateProps> = ({
         disabled={isDisabled}
         onClick={handleSubmit}
         ariaLabel="Save changes"
-      >
-        {isLoading ? (
-          <Spinner color="white" />
-        ) : (
-          <Icon name="check" />
-        )}
-      </FloatingActionButton>
+        iconName="check"
+        isLoading={isLoading}
+      />
     </div>
   );
 };
 
 export default memo(withGlobal<OwnProps>(
-  (global): StateProps => {
+  (global): Complete<StateProps> => {
     const { folderId, url, isLoading } = selectTabState(global).shareFolderScreen || {};
     const folder = folderId ? selectChatFolder(global, folderId) : undefined;
     const invite = folderId ? global.chatFolders.invites[folderId]?.find((i) => i.url === url) : undefined;

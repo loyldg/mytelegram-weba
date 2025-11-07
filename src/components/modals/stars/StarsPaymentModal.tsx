@@ -170,7 +170,7 @@ const StarPaymentModal = ({
       onClose={closeStarsPaymentModal}
     >
       <BalanceBlock balance={starsBalanceState?.balance} className={styles.modalBalance} />
-      <div className={styles.paymentImages} dir={oldLang.isRtl ? 'ltr' : 'rtl'}>
+      <div className={styles.paymentImages} dir={lang.isRtl ? 'ltr' : 'rtl'}>
         {paidMediaMessage ? (
           <PaidMediaThumb media={paidMediaMessage.content.paidMedia!.extendedMedia} />
         ) : inviteCustomPeer ? (
@@ -215,7 +215,7 @@ const StarPaymentModal = ({
 };
 
 export default memo(withGlobal<OwnProps>(
-  (global, { modal }): StateProps => {
+  (global, { modal }): Complete<StateProps> => {
     const bot = modal?.form?.botId ? selectUser(global, modal.form.botId) : undefined;
 
     const messageInputInvoice = modal?.inputInvoice?.type === 'message' ? modal.inputInvoice : undefined;

@@ -1,10 +1,9 @@
-import BigInt from 'big-integer';
-
 import type { DownloadFileWithDcParams } from './downloadFile';
 import type { MockTypes } from './mockUtils/MockTypes';
 import type { SizeType } from './TelegramClient';
 
 import { GENERAL_TOPIC_ID } from '../../../config';
+import { toJSNumber } from '../../../util/numbers';
 import { Logger } from '../extensions';
 import { UpdateConnectionState } from '../network';
 import Api from '../tl/api';
@@ -139,6 +138,7 @@ class TelegramClient {
         messages: messages.map((message) => createMockedMessage(peerId, message.id, this.mockData)),
         chats: [],
         users: [],
+        topics: [],
       });
     }
 
@@ -159,11 +159,11 @@ class TelegramClient {
       });
     }
 
-    if (request instanceof Api.channels.GetForumTopics) {
-      const channelId = getIdFromInputPeer(request.channel);
-      if (!channelId) return undefined;
+    if (request instanceof Api.messages.GetForumTopics) {
+      const peerId = getIdFromInputPeer(request.peer);
+      if (!peerId) return undefined;
 
-      const topics = this.getChannel(channelId)?.forumTopics;
+      const topics = this.getChannel(peerId)?.forumTopics;
 
       if (!topics) return undefined;
 
@@ -174,7 +174,7 @@ class TelegramClient {
         topics: topics
           .sort((a, b) => b.id - a.id)
           .map((topic) => {
-            return createMockedForumTopic(channelId, topic.id, this.mockData);
+            return createMockedForumTopic(peerId, topic.id, this.mockData);
           }).filter((topic) => {
             if (offsetTopicId) {
               return topic.id < offsetTopicId;
@@ -195,7 +195,7 @@ class TelegramClient {
           about: 'lol',
           settings: new Api.PeerSettings({}),
           notifySettings: new Api.PeerNotifySettings({}),
-          id: BigInt(1),
+          id: 1n,
           commonChatsCount: 0,
         }),
         chats: [],
@@ -220,6 +220,7 @@ class TelegramClient {
         messages: this.getMessagesFrom(peerId),
         chats: [],
         users: [],
+        topics: [],
       });
     }
 
@@ -381,7 +382,7 @@ class TelegramClient {
         thumbSize: size ? size.type : '',
       }),
       {
-        fileSize: size ? size.size : doc.size.toJSNumber(),
+        fileSize: size ? size.size : toJSNumber(doc.size),
         progressCallback: args.progressCallback,
         start: args.start,
         end: args.end,

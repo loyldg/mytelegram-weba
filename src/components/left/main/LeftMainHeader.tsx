@@ -1,6 +1,6 @@
 import type { FC } from '../../../lib/teact/teact';
 import {
-  memo, useEffect, useMemo, useRef,
+  memo, useEffect, useMemo,
 } from '../../../lib/teact/teact';
 import { getActions, withGlobal } from '../../../global';
 
@@ -21,14 +21,14 @@ import {
   selectTheme,
 } from '../../../global/selectors';
 import { selectSharedSettings } from '../../../global/selectors/sharedState';
-import { IS_APP, IS_ELECTRON, IS_MAC_OS } from '../../../util/browser/windowEnvironment';
+import { IS_TAURI } from '../../../util/browser/globalEnvironment';
+import { IS_APP, IS_MAC_OS } from '../../../util/browser/windowEnvironment';
 import buildClassName from '../../../util/buildClassName';
 import captureEscKeyListener from '../../../util/captureEscKeyListener';
 import { formatDateToString } from '../../../util/dates/dateFormat';
 
 import useAppLayout from '../../../hooks/useAppLayout';
 import useConnectionStatus from '../../../hooks/useConnectionStatus';
-import useElectronDrag from '../../../hooks/useElectronDrag';
 import useFlag from '../../../hooks/useFlag';
 import { useHotkeys } from '../../../hooks/useHotkeys';
 import useLang from '../../../hooks/useLang';
@@ -225,11 +225,7 @@ const LeftMainHeader: FC<OwnProps & StateProps> = ({
     handleDropdownMenuTransitionEnd,
   } = useLeftHeaderButtonRtlForumTransition(shouldHideSearch);
 
-  const headerRef = useRef<HTMLDivElement>();
-  useElectronDrag(headerRef);
-
-  const withStoryToggler = !isSearchFocused
-    && !selectedSearchDate && !globalSearchChatId && !areContactsVisible;
+  const withStoryToggler = !isSearchFocused && !selectedSearchDate && !globalSearchChatId && !areContactsVisible;
 
   const searchContent = useMemo(() => {
     return (
@@ -260,23 +256,38 @@ const LeftMainHeader: FC<OwnProps & StateProps> = ({
     );
   }, [globalSearchChatId, selectedSearchDate]);
 
+  const version = useMemo(() => {
+    let fullVersion = '';
+    if (IS_TAURI && window.tauri.version) {
+      fullVersion = `Tauri ${window.tauri.version} | `;
+    }
+
+    fullVersion += `${APP_NAME} ${versionString}`;
+
+    return fullVersion;
+  }, [versionString]);
+
   return (
     <div className="LeftMainHeader">
-      <div id="LeftMainHeader" className="left-header" ref={headerRef}>
-        {oldLang.isRtl && <div className="DropdownMenuFiller" />}
+      <div
+        id="LeftMainHeader"
+        className="left-header"
+        data-tauri-drag-region={IS_TAURI && IS_MAC_OS ? true : undefined}
+      >
+        {lang.isRtl && <div className="DropdownMenuFiller" />}
         <DropdownMenu
           trigger={MainButton}
-          footer={`${APP_NAME} ${versionString}`}
+          footer={version}
           className={buildClassName(
             'main-menu',
-            oldLang.isRtl && 'rtl',
-            shouldHideSearch && oldLang.isRtl && 'right-aligned',
-            shouldDisableDropdownMenuTransitionRef.current && oldLang.isRtl && 'disable-transition',
+            lang.isRtl && 'rtl',
+            shouldHideSearch && lang.isRtl && 'right-aligned',
+            shouldDisableDropdownMenuTransitionRef.current && lang.isRtl && 'disable-transition',
           )}
           forceOpen={isBotMenuOpen}
-          positionX={shouldHideSearch && oldLang.isRtl ? 'right' : 'left'}
-          transformOriginX={IS_ELECTRON && IS_MAC_OS && !isFullscreen ? 90 : undefined}
-          onTransitionEnd={oldLang.isRtl ? handleDropdownMenuTransitionEnd : undefined}
+          positionX={shouldHideSearch && lang.isRtl ? 'right' : 'left'}
+          transformOriginX={IS_TAURI && IS_MAC_OS && !isFullscreen ? 90 : undefined}
+          onTransitionEnd={lang.isRtl ? handleDropdownMenuTransitionEnd : undefined}
         >
           <LeftSideMenuItems
             onSelectArchived={onSelectArchived}
@@ -343,7 +354,7 @@ const LeftMainHeader: FC<OwnProps & StateProps> = ({
 };
 
 export default memo(withGlobal<OwnProps>(
-  (global): StateProps => {
+  (global): Complete<StateProps> => {
     const tabState = selectTabState(global);
     const {
       query: searchQuery, fetchingStatus, chatId, minDate,

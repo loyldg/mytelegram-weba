@@ -87,6 +87,7 @@ const GiftWithdrawModal = ({ modal, hasPassword, passwordHint }: OwnProps & Stat
     <Modal
       isOpen={isOpen}
       title={lang('GiftWithdrawTitle')}
+      isCondensedHeader
       hasCloseButton
       isSlim
       onClose={handleClose}
@@ -98,8 +99,10 @@ const GiftWithdrawModal = ({ modal, hasPassword, passwordHint }: OwnProps & Stat
               <RadialPatternBackground
                 className={styles.backdrop}
                 backgroundColors={[giftAttributes.backdrop!.centerColor, giftAttributes.backdrop!.edgeColor]}
-                patternColor={giftAttributes.backdrop?.patternColor}
                 patternIcon={giftAttributes.pattern?.sticker}
+                ringsCount={1}
+                ovalFactor={1}
+                patternSize={12}
               />
               <AnimatedIconFromSticker
                 className={styles.sticker}
@@ -142,7 +145,7 @@ const GiftWithdrawModal = ({ modal, hasPassword, passwordHint }: OwnProps & Stat
           placeholder={lang('CheckPasswordPlaceholder')}
           error={renderingModal?.errorKey && lang.withRegular(renderingModal?.errorKey)}
           description={lang('CheckPasswordDescription')}
-          clearError={clearGiftWithdrawError}
+          onClearError={clearGiftWithdrawError}
           isLoading={renderingModal?.isLoading}
           hint={passwordHint}
           isPasswordVisible={shouldShowPassword}
@@ -157,7 +160,7 @@ const GiftWithdrawModal = ({ modal, hasPassword, passwordHint }: OwnProps & Stat
 };
 
 export default memo(withGlobal<OwnProps>(
-  (global): StateProps => {
+  (global): Complete<StateProps> => {
     const {
       settings: {
         byKey: {

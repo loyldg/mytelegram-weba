@@ -185,9 +185,9 @@ function StoryStatistics({
 
       <div ref={containerRef}>
         {GRAPHS.map((graph) => {
-          const isReady = loadedCharts.current.has(graph) && !errorCharts.current.has(graph);
+          const isGraphReady = loadedCharts.current.has(graph) && !errorCharts.current.has(graph);
           return (
-            <div className={buildClassName(styles.graph, !isReady && styles.hidden)} />
+            <div className={buildClassName(styles.graph, !isGraphReady && styles.hidden)} />
           );
         })}
       </div>
@@ -226,7 +226,7 @@ function StoryStatistics({
 }
 
 export default memo(withGlobal<OwnProps>(
-  (global, { chatId }): StateProps => {
+  (global, { chatId }): Complete<StateProps> => {
     const dcId = selectChatFullInfo(global, chatId)?.statisticsDcId;
     const tabState = selectTabState(global);
     const statistics = tabState.statistics.currentStory;

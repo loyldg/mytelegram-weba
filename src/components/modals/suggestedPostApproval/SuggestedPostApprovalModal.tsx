@@ -145,7 +145,7 @@ const SuggestedPostApprovalModal = ({
       const time = formatScheduledDateTime(scheduleDate, lang, oldLang);
 
       const key
-      = isAdmin ? 'SuggestedPostConfirmDetailsWithTimeAdmin' : 'SuggestedPostConfirmDetailsWithTimeUser';
+        = isAdmin ? 'SuggestedPostConfirmDetailsWithTimeAdmin' : 'SuggestedPostConfirmDetailsWithTimeUser';
 
       return (
         <>
@@ -216,7 +216,7 @@ const SuggestedPostApprovalModal = ({
 };
 
 export default memo(withGlobal<OwnProps>(
-  (global, { modal }): StateProps => {
+  (global, { modal }): Complete<StateProps> => {
     const message = modal && selectChatMessage(global, modal.chatId, modal.messageId);
     const sender = message ? selectSender(global, message) : undefined;
     const isAdmin = modal && selectIsMonoforumAdmin(global, modal.chatId);

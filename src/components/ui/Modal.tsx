@@ -30,6 +30,7 @@ export type OwnProps = {
   className?: string;
   contentClassName?: string;
   headerClassName?: string;
+  dialogClassName?: string;
   isOpen?: boolean;
   header?: TeactNode;
   isSlim?: boolean;
@@ -72,6 +73,7 @@ const Modal: FC<OwnProps> = ({
   dialogStyle,
   isLowStackPriority,
   dialogContent,
+  dialogClassName,
   onClose,
   onCloseAnimationEnd,
   onEnter,
@@ -143,8 +145,7 @@ const Modal: FC<OwnProps> = ({
       return header;
     }
 
-    if (!title && !withCloseButton) return undefined;
-    const closeButton = (
+    const closeButton = withCloseButton ? (
       <Button
         className={buildClassName(hasAbsoluteCloseButton && 'modal-absolute-close-button')}
         round
@@ -155,18 +156,14 @@ const Modal: FC<OwnProps> = ({
       >
         <Icon name="close" />
       </Button>
-    );
+    ) : undefined;
 
-    if (hasAbsoluteCloseButton) {
-      return closeButton;
-    }
-
-    return (
+    return title ? (
       <div className={buildClassName('modal-header', headerClassName, isCondensedHeader && 'modal-header-condensed')}>
-        {withCloseButton && closeButton}
+        {closeButton}
         <div className="modal-title">{title}</div>
       </div>
-    );
+    ) : closeButton;
   }
 
   const fullClassName = buildClassName(
@@ -176,6 +173,11 @@ const Modal: FC<OwnProps> = ({
     isSlim && 'slim',
     isLowStackPriority && 'low-priority',
     withBalanceBar && 'with-balance-bar',
+  );
+
+  const modalDialogClassName = buildClassName(
+    'modal-dialog',
+    dialogClassName,
   );
 
   return (
@@ -194,7 +196,7 @@ const Modal: FC<OwnProps> = ({
         )}
         <div className="modal-container">
           <div className="modal-backdrop" onClick={!noBackdropClose ? onClose : undefined} />
-          <div className="modal-dialog" ref={dialogRef} style={dialogStyle}>
+          <div className={modalDialogClassName} ref={dialogRef} style={dialogStyle}>
             {renderHeader()}
             {dialogContent}
             <div className={buildClassName('modal-content custom-scroll', contentClassName)} style={style}>

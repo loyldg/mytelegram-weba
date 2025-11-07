@@ -19,6 +19,17 @@
   font-size: 1.25rem;
 }
 
+.descriptionConfirm {
+  padding-bottom: 0.75rem;
+  color: var(--color-text-secondary);
+}
+
+.titleConfirm {
+  margin-bottom: 0.75rem;
+  font-size: 1.25rem;
+  font-weight: var(--font-weight-medium);
+}
+
 .header {
   display: flex;
   flex-direction: column;
@@ -36,11 +47,21 @@
   color: var(--color-error);
 }
 
+.modalContent {
+  position: relative;
+  max-height: min(97vh, 48rem) !important;
+}
+
 .headerSplitButton {
   position: absolute;
   right: 0.375rem;
+
   display: flex;
   flex-direction: row;
+
+  border-radius: 1rem;
+
+  backdrop-filter: blur(0.5rem);
 }
 
 .headerButton,
@@ -128,10 +149,21 @@
   line-height: 1;
 }
 
+.uniqueValue,
 .uniqueAttribute {
   display: flex;
   gap: 0.25rem;
   align-items: center;
+}
+
+.attributeName {
+  cursor: pointer;
+  color: var(--color-primary);
+  transition: opacity 0.15s;
+
+  &:hover {
+    opacity: 0.75;
+  }
 }
 
 /* stylelint-disable-next-line plugin/stylelint-group-selectors */
@@ -164,4 +196,15 @@
   pointer-events: none;
   margin-inline-start: 0.25rem;
   color: var(--color-primary);
+}
+
+.messageContainer {
+  position: relative;
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.removeMessageButton {
+  color: var(--color-primary) !important;
 }

@@ -11,7 +11,7 @@ import type {
   FoldersState,
 } from '../../../../hooks/reducers/useFoldersReducer';
 
-import { STICKER_SIZE_FOLDER_SETTINGS } from '../../../../config';
+import { FOLDER_TITLE_MAX_LENGTH, STICKER_SIZE_FOLDER_SETTINGS } from '../../../../config';
 import { selectCanShareFolder, selectIsCurrentUserPremium } from '../../../../global/selectors';
 import { selectCurrentLimit } from '../../../../global/selectors/limits';
 import buildClassName from '../../../../util/buildClassName';
@@ -20,12 +20,12 @@ import { findIntersectionWithSet } from '../../../../util/iteratees';
 import { MEMO_EMPTY_ARRAY } from '../../../../util/memo';
 import { CUSTOM_PEER_EXCLUDED_CHAT_TYPES, CUSTOM_PEER_INCLUDED_CHAT_TYPES } from '../../../../util/objects/customPeer';
 import { LOCAL_TGS_URLS } from '../../../common/helpers/animatedAssets';
-import { getApiPeerColorClass } from '../../../common/helpers/peerColor';
 import { renderTextWithEntities } from '../../../common/helpers/renderTextWithEntities';
 
 import { selectChatFilters } from '../../../../hooks/reducers/useFoldersReducer';
 import useHistoryBack from '../../../../hooks/useHistoryBack';
 import useOldLang from '../../../../hooks/useOldLang';
+import { getPeerColorClass } from '../../../../hooks/usePeerColor';
 
 import AnimatedIconWithPreview from '../../../common/AnimatedIconWithPreview';
 import GroupChatInfo from '../../../common/GroupChatInfo';
@@ -34,7 +34,6 @@ import PrivateChatInfo from '../../../common/PrivateChatInfo';
 import FloatingActionButton from '../../../ui/FloatingActionButton';
 import InputText from '../../../ui/InputText';
 import ListItem from '../../../ui/ListItem';
-import Spinner from '../../../ui/Spinner';
 
 type OwnProps = {
   state: FoldersState;
@@ -309,6 +308,7 @@ const SettingsFoldersEdit: FC<OwnProps & StateProps> = ({
             className="mb-0"
             label={lang('FilterNameHint')}
             value={state.folder.title.text}
+            maxLength={FOLDER_TITLE_MAX_LENGTH}
             onChange={handleChange}
             error={state.error && state.error === ERROR_NO_TITLE ? ERROR_NO_TITLE : undefined}
           />
@@ -355,12 +355,13 @@ const SettingsFoldersEdit: FC<OwnProps & StateProps> = ({
         )}
 
         <div className="settings-item pt-3">
-          <h4 className="settings-item-header mb-3 color-picker-title" dir={lang.isRtl ? 'rtl' : undefined}>
-            {lang('FilterColorTitle')}
+          <h4 className="settings-item-header mb-3 color-picker-header" dir={lang.isRtl ? 'rtl' : undefined}>
+            <span className="color-picker-title-text">{lang('FilterColorTitle')}</span>
             <div className={buildClassName(
+              'color-picker-title',
               'color-picker-selected-color',
               isCurrentUserPremium && state.folder.color !== undefined && state.folder.color !== -1
-                ? getApiPeerColorClass({ color: state.folder.color })
+                ? getPeerColorClass(state.folder.color)
                 : 'color-picker-item-disabled',
             )}
             >
@@ -371,7 +372,7 @@ const SettingsFoldersEdit: FC<OwnProps & StateProps> = ({
               })}
             </div>
           </h4>
-          <div className="color-picker">
+          <div className="color-picker custom-scroll-x">
             {FOLDER_COLORS.map((color) => (
               <button
                 key={color}
@@ -386,7 +387,7 @@ const SettingsFoldersEdit: FC<OwnProps & StateProps> = ({
                 }}
                 className={buildClassName(
                   'color-picker-item',
-                  getApiPeerColorClass({ color }),
+                  getPeerColorClass(color),
                   !isCurrentUserPremium && 'color-picker-item-hover-disabled',
                   color === state.folder.color && isCurrentUserPremium && 'color-picker-item-active',
                 )}
@@ -416,7 +417,7 @@ const SettingsFoldersEdit: FC<OwnProps & StateProps> = ({
               )}
             </button>
           </div>
-          <p className="settings-item-description mb-0" dir={lang.isRtl ? 'rtl' : undefined}>
+          <p className="settings-item-description mb-0 mt-3" dir={lang.isRtl ? 'rtl' : undefined}>
             {lang('FilterColorHint')}
           </p>
         </div>
@@ -459,19 +460,15 @@ const SettingsFoldersEdit: FC<OwnProps & StateProps> = ({
         disabled={state.isLoading}
         onClick={handleSubmit}
         ariaLabel={state.mode === 'edit' ? 'Save changes' : 'Create folder'}
-      >
-        {state.isLoading ? (
-          <Spinner color="white" />
-        ) : (
-          <Icon name="check" />
-        )}
-      </FloatingActionButton>
+        iconName="check"
+        isLoading={state.isLoading}
+      />
     </div>
   );
 };
 
 export default memo(withGlobal<OwnProps>(
-  (global, { state }): StateProps => {
+  (global, { state }): Complete<StateProps> => {
     const { listIds } = global.chats;
     const { byId, invites } = global.chatFolders;
     const chatListCount = Object.values(byId).reduce((acc, el) => acc + (el.isChatList ? 1 : 0), 0);

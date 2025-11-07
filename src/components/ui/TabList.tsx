@@ -1,4 +1,4 @@
-import type { FC, TeactNode } from '../../lib/teact/teact';
+import type { TeactNode } from '../../lib/teact/teact';
 import { memo, useEffect, useRef } from '../../lib/teact/teact';
 
 import type { MenuItemContextAction } from './ListItem';
@@ -8,7 +8,7 @@ import { IS_ANDROID, IS_IOS } from '../../util/browser/windowEnvironment';
 import buildClassName from '../../util/buildClassName';
 
 import useHorizontalScroll from '../../hooks/useHorizontalScroll';
-import useOldLang from '../../hooks/useOldLang';
+import useLang from '../../hooks/useLang';
 import usePreviousDeprecated from '../../hooks/usePreviousDeprecated';
 
 import Tab from './Tab';
@@ -29,20 +29,26 @@ type OwnProps = {
   activeTab: number;
   className?: string;
   tabClassName?: string;
-  onSwitchTab: (index: number) => void;
   contextRootElementSelector?: string;
+  onSwitchTab: (index: number) => void;
 };
 
 const TAB_SCROLL_THRESHOLD_PX = 16;
 // Should match duration from `--slide-transition` CSS variable
 const SCROLL_DURATION = IS_IOS ? 450 : IS_ANDROID ? 400 : 300;
 
-const TabList: FC<OwnProps> = ({
-  tabs, activeTab, onSwitchTab,
-  contextRootElementSelector, className, tabClassName,
-}) => {
+const TabList = ({
+  tabs,
+  activeTab,
+  className,
+  tabClassName,
+  contextRootElementSelector,
+  onSwitchTab,
+}: OwnProps) => {
   const containerRef = useRef<HTMLDivElement>();
   const previousActiveTab = usePreviousDeprecated(activeTab);
+
+  const lang = useLang();
 
   useHorizontalScroll(containerRef, undefined, true);
 
@@ -69,8 +75,6 @@ const TabList: FC<OwnProps> = ({
 
     animateHorizontalScroll(container, newLeft, SCROLL_DURATION);
   }, [activeTab]);
-
-  const lang = useOldLang();
 
   return (
     <div

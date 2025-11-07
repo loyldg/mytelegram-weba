@@ -13,13 +13,12 @@ import { type AnimationLevel, LeftColumnContent, SettingsScreens } from '../../t
 import {
   selectCurrentChat, selectIsCurrentUserFrozen, selectIsForumPanelOpen, selectTabState,
 } from '../../global/selectors';
-import { selectSharedSettings } from '../../global/selectors/sharedState.ts';
+import { selectSharedSettings } from '../../global/selectors/sharedState';
 import {
   IS_APP, IS_FIREFOX, IS_MAC_OS, IS_TOUCH_ENV,
 } from '../../util/browser/windowEnvironment';
 import captureEscKeyListener from '../../util/captureEscKeyListener';
-import { resolveTransitionName } from '../../util/resolveTransitionName.ts';
-import { debounce } from '../../util/schedulers';
+import { resolveTransitionName } from '../../util/resolveTransitionName';
 import { captureControlledSwipe } from '../../util/swipeController';
 
 import useFoldersReducer from '../../hooks/reducers/useFoldersReducer';
@@ -54,7 +53,6 @@ type StateProps = {
   nextFoldersAction?: ReducerAction<FoldersActions>;
   isChatOpen: boolean;
   isAppUpdateAvailable?: boolean;
-  isElectronUpdateAvailable?: boolean;
   isForumPanelOpen?: boolean;
   forumPanelChatId?: string;
   isClosingSearch?: boolean;
@@ -66,6 +64,7 @@ type StateProps = {
 enum ContentType {
   Main,
 
+  // eslint-disable-next-line @typescript-eslint/no-shadow
   Settings,
   Archived,
 
@@ -91,7 +90,6 @@ function LeftColumn({
   nextFoldersAction,
   isChatOpen,
   isAppUpdateAvailable,
-  isElectronUpdateAvailable,
   isForumPanelOpen,
   forumPanelChatId,
   isClosingSearch,
@@ -114,10 +112,6 @@ function LeftColumn({
 
   const [contactsFilter, setContactsFilter] = useState<string>('');
   const [foldersState, foldersDispatch] = useFoldersReducer();
-
-  const debouncedSetGlobalSearchQuery = useMemo(() => debounce((query: string) => {
-    setGlobalSearchQuery({ query });
-  }, 200, false, true), [setGlobalSearchQuery]);
 
   // Used to reset child components in background.
   const [lastResetTime, setLastResetTime] = useState<number>(0);
@@ -384,7 +378,7 @@ function LeftColumn({
     openLeftColumnContent({ contentKey: LeftColumnContent.GlobalSearch });
 
     if (query !== searchQuery) {
-      debouncedSetGlobalSearchQuery(query);
+      setGlobalSearchQuery({ query });
     }
   });
 
@@ -544,7 +538,6 @@ function LeftColumn({
             onReset={handleReset}
             shouldSkipTransition={shouldSkipHistoryAnimations}
             isAppUpdateAvailable={isAppUpdateAvailable}
-            isElectronUpdateAvailable={isElectronUpdateAvailable}
             isForumPanelOpen={isForumPanelOpen}
             onTopicSearch={handleTopicSearch}
             isAccountFrozen={isAccountFrozen}
@@ -572,7 +565,7 @@ function LeftColumn({
 }
 
 export default memo(withGlobal<OwnProps>(
-  (global): StateProps => {
+  (global): Complete<StateProps> => {
     const tabState = selectTabState(global);
     const {
       globalSearch: {
@@ -593,7 +586,6 @@ export default memo(withGlobal<OwnProps>(
         hasPasscode,
       },
       isAppUpdateAvailable,
-      isElectronUpdateAvailable,
       archiveSettings,
     } = global;
 
@@ -615,7 +607,6 @@ export default memo(withGlobal<OwnProps>(
       nextFoldersAction,
       isChatOpen,
       isAppUpdateAvailable,
-      isElectronUpdateAvailable,
       isForumPanelOpen,
       forumPanelChatId,
       isClosingSearch: tabState.globalSearch.isClosing,

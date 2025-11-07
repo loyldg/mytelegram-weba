@@ -211,9 +211,9 @@ const Statistics = ({
 
       <div ref={containerRef}>
         {graphs.map((graph) => {
-          const isReady = loadedCharts.current.has(graph) && !errorCharts.current.has(graph);
+          const isGraphReady = loadedCharts.current.has(graph) && !errorCharts.current.has(graph);
           return (
-            <div className={buildClassName(styles.graph, !isReady && styles.hidden)} />
+            <div className={buildClassName(styles.graph, !isGraphReady && styles.hidden)} />
           );
         })}
       </div>
@@ -258,7 +258,7 @@ const Statistics = ({
 };
 
 export default memo(withGlobal<OwnProps>(
-  (global, { chatId }): StateProps => {
+  (global, { chatId }): Complete<StateProps> => {
     const statistics = selectStatistics(global, chatId);
     const chat = selectChat(global, chatId);
     const dcId = selectChatFullInfo(global, chatId)?.statisticsDcId;

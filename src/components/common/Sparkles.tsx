@@ -1,4 +1,4 @@
-import { memo } from '../../lib/teact/teact';
+import { memo, useRef } from '../../lib/teact/teact';
 
 import buildClassName from '../../util/buildClassName';
 import buildStyle from '../../util/buildStyle';
@@ -18,6 +18,7 @@ type PresetParameters = ButtonParameters | ProgressParameters;
 type OwnProps = {
   className?: string;
   style?: string;
+  noAnimation?: boolean;
 } & PresetParameters;
 
 const SYMBOL = '✦';
@@ -85,11 +86,18 @@ const PROGRESS_POSITIONS = generateRandomProgressPositions(100);
 const Sparkles = ({
   className,
   style,
+  noAnimation,
   ...presetSettings
 }: OwnProps) => {
+  const ref = useRef<HTMLDivElement>();
+
   if (presetSettings.preset === 'button') {
     return (
-      <div className={buildClassName(styles.root, styles.button, className)} style={style}>
+      <div
+        ref={ref}
+        className={buildClassName(styles.root, styles.button, className, noAnimation && styles.noAnimation)}
+        style={style}
+      >
         {BUTTON_POSITIONS.map((position) => {
           const shiftX = Math.cos(Math.atan2(-50 + position.y, -50 + position.x)) * 100;
           const shiftY = Math.sin(Math.atan2(-50 + position.y, -50 + position.x)) * 100;
@@ -104,6 +112,7 @@ const Sparkles = ({
                 `--_shift-y: ${shiftY}%`,
                 `scale: ${position.size}%`,
               )}
+              aria-hidden="true"
             >
               {SYMBOL}
             </div>
@@ -115,7 +124,7 @@ const Sparkles = ({
 
   if (presetSettings.preset === 'progress') {
     return (
-      <div className={buildClassName(styles.root, styles.progress, className)} style={style}>
+      <div ref={ref} className={buildClassName(styles.root, styles.progress, className)} style={style}>
         {PROGRESS_POSITIONS.map((position) => {
           return (
             <div
@@ -128,6 +137,7 @@ const Sparkles = ({
                 `scale: ${position.scale}%`,
                 `--_duration-shift: ${(-position.durationShift / 100) * ANIMATION_DURATION}s`,
               )}
+              aria-hidden="true"
             >
               {SYMBOL}
             </div>

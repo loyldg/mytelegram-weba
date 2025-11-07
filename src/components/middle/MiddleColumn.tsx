@@ -54,20 +54,16 @@ import {
   selectTopics,
   selectUserFullInfo,
 } from '../../global/selectors';
-import { selectSharedSettings } from '../../global/selectors/sharedState.ts';
+import { selectSharedSettings } from '../../global/selectors/sharedState';
+import { IS_TAURI } from '../../util/browser/globalEnvironment';
 import {
-  IS_ANDROID,
-  IS_ELECTRON,
-  IS_IOS,
-  IS_SAFARI,
-  IS_TRANSLATION_SUPPORTED,
-  MASK_IMAGE_DISABLED,
+  IS_ANDROID, IS_IOS, IS_MAC_OS, IS_SAFARI, IS_TRANSLATION_SUPPORTED, MASK_IMAGE_DISABLED,
 } from '../../util/browser/windowEnvironment';
 import buildClassName from '../../util/buildClassName';
 import buildStyle from '../../util/buildStyle';
 import captureEscKeyListener from '../../util/captureEscKeyListener';
 import { isUserId } from '../../util/entities/ids';
-import { resolveTransitionName } from '../../util/resolveTransitionName.ts';
+import { resolveTransitionName } from '../../util/resolveTransitionName';
 import calculateMiddleFooterTransforms from './helpers/calculateMiddleFooterTransforms';
 
 import useAppLayout from '../../hooks/useAppLayout';
@@ -106,7 +102,7 @@ import ReactorListModal from './ReactorListModal.async';
 import MiddleSearch from './search/MiddleSearch.async';
 
 import './MiddleColumn.scss';
-import styles from './MiddleColumn.module.scss';
+import backgroundStyles from '../../styles/_patternBackground.module.scss';
 
 interface OwnProps {
   leftColumnRef: ElementRef<HTMLDivElement>;
@@ -349,7 +345,7 @@ function MiddleColumn({
     return () => {
       visualViewport.removeEventListener('resize', handleResize);
     };
-  });
+  }, []);
 
   useEffect(() => {
     if (isPrivate) {
@@ -443,13 +439,12 @@ function MiddleColumn({
   );
 
   const bgClassName = buildClassName(
-    styles.background,
-    withRightColumnAnimation && styles.withTransition,
-    customBackground && styles.customBgImage,
-    backgroundColor && styles.customBgColor,
-    customBackground && isBackgroundBlurred && styles.blurred,
-    isRightColumnShown && styles.withRightColumn,
-    IS_ELECTRON && !(renderingChatId && renderingThreadId) && styles.draggable,
+    backgroundStyles.background,
+    withRightColumnAnimation && backgroundStyles.withTransition,
+    customBackground && backgroundStyles.customBgImage,
+    backgroundColor && backgroundStyles.customBgColor,
+    customBackground && isBackgroundBlurred && backgroundStyles.blurred,
+    isRightColumnShown && backgroundStyles.withRightColumn,
   );
 
   const messagingDisabledClassName = buildClassName(
@@ -513,7 +508,7 @@ function MiddleColumn({
         `--composer-hidden-scale: ${composerHiddenScale}`,
         `--toolbar-hidden-scale: ${toolbarHiddenScale}`,
         `--unpin-hidden-scale: ${unpinHiddenScale}`,
-        `--toolbar-unpin-hidden-scale: ${toolbarForUnpinHiddenScale},`,
+        `--toolbar-unpin-hidden-scale: ${toolbarForUnpinHiddenScale}`,
         `--composer-translate-x: ${composerTranslateX}px`,
         `--toolbar-translate-x: ${toolbarTranslateX}px`,
         `--pattern-color: ${patternColor}`,
@@ -532,6 +527,7 @@ function MiddleColumn({
       <div
         className={bgClassName}
         style={customBackgroundValue ? `--custom-background: ${customBackgroundValue}` : undefined}
+        data-tauri-drag-region={IS_TAURI && IS_MAC_OS && !(renderingChatId && renderingThreadId) ? true : undefined}
       />
       <div id="middle-column-portals" />
       {Boolean(renderingChatId && renderingThreadId) && (
@@ -582,9 +578,14 @@ function MiddleColumn({
                 paidMessagesStars={paidMessagesStars}
                 withBottomShift={withMessageListBottomShift}
                 withDefaultBg={Boolean(!customBackground && !backgroundColor)}
-                onIntersectPinnedMessage={renderingHandleIntersectPinnedMessage!}
+                onIntersectPinnedMessage={renderingHandleIntersectPinnedMessage}
               />
               <div className={footerClassName}>
+                <FloatingActionButtons
+                  withScrollDown={renderingIsScrollDownShown}
+                  canPost={renderingCanPost}
+                  withExtraShift={withExtraShift}
+                />
                 {renderingCanPost && (
                   <Composer
                     type="messageList"
@@ -601,7 +602,7 @@ function MiddleColumn({
                   />
                 )}
                 {isPinnedMessageList && canUnpin && (
-                  <div className="middle-column-footer-button-container" dir={oldLang.isRtl ? 'rtl' : undefined}>
+                  <div className="middle-column-footer-button-container" dir={lang.isRtl ? 'rtl' : undefined}>
                     <Button
                       size="tiny"
                       fluid
@@ -615,7 +616,7 @@ function MiddleColumn({
                   </div>
                 )}
                 {canShowOpenChatButton && (
-                  <div className="middle-column-footer-button-container" dir={oldLang.isRtl ? 'rtl' : undefined}>
+                  <div className="middle-column-footer-button-container" dir={lang.isRtl ? 'rtl' : undefined}>
                     <Button
                       size="tiny"
                       fluid
@@ -639,7 +640,7 @@ function MiddleColumn({
                 {(
                   isMobile && (renderingCanSubscribe || (renderingShouldJoinToSend && !renderingShouldSendJoinRequest))
                 ) && (
-                  <div className="middle-column-footer-button-container" dir={oldLang.isRtl ? 'rtl' : undefined}>
+                  <div className="middle-column-footer-button-container" dir={lang.isRtl ? 'rtl' : undefined}>
                     <Button
                       size="tiny"
                       fluid
@@ -652,7 +653,7 @@ function MiddleColumn({
                   </div>
                 )}
                 {isMobile && renderingShouldSendJoinRequest && (
-                  <div className="middle-column-footer-button-container" dir={oldLang.isRtl ? 'rtl' : undefined}>
+                  <div className="middle-column-footer-button-container" dir={lang.isRtl ? 'rtl' : undefined}>
                     <Button
                       size="tiny"
                       fluid
@@ -665,7 +666,7 @@ function MiddleColumn({
                   </div>
                 )}
                 {isMobile && renderingCanStartBot && (
-                  <div className="middle-column-footer-button-container" dir={oldLang.isRtl ? 'rtl' : undefined}>
+                  <div className="middle-column-footer-button-container" dir={lang.isRtl ? 'rtl' : undefined}>
                     <Button
                       size="tiny"
                       fluid
@@ -678,7 +679,7 @@ function MiddleColumn({
                   </div>
                 )}
                 {isMobile && renderingCanRestartBot && (
-                  <div className="middle-column-footer-button-container" dir={oldLang.isRtl ? 'rtl' : undefined}>
+                  <div className="middle-column-footer-button-container" dir={lang.isRtl ? 'rtl' : undefined}>
                     <Button
                       size="tiny"
                       fluid
@@ -691,7 +692,7 @@ function MiddleColumn({
                   </div>
                 )}
                 {isMobile && renderingCanUnblock && (
-                  <div className="middle-column-footer-button-container" dir={oldLang.isRtl ? 'rtl' : undefined}>
+                  <div className="middle-column-footer-button-container" dir={lang.isRtl ? 'rtl' : undefined}>
                     <Button
                       size="tiny"
                       fluid
@@ -714,12 +715,6 @@ function MiddleColumn({
                 {IS_TRANSLATION_SUPPORTED && <ChatLanguageModal isOpen={isChatLanguageModalOpen} />}
               </div>
             </Transition>
-
-            <FloatingActionButtons
-              withScrollDown={renderingIsScrollDownShown}
-              canPost={renderingCanPost}
-              withExtraShift={withExtraShift}
-            />
           </div>
           <MiddleSearch isActive={Boolean(hasActiveMiddleSearch)} />
         </>
@@ -747,7 +742,7 @@ function MiddleColumn({
 }
 
 export default memo(withGlobal<OwnProps>(
-  (global, { isMobile }): StateProps => {
+  (global, { isMobile }): Complete<StateProps> => {
     const theme = selectTheme(global);
     const {
       isBlurred: isBackgroundBlurred, background: customBackground, backgroundColor, patternColor,
@@ -784,7 +779,7 @@ export default memo(withGlobal<OwnProps>(
     };
 
     if (!currentMessageList) {
-      return state;
+      return state as Complete<StateProps>;
     }
 
     const { chatId, threadId, type: messageListType } = currentMessageList;
@@ -887,7 +882,7 @@ export default memo(withGlobal<OwnProps>(
       isAccountFrozen,
       freezeAppealChat,
       shouldBlockSendInMonoforum,
-    };
+    } as Complete<StateProps>;
   },
 )(MiddleColumn));
 

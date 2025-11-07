@@ -15,12 +15,12 @@ import { isBetween } from '../../../../util/math';
 import { MEMO_EMPTY_ARRAY } from '../../../../util/memo';
 import { throttle } from '../../../../util/schedulers';
 import { LOCAL_TGS_URLS } from '../../../common/helpers/animatedAssets';
-import { getApiPeerColorClass } from '../../../common/helpers/peerColor';
 import { renderTextWithEntities } from '../../../common/helpers/renderTextWithEntities';
 
 import { useFolderManagerForChatsCount } from '../../../../hooks/useFolderManager';
 import useHistoryBack from '../../../../hooks/useHistoryBack';
-import useOldLang from '../../../../hooks/useOldLang';
+import useLang from '../../../../hooks/useLang';
+import { getPeerColorClass } from '../../../../hooks/usePeerColor';
 import usePreviousDeprecated from '../../../../hooks/usePreviousDeprecated';
 
 import AnimatedIconWithPreview from '../../../common/AnimatedIconWithPreview';
@@ -117,7 +117,7 @@ const SettingsFoldersMain: FC<OwnProps & StateProps> = ({
     onCreateFolder();
   }, [foldersById, maxFolders, onCreateFolder, openLimitReachedModal]);
 
-  const lang = useOldLang();
+  const lang = useLang();
 
   useHistoryBack({
     isActive,
@@ -226,7 +226,7 @@ const SettingsFoldersMain: FC<OwnProps & StateProps> = ({
 
         {canCreateNewFolder && (
           <Button
-          // TODO: Refactor button component to handle icon placemenet with props
+          // TODO: Move icon into button prop
             className="settings-button with-icon"
             color="primary"
             pill
@@ -250,7 +250,7 @@ const SettingsFoldersMain: FC<OwnProps & StateProps> = ({
             const draggedTop = (state.orderedFolderIds?.indexOf(folder.id) ?? 0) * FOLDER_HEIGHT_PX;
             const top = (state.dragOrderIds?.indexOf(folder.id) ?? 0) * FOLDER_HEIGHT_PX;
 
-            const shouldRenderColor = folder?.color !== undefined && folder.color !== -1 && isPremium;
+            const shouldRenderColor = folder?.color !== undefined && folder.color !== -1 && areTagsEnabled;
 
             if (folder.id === ALL_FOLDER_ID) {
               return (
@@ -292,7 +292,7 @@ const SettingsFoldersMain: FC<OwnProps & StateProps> = ({
                 onDrag={handleDrag}
                 onDragEnd={handleDragEnd}
                 style={`top: ${isDragged ? draggedTop : top}px;`}
-                knobStyle={`${lang.isRtl ? 'left' : 'right'}: ${shouldRenderColor ? '3.5rem' : '3rem'};`}
+                knobStyle={`${lang.isRtl ? 'left' : 'right'}: ${shouldRenderColor ? '4rem' : '2.5rem'};`}
                 isDisabled={isBlocked || !isActive}
               >
                 <ListItem
@@ -338,7 +338,7 @@ const SettingsFoldersMain: FC<OwnProps & StateProps> = ({
                     shouldRenderColor && (
                       <div className={buildClassName(
                         'settings-folders-color-circle',
-                        getApiPeerColorClass({ color: folder.color }),
+                        folder.color !== undefined && folder.color !== -1 && getPeerColorClass(folder.color),
                       )}
                       />
                     )
@@ -349,7 +349,7 @@ const SettingsFoldersMain: FC<OwnProps & StateProps> = ({
             );
           }) : userFolders && !userFolders.length ? (
             <p className="settings-item-description my-4" dir="auto">
-              You have no folders yet.
+              {lang('SettingsFoldersEmpty')}
             </p>
           ) : <Loading />}
         </div>
@@ -416,7 +416,7 @@ const SettingsFoldersMain: FC<OwnProps & StateProps> = ({
 };
 
 export default memo(withGlobal<OwnProps>(
-  (global): StateProps => {
+  (global): Complete<StateProps> => {
     const {
       orderedIds: folderIds,
       byId: foldersById,
