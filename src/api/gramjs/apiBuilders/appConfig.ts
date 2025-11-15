@@ -1,4 +1,3 @@
-import BigInt from 'big-integer';
 import { Api as GramJs } from '../../../lib/gramjs';
 
 import type { ApiAppConfig, ApiLimitType, ApiPremiumSection } from '../../types';
@@ -119,6 +118,7 @@ export interface GramJsAppConfig extends LimitsConfig {
   verify_age_bot_username?: string;
   verify_age_country?: string;
   verify_age_min?: number;
+  contact_note_length_limit?: number;
 }
 
 function buildEmojiSounds(appConfig: GramJsAppConfig) {
@@ -131,7 +131,7 @@ function buildEmojiSounds(appConfig: GramJsAppConfig) {
       dcId: 1,
       mimeType: 'audio/ogg',
       fileReference: Buffer.alloc(0),
-      size: BigInt(0),
+      size: 0n,
     } as GramJs.Document);
 
     acc[key] = l.id;
@@ -188,6 +188,7 @@ export function buildAppConfig(json: GramJs.TypeJSONValue, hash: number): ApiApp
       maxReactions: getLimit(appConfig, 'reactions_user_max', 'maxReactions'),
       moreAccounts: DEFAULT_LIMITS.moreAccounts,
     },
+    contactNoteLimit: appConfig.contact_note_length_limit,
     hash,
     storyViewersExpirePeriod: appConfig.story_viewers_expire_period,
     storyChangelogUserId: appConfig.stories_changelog_user_id?.toString(),

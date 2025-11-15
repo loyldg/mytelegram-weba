@@ -12,7 +12,6 @@ import useFlag from '../../../hooks/useFlag';
 import useHistoryBack from '../../../hooks/useHistoryBack';
 import useOldLang from '../../../hooks/useOldLang';
 
-import Icon from '../../common/icons/Icon';
 import PrivateChatInfo from '../../common/PrivateChatInfo';
 import FloatingActionButton from '../../ui/FloatingActionButton';
 import ListItem, { type MenuItemContextAction } from '../../ui/ListItem';
@@ -106,9 +105,8 @@ const ManageChatRemovedUsers: FC<OwnProps & StateProps> = ({
               isShown
               onClick={openRemoveUserModal}
               ariaLabel={lang('Channel.EditAdmin.Permission.BanUsers')}
-            >
-              <Icon name="add-user-filled" />
-            </FloatingActionButton>
+              iconName="add-user-filled"
+            />
           )}
           {chat && canDeleteMembers && (
             <RemoveGroupUserModal
@@ -124,7 +122,7 @@ const ManageChatRemovedUsers: FC<OwnProps & StateProps> = ({
 };
 
 export default memo(withGlobal<OwnProps>(
-  (global, { chatId }): StateProps => {
+  (global, { chatId }): Complete<StateProps> => {
     const chat = selectChat(global, chatId);
     const { byId: usersById } = global.users;
     const canDeleteMembers = chat && (getHasAdminRight(chat, 'banUsers') || chat.isCreator);

@@ -197,6 +197,7 @@ function Story({
   const isChatStory = !isUserStory;
   const isChannelStory = isChatStory && isChatChannel(peer as ApiChat);
   const isOut = isLoadedStory && story.isOut;
+  const isUnsupportedStory = isLoadedStory && Object.keys(story.content).length === 0;
 
   const canPinToProfile = useCurrentOrPrev(
     isOut ? !story.isInProfile : undefined,
@@ -229,7 +230,8 @@ function Story({
   );
 
   const canPlayStory = Boolean(
-    hasFullData && !shouldForcePause && isAppFocused && !isComposerHasFocus && !isCaptionExpanded
+    (hasFullData || isUnsupportedStory)
+    && !shouldForcePause && isAppFocused && !isComposerHasFocus && !isCaptionExpanded
     && !isPausedBySpacebar && !isPausedByLongPress,
   );
 
@@ -244,11 +246,11 @@ function Story({
   const {
     shouldRender: shouldRenderSkeleton,
     transitionClassNames: skeletonTransitionClassNames,
-  } = useShowTransitionDeprecated(!hasFullData);
+  } = useShowTransitionDeprecated(!hasFullData && !isUnsupportedStory);
 
   const {
     transitionClassNames: mediaTransitionClassNames,
-  } = useShowTransitionDeprecated(Boolean(fullMediaData));
+  } = useShowTransitionDeprecated(Boolean(fullMediaData) && !isUnsupportedStory);
 
   const thumbRef = useCanvasBlur(thumbnail, !hasThumb);
   const previewTransitionClassNames = useMediaTransitionDeprecated(previewBlobUrl);
@@ -340,17 +342,17 @@ function Story({
     onEnd: handleLongPressEnd,
   });
 
-  const isUnsupported = useUnsupportedMedia(
+  const isUnsupportedVideo = useUnsupportedMedia(
     videoRef,
     undefined,
     !isVideo || !fullMediaData || isStreamingSupported,
   );
 
   const hasAllData = fullMediaData && (!altMediaHash || altMediaData);
-  // Play story after media has been downloaded
   useEffect(() => {
-    if (hasAllData && !isUnsupported) handlePlayStory();
-  }, [hasAllData, isUnsupported]);
+    // Start progress to the nest slide after media has been downloaded or it is unsupported
+    if (hasAllData || isUnsupportedVideo || isUnsupportedStory) handlePlayStory();
+  }, [hasAllData, isUnsupportedVideo, isUnsupportedStory]);
 
   useBackgroundMode(unmarkAppFocused, markAppFocused);
 
@@ -842,6 +844,12 @@ function Story({
           </OptimizedVideo>
         )}
 
+        {isUnsupportedStory && (
+          <div className={buildClassName(styles.media, styles.unsupportedMedia)}>
+            <span>{lang('StoryUnsupported')}</span>
+          </div>
+        )}
+
         {!isPausedByLongPress && !isComposerHasFocus && (
           <>
             <button
@@ -930,7 +938,7 @@ export default memo(withGlobal<OwnProps>((global, {
   peerId,
   storyId,
   isDeleteModalOpen,
-}): StateProps => {
+}): Complete<StateProps> => {
   const { appConfig } = global;
   const user = selectUser(global, peerId);
   const chat = selectChat(global, peerId);

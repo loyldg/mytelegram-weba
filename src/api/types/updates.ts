@@ -18,7 +18,6 @@ import type {
   ApiChatFullInfo,
   ApiChatMember,
   ApiDraft,
-  ApiPeerSettings,
   ApiTypingStatus,
 } from './chats';
 import type {
@@ -43,11 +42,12 @@ import type {
   ApiPeerNotifySettings,
   ApiSessionData,
 } from './misc';
+import type { ApiEmojiStatusType, ApiPeerSettings } from './peers';
 import type { ApiPrivacyKey, LangPackStringValue, PrivacyVisibility } from './settings';
 import type { ApiTypeCurrencyAmount } from './stars';
 import type { ApiStealthMode, ApiStory, ApiStorySkipped } from './stories';
 import type {
-  ApiEmojiStatusType, ApiUser, ApiUserFullInfo, ApiUserStatus,
+  ApiUser, ApiUserFullInfo, ApiUserStatus,
 } from './users';
 
 export type ApiUpdateReady = {
@@ -314,6 +314,13 @@ export type ApiUpdateVideoProcessingPending = {
 
 export type ApiUpdateMessageSendFailed = {
   '@type': 'updateMessageSendFailed';
+  chatId: string;
+  localId: number;
+  error: string;
+};
+
+export type ApiUpdateScheduledMessageSendFailed = {
+  '@type': 'updateScheduledMessageSendFailed';
   chatId: string;
   localId: number;
   error: string;
@@ -865,7 +872,7 @@ export type ApiUpdate = (
   ApiDeleteParticipantHistory | ApiUpdateMessageSendSucceeded | ApiUpdateMessageSendFailed |
   ApiUpdateServiceNotification | ApiDeleteContact | ApiUpdateUser | ApiUpdateUserStatus |
   ApiUpdateUserFullInfo | ApiUpdateVideoProcessingPending | ApiUpdatePeerSettings |
-  ApiUpdateAvatar | ApiUpdateMessageImage | ApiUpdateDraftMessage |
+  ApiUpdateAvatar | ApiUpdateMessageImage | ApiUpdateDraftMessage | ApiUpdateScheduledMessageSendFailed |
   ApiUpdateError | ApiUpdateResetContacts | ApiUpdateStartEmojiInteraction |
   ApiUpdateFavoriteStickers | ApiUpdateStickerSet | ApiUpdateStickerSets | ApiUpdateStickerSetsOrder |
   ApiUpdateRecentStickers | ApiUpdateSavedGifs | ApiUpdateNewScheduledMessage | ApiUpdateMoveStickerSetToTop |

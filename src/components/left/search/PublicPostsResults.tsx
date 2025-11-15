@@ -7,16 +7,15 @@ import type { AnimationLevel } from '../../../types';
 import { LoadMoreDirection } from '../../../types';
 
 import { selectTabState } from '../../../global/selectors';
-import { selectSharedSettings } from '../../../global/selectors/sharedState.ts';
+import { selectSharedSettings } from '../../../global/selectors/sharedState';
 import { parseSearchResultKey, type SearchResultKey } from '../../../util/keys/searchResultKey';
 import { MEMO_EMPTY_ARRAY } from '../../../util/memo';
-import { resolveTransitionName } from '../../../util/resolveTransitionName.ts';
+import { resolveTransitionName } from '../../../util/resolveTransitionName';
 import { throttle } from '../../../util/schedulers';
 import { renderMessageSummary } from '../../common/helpers/renderMessageText';
 
 import useLang from '../../../hooks/useLang';
 import useLastCallback from '../../../hooks/useLastCallback';
-import useOldLang from '../../../hooks/useOldLang';
 
 import NothingFound from '../../common/NothingFound';
 import InfiniteScroll from '../../ui/InfiniteScroll';
@@ -53,7 +52,6 @@ const PublicPostsResults = ({
   const { searchMessagesGlobal } = getActions();
 
   const lang = useLang();
-  const oldLang = useOldLang();
 
   const handleSearch = useLastCallback(() => {
     if (!searchQuery) return;
@@ -90,7 +88,7 @@ const PublicPostsResults = ({
   function renderFoundMessage(message: ApiMessage) {
     const chatsById = getGlobal().chats.byId;
 
-    const text = renderMessageSummary(oldLang, message);
+    const text = renderMessageSummary(lang, message);
     const chat = chatsById[message.chatId];
 
     if (!text || !chat) {
@@ -130,8 +128,8 @@ const PublicPostsResults = ({
           >
             {isNothingFound && (
               <NothingFound
-                text={oldLang('ChatList.Search.NoResults')}
-                description={oldLang('ChatList.Search.NoResultsDescription')}
+                text={lang('ChatListSearchNoResults')}
+                description={lang('ChatListSearchNoResultsDescription')}
                 withSticker
               />
             )}
@@ -151,7 +149,7 @@ const PublicPostsResults = ({
 };
 
 export default memo(withGlobal<OwnProps>(
-  (global): StateProps => {
+  (global): Complete<StateProps> => {
     const { messages: { byChatId: globalMessagesByChatId } } = global;
     const { resultsByType, searchFlood, fetchingStatus } = selectTabState(global).globalSearch;
     const publicPostsResult = resultsByType?.publicPosts;

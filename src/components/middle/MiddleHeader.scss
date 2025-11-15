@@ -116,7 +116,7 @@
 
     font-size: 1.125rem;
     font-weight: var(--font-weight-medium);
-    line-height: 1.375rem;
+    line-height: 1.5rem;
     text-overflow: ellipsis;
     white-space: pre;
 
@@ -325,13 +325,9 @@
     }
   }
 
-  body.is-electron.is-macos & {
-    -webkit-app-region: drag;
-  }
-
-  body.is-electron.is-macos #Main:not(.left-column-open):not(.is-fullscreen) & {
+  body.is-tauri.is-macos #Main:not(.left-column-open):not(.is-fullscreen) & {
     @media (max-width: 925px) {
-      padding-left: 5rem;
+      padding-left: var(--window-controls-width);
 
       .back-button {
         margin-left: -0.5rem;

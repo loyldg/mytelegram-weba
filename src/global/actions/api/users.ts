@@ -74,6 +74,7 @@ addActionHandler('loadFullUser', async (global, actions, payload): Promise<void>
   global = updateUserFullInfo(global, userId, result.fullInfo);
   global = updateUsers(global, buildCollectionByKey(result.users, 'id'));
   global = updateChats(global, buildCollectionByKey(result.chats, 'id'));
+  global = addUserStatuses(global, result.userStatusesById);
 
   setGlobal(global);
   if (withPhotos || (profilePhotos?.count && hasChangedPhoto)) {
@@ -173,7 +174,10 @@ addActionHandler('loadCommonChats', async (global, actions, payload): Promise<vo
     return;
   }
 
-  const result = await callApi('fetchCommonChats', user, commonChats?.maxId);
+  const result = await callApi('fetchCommonChats', {
+    user,
+    maxId: commonChats?.maxId,
+  });
   if (!result) {
     return;
   }
@@ -235,7 +239,7 @@ addActionHandler('openChatRefundModal', async (global, actions, payload): Promis
 
 addActionHandler('updateContact', async (global, actions, payload): Promise<void> => {
   const {
-    userId, isMuted = false, firstName, lastName, shouldSharePhoneNumber,
+    userId, firstName, lastName, shouldSharePhoneNumber, note,
     tabId = getCurrentTabId(),
   } = payload;
 
@@ -244,14 +248,12 @@ addActionHandler('updateContact', async (global, actions, payload): Promise<void
     return;
   }
 
-  actions.updateChatMutedState({ chatId: userId, isMuted });
-
   global = getGlobal();
   global = updateManagementProgress(global, ManagementProgress.InProgress, tabId);
   setGlobal(global);
 
   let result;
-  if (!user.isContact && user.phoneNumber) {
+  if (!user.isContact && user.phoneNumber && !note) {
     result = await callApi('importContact', { phone: user.phoneNumber, firstName, lastName });
   } else {
     const { id, accessHash } = user;
@@ -262,6 +264,7 @@ addActionHandler('updateContact', async (global, actions, payload): Promise<void
       firstName,
       lastName,
       shouldSharePhoneNumber,
+      note,
     });
   }
 
@@ -284,6 +287,29 @@ addActionHandler('updateContact', async (global, actions, payload): Promise<void
   global = getGlobal();
   global = updateManagementProgress(global, ManagementProgress.Complete, tabId);
   global = closeNewContactDialog(global, tabId);
+  setGlobal(global);
+});
+
+addActionHandler('updateContactNote', async (global, actions, payload): Promise<void> => {
+  const {
+    userId, note,
+    tabId = getCurrentTabId(),
+  } = payload;
+
+  const user = selectUser(global, userId);
+  if (!user) {
+    return;
+  }
+
+  global = getGlobal();
+  global = updateManagementProgress(global, ManagementProgress.InProgress, tabId);
+  setGlobal(global);
+
+  const result = await callApi('updateContactNote', user, note);
+
+  global = getGlobal();
+  if (result) global = updateUserFullInfo(global, userId, { note });
+  global = updateManagementProgress(global, ManagementProgress.Complete, tabId);
   setGlobal(global);
 });
 

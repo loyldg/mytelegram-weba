@@ -16,10 +16,9 @@ import type {
   TypeStatisticsGraph,
 } from '../../types';
 
-import { buildApiUsernames, buildAvatarPhotoId } from './common';
-import { buildApiPeerId, getApiChatIdFromMtpPeer } from './peers';
-
-const DECIMALS = 10 ** 9;
+import { buildApiUsernames } from './common';
+import { buildApiCurrencyAmount } from './payments';
+import { buildApiPeerId, buildAvatarPhotoId, getApiChatIdFromMtpPeer } from './peers';
 
 export function buildChannelStatistics(stats: GramJs.stats.BroadcastStats): ApiChannelStatistics {
   return {
@@ -275,16 +274,16 @@ function buildApiMessagePublicForward(message: GramJs.TypeMessage, chats: GramJs
   };
 }
 
-function buildChannelMonetizationBalances({
-  currentBalance,
-  availableBalance,
-  overallRevenue,
-  withdrawalEnabled,
-}: GramJs.StarsRevenueStatus): ChannelMonetizationBalances {
+function buildChannelMonetizationBalances(revenueStatus: GramJs.StarsRevenueStatus): ChannelMonetizationBalances {
+  const currentBalance = buildApiCurrencyAmount(revenueStatus.currentBalance);
+  const availableBalance = buildApiCurrencyAmount(revenueStatus.availableBalance);
+  const overallRevenue = buildApiCurrencyAmount(revenueStatus.overallRevenue);
+  const withdrawalEnabled = revenueStatus.withdrawalEnabled;
+
   return {
-    currentBalance: Number(currentBalance) / DECIMALS,
-    availableBalance: Number(availableBalance) / DECIMALS,
-    overallRevenue: Number(overallRevenue) / DECIMALS,
+    currentBalance,
+    availableBalance,
+    overallRevenue,
     isWithdrawalEnabled: withdrawalEnabled,
   };
 }

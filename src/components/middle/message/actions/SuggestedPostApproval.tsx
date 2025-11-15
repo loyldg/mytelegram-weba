@@ -113,7 +113,6 @@ const SuggestedPostApproval = ({
             {translateWithYou(lang, 'SuggestedPostReceiveAmount', !isAdmin, {
               peer: renderChatLink(),
               duration,
-              currency: currency === TON_CURRENCY_CODE ? lang('CurrencyTon') : lang('CurrencyStars'),
             }, { withMarkdown: true })}
           </div>
 
@@ -121,7 +120,6 @@ const SuggestedPostApproval = ({
             {translateWithYou(lang, 'SuggestedPostRefund', !isAdmin, {
               peer: renderChatLink(),
               duration,
-              currency: currency === TON_CURRENCY_CODE ? lang('CurrencyTon') : lang('CurrencyStars'),
             }, { withMarkdown: true })}
           </div>
         </>
@@ -131,7 +129,7 @@ const SuggestedPostApproval = ({
 };
 
 export default memo(withGlobal<OwnProps>(
-  (global, { message }): StateProps => {
+  (global, { message }): Complete<StateProps> => {
     const sender = selectSender(global, message);
     const chat = selectMonoforumChannel(global, message.chatId);
 

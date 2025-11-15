@@ -5,7 +5,7 @@ import {
 } from '../../../lib/teact/teact';
 import { getActions, withGlobal } from '../../../global';
 
-import type { ApiBotInfo, ApiUser } from '../../../api/types';
+import type { ApiUser } from '../../../api/types';
 import { ApiMediaFormat } from '../../../api/types';
 import { ManagementProgress } from '../../../types';
 
@@ -26,13 +26,11 @@ import useLastCallback from '../../../hooks/useLastCallback';
 import useMedia from '../../../hooks/useMedia';
 import useOldLang from '../../../hooks/useOldLang';
 
-import Icon from '../../common/icons/Icon';
 import AvatarEditable from '../../ui/AvatarEditable';
 import FloatingActionButton from '../../ui/FloatingActionButton';
 import InputText from '../../ui/InputText';
 import ListItem from '../../ui/ListItem';
 import SelectAvatar from '../../ui/SelectAvatar';
-import Spinner from '../../ui/Spinner';
 import TextArea from '../../ui/TextArea';
 
 import './Management.scss';
@@ -46,10 +44,8 @@ type OwnProps = {
 type StateProps = {
   userId?: string;
   user?: ApiUser;
-  chatBot?: ApiBotInfo;
   currentBio?: string;
   progress?: ManagementProgress;
-  isMuted?: boolean;
   maxBioLength: number;
 };
 
@@ -59,10 +55,10 @@ const ManageBot: FC<OwnProps & StateProps> = ({
   userId,
   user,
   progress,
-  onClose,
   currentBio,
   isActive,
   maxBioLength,
+  onClose,
 }) => {
   const {
     setBotInfo,
@@ -233,13 +229,9 @@ const ManageBot: FC<OwnProps & StateProps> = ({
         onClick={handleProfileSave}
         disabled={isLoading}
         ariaLabel={lang('Save')}
-      >
-        {isLoading ? (
-          <Spinner color="white" />
-        ) : (
-          <Icon name="check" />
-        )}
-      </FloatingActionButton>
+        iconName="check"
+        isLoading={isLoading}
+      />
       <SelectAvatar
         onChange={handleSelectAvatar}
         inputRef={inputRef}
@@ -249,7 +241,7 @@ const ManageBot: FC<OwnProps & StateProps> = ({
 };
 
 export default memo(withGlobal<OwnProps>(
-  (global, { userId }): StateProps => {
+  (global, { userId }): Complete<StateProps> => {
     const user = selectBot(global, userId);
     const userFullInfo = selectUserFullInfo(global, userId);
     const { progress } = selectTabState(global).management;

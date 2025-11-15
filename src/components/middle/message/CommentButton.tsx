@@ -21,7 +21,7 @@ import Spinner from '../../ui/Spinner';
 import './CommentButton.scss';
 
 type OwnProps = {
-  threadInfo: ApiCommentsInfo;
+  threadInfo?: ApiCommentsInfo;
   disabled?: boolean;
   isLoading?: boolean;
   isCustomShape?: boolean;
@@ -45,10 +45,15 @@ const CommentButton: FC<OwnProps> = ({
   const lang = useLang();
   const {
     originMessageId, chatId, messagesCount, lastMessageId, lastReadInboxMessageId, recentReplierIds, originChannelId,
-  } = threadInfo;
+  } = threadInfo || {};
 
   const handleClick = useLastCallback(() => {
     const global = getGlobal();
+
+    if (!originMessageId || !originChannelId) {
+      return;
+    }
+
     if (selectIsCurrentUserFrozen(global)) {
       openFrozenAccountModal();
       return;
@@ -71,14 +76,10 @@ const CommentButton: FC<OwnProps> = ({
     }).filter(Boolean);
   }, [recentReplierIds]);
 
-  if (messagesCount === undefined) {
-    return undefined;
-  }
-
   function renderRecentRepliers() {
     return (
       Boolean(recentRepliers?.length) && (
-        <div className="recent-repliers" dir={oldLang.isRtl ? 'rtl' : 'ltr'}>
+        <div className="recent-repliers" dir={lang.isRtl ? 'rtl' : 'ltr'}>
           {recentRepliers.map((peer) => (
             <Avatar
               key={peer.id}
@@ -102,7 +103,7 @@ const CommentButton: FC<OwnProps> = ({
 
   return (
     <div
-      data-cnt={formatIntegerCompact(lang, messagesCount)}
+      data-cnt={formatIntegerCompact(lang, messagesCount || 0)}
       className={buildClassName(
         'CommentButton',
         hasUnread && 'has-unread',
@@ -111,7 +112,7 @@ const CommentButton: FC<OwnProps> = ({
         isLoading && 'loading',
         asActionButton && 'as-action-button',
       )}
-      dir={oldLang.isRtl ? 'rtl' : 'ltr'}
+      dir={lang.isRtl ? 'rtl' : 'ltr'}
       onClick={handleClick}
       role="button"
       tabIndex={0}

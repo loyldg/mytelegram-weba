@@ -51,14 +51,14 @@ type OwnProps =
     canPost?: boolean;
   };
 
-  type StateProps = {
-    sender?: ApiPeer;
-    canShowSender: boolean;
-    originSender?: ApiPeer;
-    isChatWithSelf?: boolean;
-    isRepliesChat?: boolean;
-    isAnonymousForwards?: boolean;
-  };
+type StateProps = {
+  sender?: ApiPeer;
+  canShowSender: boolean;
+  originSender?: ApiPeer;
+  isChatWithSelf?: boolean;
+  isRepliesChat?: boolean;
+  isAnonymousForwards?: boolean;
+};
 
 const SenderGroupContainer: FC<OwnProps & StateProps> = ({
   message,
@@ -215,7 +215,7 @@ const SenderGroupContainer: FC<OwnProps & StateProps> = ({
 };
 
 export default memo(withGlobal<OwnProps>(
-  (global, ownProps): StateProps => {
+  (global, ownProps): Complete<StateProps> => {
     const {
       message, withAvatar,
     } = ownProps;

@@ -233,7 +233,7 @@ const GroupChatInfo: FC<OwnProps & StateProps> = ({
       className={
         buildClassName('ChatInfo', className)
       }
-      dir={!noRtl && oldLang.isRtl ? 'rtl' : undefined}
+      dir={!noRtl && lang.isRtl ? 'rtl' : undefined}
       onClick={onClick}
     >
       {!noAvatar && !isTopic && (
@@ -288,7 +288,7 @@ const GroupChatInfo: FC<OwnProps & StateProps> = ({
 };
 
 export default memo(withGlobal<OwnProps>(
-  (global, { chatId, threadId }): StateProps => {
+  (global, { chatId, threadId }): Complete<StateProps> => {
     const chat = selectChat(global, chatId);
     const threadInfo = threadId ? selectThreadInfo(global, chatId, threadId) : undefined;
     const onlineCount = chat ? selectChatOnlineCount(global, chat) : undefined;

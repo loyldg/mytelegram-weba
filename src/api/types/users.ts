@@ -1,10 +1,16 @@
 import type { API_CHAT_TYPES } from '../../config';
 import type { ApiBotInfo } from './bots';
 import type { ApiBusinessIntro, ApiBusinessLocation, ApiBusinessWorkHours } from './business';
-import type { ApiPeerColor, ApiPeerSettings } from './chats';
-import type { ApiDocument, ApiPhoto } from './messages';
-import type { ApiBotVerification } from './misc';
-import type { ApiSavedStarGift } from './stars';
+import type { ApiDocument, ApiFormattedText, ApiPhoto } from './messages';
+import type {
+  ApiBotVerification,
+  ApiEmojiStatusType,
+  ApiFakeType,
+  ApiPeerSettings,
+  ApiProfileTab,
+  ApiTypePeerColor,
+} from './peers';
+import type { ApiSavedStarGift, ApiStarsRating } from './stars';
 
 export interface ApiUser {
   id: string;
@@ -34,7 +40,8 @@ export interface ApiUser {
   hasStories?: boolean;
   hasUnreadStories?: boolean;
   maxStoryId?: number;
-  color?: ApiPeerColor;
+  color?: ApiTypePeerColor;
+  profileColor?: ApiTypePeerColor;
   canEditBot?: boolean;
   hasMainMiniApp?: boolean;
   botActiveUsers?: number;
@@ -65,15 +72,18 @@ export interface ApiUserFullInfo {
   businessWorkHours?: ApiBusinessWorkHours;
   businessIntro?: ApiBusinessIntro;
   starGiftCount?: number;
+  starsRating?: ApiStarsRating;
+  starsMyPendingRating?: ApiStarsRating;
+  starsMyPendingRatingDate?: number;
   isBotCanManageEmojiStatus?: boolean;
   isBotAccessEmojiGranted?: boolean;
   hasScheduledMessages?: boolean;
   botVerification?: ApiBotVerification;
   paidMessagesStars?: number;
   settings?: ApiPeerSettings;
+  mainTab?: ApiProfileTab;
+  note?: ApiFormattedText;
 }
-
-export type ApiFakeType = 'fake' | 'scam';
 
 export type ApiUserType = 'userTypeBot' | 'userTypeRegular' | 'userTypeDeleted' | 'userTypeUnknown';
 
@@ -130,28 +140,6 @@ export type ApiAttachBot = OptionalCombine<ApiAttachBotBase, ApiAttachBotForMenu
 export interface ApiAttachBotIcon {
   name: string;
   document: ApiDocument;
-}
-
-export type ApiEmojiStatusType = ApiEmojiStatus | ApiEmojiStatusCollectible;
-
-export interface ApiEmojiStatus {
-  type: 'regular';
-  documentId: string;
-  until?: number;
-}
-
-export interface ApiEmojiStatusCollectible {
-  type: 'collectible';
-  collectibleId: string;
-  documentId: string;
-  title: string;
-  slug: string;
-  patternDocumentId: string;
-  centerColor: string;
-  edgeColor: string;
-  patternColor: string;
-  textColor: string;
-  until?: number;
 }
 
 export interface ApiBirthday {

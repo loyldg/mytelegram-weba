@@ -17,7 +17,6 @@ import type { GlobalState } from '../types';
 import { ApiMessageEntityTypes, MAIN_THREAD_ID } from '../../api/types';
 
 import {
-  CONTENT_NOT_SUPPORTED,
   LOTTIE_STICKER_MIME_TYPE,
   RE_LINK_TEMPLATE,
   SERVICE_NOTIFICATIONS_USER_ID,
@@ -29,7 +28,7 @@ import {
   VIDEO_STICKER_MIME_TYPE,
 } from '../../config';
 import { areDeepEqual } from '../../util/areDeepEqual';
-import { getCleanPeerId, isUserId } from '../../util/entities/ids';
+import { getRawPeerId, isUserId } from '../../util/entities/ids';
 import { areSortedArraysIntersecting, unique } from '../../util/iteratees';
 import { isLocalMessageId } from '../../util/keys/messageKey';
 import { getServerTime } from '../../util/serverTime';
@@ -95,7 +94,11 @@ export function groupStatefulContent({
 }
 
 export function getMessageText(message: MediaContainer) {
-  return hasMessageText(message) ? message.content.text || { text: CONTENT_NOT_SUPPORTED } : undefined;
+  return hasMessageText(message) ? message.content.text : undefined;
+}
+
+export function getMessageTextWithFallback(lang: LangFn, message: MediaContainer) {
+  return hasMessageText(message) ? message.content.text || { text: lang('MessageUnsupported') } : undefined;
 }
 
 export function getMessageCustomShape(message: ApiMessage): boolean {
@@ -116,29 +119,31 @@ export function getMessageCustomShape(message: ApiMessage): boolean {
 
   const hasOtherFormatting = text?.entities?.some((entity) => entity.type !== ApiMessageEntityTypes.CustomEmoji);
 
-  return Boolean(message.emojiOnlyCount && !hasOtherFormatting);
+  return Boolean(text.emojiOnlyCount && !hasOtherFormatting);
 }
 
-export function getMessageSingleRegularEmoji(message: ApiMessage) {
+export function getMessageSingleRegularEmoji(message: MediaContainer) {
   const { text } = message.content;
 
-  if (text?.entities?.length || message.emojiOnlyCount !== 1) {
+  if (!text || text.entities?.length || text.emojiOnlyCount !== 1) {
     return undefined;
   }
 
-  return text!.text;
+  return text.text;
 }
 
-export function getMessageSingleCustomEmoji(message: ApiMessage): string | undefined {
+export function getMessageSingleCustomEmoji(message: MediaContainer): string | undefined {
   const { text } = message.content;
 
+  const firstEntity = text?.entities?.[0];
   if (text?.entities?.length !== 1
-    || text.entities[0].type !== ApiMessageEntityTypes.CustomEmoji
-    || message.emojiOnlyCount !== 1) {
+    || firstEntity?.type !== ApiMessageEntityTypes.CustomEmoji
+    || firstEntity.offset !== 0
+    || firstEntity.length !== text.text.length) {
     return undefined;
   }
 
-  return text.entities[0].documentId;
+  return firstEntity.documentId;
 }
 
 export function getFirstLinkInMessage(message: ApiMessage) {
@@ -247,7 +252,7 @@ export function isMessageTranslatable(message: ApiMessage, allowOutgoing?: boole
   const isServiceNotification = isServiceNotificationMessage(message);
   const isAction = isActionMessage(message);
 
-  return Boolean(text?.text.length && !message.emojiOnlyCount && !game && (allowOutgoing || !message.isOutgoing)
+  return Boolean(text?.text.length && !text.emojiOnlyCount && !game && (allowOutgoing || !message.isOutgoing)
     && !isLocal && !isServiceNotification && !isAction && !message.isScheduled);
 }
 
@@ -380,7 +385,7 @@ export function isUploadingFileSticker(attachment: ApiAttachment) {
 export function getMessageLink(peer: ApiPeer, topicId?: ThreadId, messageId?: number) {
   const chatUsername = getMainUsername(peer);
 
-  const normalizedId = getCleanPeerId(peer.id);
+  const normalizedId = getRawPeerId(peer.id).toString();
 
   const chatPart = chatUsername || `c/${normalizedId}`;
   const topicPart = topicId && topicId !== MAIN_THREAD_ID ? `/${topicId}` : '';

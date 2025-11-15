@@ -2,7 +2,7 @@ import type { FC } from '@teact';
 import { memo, useEffect, useRef, useState } from '@teact';
 import { getActions, withGlobal } from '../../global';
 
-import type { AnimationLevel, ProfileTabType, ThreadId } from '../../types';
+import type { AnimationLevel, ThreadId } from '../../types';
 import { ManagementScreens, NewChatMembersProgress, ProfileState, RightColumnContent } from '../../types';
 
 import { ANIMATION_END_DELAY, MIN_SCREEN_WIDTH_FOR_STATIC_RIGHT_COLUMN } from '../../config';
@@ -51,15 +51,14 @@ type StateProps = {
   contentKey?: RightColumnContent;
   chatId?: string;
   threadId?: ThreadId;
-  isInsideTopic?: boolean;
   isChatSelected: boolean;
   animationLevel: AnimationLevel;
   shouldSkipHistoryAnimations?: boolean;
   nextManagementScreen?: ManagementScreens;
-  nextProfileTab?: ProfileTabType;
   shouldCloseRightColumn?: boolean;
   isSavedMessages?: boolean;
   isSavedDialog?: boolean;
+  isOwnProfile?: boolean;
 };
 
 const ANIMATION_DURATION = 450 + ANIMATION_END_DELAY;
@@ -82,10 +81,10 @@ const RightColumn: FC<OwnProps & StateProps> = ({
   animationLevel,
   shouldSkipHistoryAnimations,
   nextManagementScreen,
-  nextProfileTab,
   shouldCloseRightColumn,
   isSavedMessages,
   isSavedDialog,
+  isOwnProfile,
 }) => {
   const {
     toggleChatInfo,
@@ -101,7 +100,6 @@ const RightColumn: FC<OwnProps & StateProps> = ({
     toggleStoryStatistics,
     setOpenedInviteInfo,
     requestNextManagementScreen,
-    resetNextProfileTab,
     closeCreateTopicPanel,
     closeEditTopicPanel,
     closeBoostStatistics,
@@ -262,12 +260,6 @@ const RightColumn: FC<OwnProps & StateProps> = ({
   }, [nextManagementScreen]);
 
   useEffect(() => {
-    if (!nextProfileTab) return;
-
-    resetNextProfileTab();
-  }, [nextProfileTab]);
-
-  useEffect(() => {
     if (shouldCloseRightColumn) {
       close();
       setShouldCloseRightColumn({ value: undefined });
@@ -321,7 +313,7 @@ const RightColumn: FC<OwnProps & StateProps> = ({
       case RightColumnContent.ChatInfo:
         return (
           <Profile
-            key={`profile_${chatId!}_${threadId}`}
+            key={`profile_${chatId!}_${threadId}_${Boolean(isOwnProfile)}`}
             chatId={chatId!}
             threadId={threadId}
             profileState={profileState}
@@ -421,17 +413,18 @@ const RightColumn: FC<OwnProps & StateProps> = ({
 };
 
 export default memo(withGlobal<OwnProps>(
-  (global, { isMobile }): StateProps => {
+  (global, { isMobile }): Complete<StateProps> => {
     const { chatId, threadId } = selectCurrentMessageList(global) || {};
 
     const areActiveChatsLoaded = selectAreActiveChatsLoaded(global);
     const { animationLevel } = selectSharedSettings(global);
     const {
-      management, shouldSkipHistoryAnimations, nextProfileTab, shouldCloseRightColumn,
+      management, shouldSkipHistoryAnimations, shouldCloseRightColumn, chatInfo,
     } = selectTabState(global);
     const nextManagementScreen = chatId ? management.byChatId[chatId]?.nextScreen : undefined;
 
-    const isSavedMessages = chatId ? selectIsChatWithSelf(global, chatId) : undefined;
+    const isOwnProfile = chatInfo?.isOwnProfile;
+    const isSavedMessages = chatId && !isOwnProfile ? selectIsChatWithSelf(global, chatId) : undefined;
     const isSavedDialog = chatId ? getIsSavedDialog(chatId, threadId, global.currentUserId) : undefined;
 
     return {
@@ -442,10 +435,10 @@ export default memo(withGlobal<OwnProps>(
       animationLevel,
       shouldSkipHistoryAnimations,
       nextManagementScreen,
-      nextProfileTab,
       shouldCloseRightColumn,
       isSavedMessages,
       isSavedDialog,
+      isOwnProfile,
     };
   },
 )(RightColumn));

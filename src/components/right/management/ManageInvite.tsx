@@ -16,7 +16,6 @@ import useOldLang from '../../../hooks/useOldLang';
 import useSyncEffect from '../../../hooks/useSyncEffect';
 
 import CalendarModal from '../../common/CalendarModal';
-import Icon from '../../common/icons/Icon';
 import Button from '../../ui/Button';
 import Checkbox from '../../ui/Checkbox';
 import FloatingActionButton from '../../ui/FloatingActionButton';
@@ -55,7 +54,7 @@ const ManageInvite: FC<OwnProps & StateProps> = ({
   const [isCalendarOpened, openCalendar, closeCalendar] = useFlag();
   const [isRequestNeeded, setIsRequestNeeded] = useState(false);
   const [title, setTitle] = useState('');
-  const [customExpireDate, setCustomExpireDate] = useState<number>(Date.now() + DEFAULT_CUSTOM_EXPIRE_DATE);
+  const [customExpireDate, setCustomExpireDate] = useState<number>(() => Date.now() + DEFAULT_CUSTOM_EXPIRE_DATE);
   const [selectedExpireOption, setSelectedExpireOption] = useState('unlimited');
   const [customUsageLimit, setCustomUsageLimit] = useState<number | undefined>(10);
   const [selectedUsageOption, setSelectedUsageOption] = useState('0');
@@ -251,9 +250,8 @@ const ManageInvite: FC<OwnProps & StateProps> = ({
           onClick={handleSaveClick}
           disabled={isSubmitBlocked}
           ariaLabel={editingInvite ? lang('SaveLink') : lang('CreateLink')}
-        >
-          <Icon name="check" />
-        </FloatingActionButton>
+          iconName="check"
+        />
       </div>
       <CalendarModal
         isOpen={isCalendarOpened}
@@ -269,7 +267,7 @@ const ManageInvite: FC<OwnProps & StateProps> = ({
 };
 
 export default memo(withGlobal<OwnProps>(
-  (global, { chatId }): StateProps => {
+  (global, { chatId }): Complete<StateProps> => {
     const { editingInvite } = selectTabState(global).management.byChatId[chatId] || {};
 
     return {

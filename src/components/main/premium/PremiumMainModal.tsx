@@ -16,7 +16,13 @@ import type { LangPair } from '../../../types/language';
 
 import { PREMIUM_FEATURE_SECTIONS, TME_LINK_PREFIX } from '../../../config';
 import { getUserFullName } from '../../../global/helpers';
-import { selectIsCurrentUserPremium, selectStickerSet, selectTabState, selectUser } from '../../../global/selectors';
+import {
+  selectCustomEmoji,
+  selectIsCurrentUserPremium,
+  selectStickerSet,
+  selectTabState,
+  selectUser,
+} from '../../../global/selectors';
 import { selectPremiumLimit } from '../../../global/selectors/limits';
 import buildClassName from '../../../util/buildClassName';
 import { formatCurrency } from '../../../util/formatCurrency';
@@ -315,9 +321,10 @@ const PremiumMainModal: FC<OwnProps & StateProps> = ({
   }
 
   function getHeaderDescription() {
-    if (gift) {
-      const perUserTotal = gift.type !== 'starGiftUnique' ? gift.perUserTotal : 0;
-      return lang('DescriptionGiftPremiumRequired', { count: perUserTotal });
+    if (gift && gift.type !== 'starGiftUnique' && gift.perUserTotal) {
+      return lang('DescriptionGiftPremiumRequired2', { count: gift.perUserTotal }, {
+        pluralValue: gift.perUserTotal,
+      });
     }
 
     if (isGift) {
@@ -387,7 +394,7 @@ const PremiumMainModal: FC<OwnProps & StateProps> = ({
     }
 
     return (
-      <div className={styles.footerText} dir={oldLang.isRtl ? 'rtl' : undefined}>
+      <div className={styles.footerText} dir={lang.isRtl ? 'rtl' : undefined}>
         {renderTextWithEntities({
           text: promo.statusText,
           entities: promo.statusEntities,
@@ -466,7 +473,7 @@ const PremiumMainModal: FC<OwnProps & StateProps> = ({
               })}
               <div
                 className={buildClassName(styles.footerText, styles.primaryFooterText)}
-                dir={oldLang.isRtl ? 'rtl' : undefined}
+                dir={lang.isRtl ? 'rtl' : undefined}
               >
                 <p>
                   {renderText(oldLang('AboutPremiumDescription'), ['simple_markdown'])}
@@ -502,13 +509,13 @@ const PremiumMainModal: FC<OwnProps & StateProps> = ({
   );
 };
 
-export default memo(withGlobal<OwnProps>((global): StateProps => {
+export default memo(withGlobal<OwnProps>((global): Complete<StateProps> => {
   const {
     premiumModal,
   } = selectTabState(global);
 
   const fromUser = premiumModal?.fromUserId ? selectUser(global, premiumModal.fromUserId) : undefined;
-  const fromUserStatusEmoji = fromUser?.emojiStatus ? global.customEmojis.byId[fromUser.emojiStatus.documentId]
+  const fromUserStatusEmoji = fromUser?.emojiStatus ? selectCustomEmoji(global, fromUser.emojiStatus.documentId)
     : undefined;
   const fromUserStatusSet = fromUserStatusEmoji ? selectStickerSet(global, fromUserStatusEmoji.stickerSetInfo)
     : undefined;

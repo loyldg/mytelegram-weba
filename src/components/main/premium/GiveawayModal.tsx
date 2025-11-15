@@ -13,7 +13,6 @@ import type {
   ApiPrepaidStarsGiveaway,
   ApiStarGiveawayOption,
   ApiTypePrepaidGiveaway,
-  ApiUser,
 } from '../../../api/types';
 
 import {
@@ -38,7 +37,7 @@ import useLastCallback from '../../../hooks/useLastCallback';
 import useOldLang from '../../../hooks/useOldLang';
 
 import CalendarModal from '../../common/CalendarModal';
-import CountryPickerModal from '../../common/CountryPickerModal';
+import CountryPickerModal from '../../common/CountryPickerModal.async';
 import GroupChatInfo from '../../common/GroupChatInfo';
 import Icon from '../../common/icons/Icon';
 import StarTopupOptionList from '../../modals/stars/StarTopupOptionList';
@@ -72,8 +71,6 @@ export type OwnProps = {
 type StateProps = {
   chatId?: string;
   gifts?: ApiPremiumGiftCodeOption[];
-  isOpen?: boolean;
-  fromUser?: ApiUser;
   selectedMemberList?: string[] | undefined;
   selectedChannelList?: string[] | undefined;
   giveawayBoostPerPremiumLimit?: number;
@@ -161,7 +158,7 @@ const GiveawayModal: FC<OwnProps & StateProps> = ({
     });
   }
 
-  const [customExpireDate, setCustomExpireDate] = useState<number>(Date.now() + DEFAULT_CUSTOM_EXPIRE_DATE);
+  const [customExpireDate, setCustomExpireDate] = useState<number>(() => Date.now() + DEFAULT_CUSTOM_EXPIRE_DATE);
   const [isHeaderHidden, setHeaderHidden] = useState(true);
   const [selectedRandomUserCount, setSelectedRandomUserCount] = useState<number>(DEFAULT_BOOST_COUNT);
   const [selectedGiveawayOption, setGiveawayOption] = useState<ApiGiveawayType>(TYPE_OPTIONS[0].value);
@@ -906,7 +903,7 @@ const GiveawayModal: FC<OwnProps & StateProps> = ({
   );
 };
 
-export default memo(withGlobal<OwnProps>((global): StateProps => {
+export default memo(withGlobal<OwnProps>((global): Complete<StateProps> => {
   const {
     giveawayModal,
   } = selectTabState(global);

@@ -12,11 +12,11 @@ import type RLottieInstance from '../../lib/rlottie/RLottie';
 
 import { requestMeasure } from '../../lib/fasterdom/fasterdom';
 import { ensureRLottie, getRLottie } from '../../lib/rlottie/RLottie.async';
-import { IS_ELECTRON } from '../../util/browser/windowEnvironment';
+import { IS_TAURI } from '../../util/browser/globalEnvironment';
 import buildClassName from '../../util/buildClassName';
 import buildStyle from '../../util/buildStyle';
+import { hex2rgbaObj } from '../../util/colors.ts';
 import generateUniqueId from '../../util/generateUniqueId';
-import { hexToRgb } from '../../util/switchTheme';
 
 import useColorFilter from '../../hooks/stickers/useColorFilter';
 import useEffectWithPrevDeps from '../../hooks/useEffectWithPrevDeps';
@@ -116,7 +116,7 @@ const AnimatedSticker: FC<OwnProps> = ({
 
   useSyncEffect(() => {
     if (color && !shouldUseColorFilter) {
-      const { r, g, b } = hexToRgb(color);
+      const { r, g, b } = hex2rgbaObj(color);
       rgbColor.current = [r, g, b];
     } else {
       rgbColor.current = undefined;
@@ -276,7 +276,7 @@ const AnimatedSticker: FC<OwnProps> = ({
       className={buildClassName('AnimatedSticker', className)}
       style={buildStyle(
         size !== undefined && `width: ${size}px; height: ${size}px;`,
-        onClick && !IS_ELECTRON && 'cursor: pointer',
+        onClick && !IS_TAURI && 'cursor: pointer',
         colorFilter,
         style,
       )}

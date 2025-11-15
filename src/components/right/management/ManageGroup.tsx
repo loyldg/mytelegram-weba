@@ -28,14 +28,12 @@ import useLastCallback from '../../../hooks/useLastCallback';
 import useMedia from '../../../hooks/useMedia';
 import useOldLang from '../../../hooks/useOldLang';
 
-import Icon from '../../common/icons/Icon';
 import AvatarEditable from '../../ui/AvatarEditable';
 import Checkbox from '../../ui/Checkbox';
 import ConfirmDialog from '../../ui/ConfirmDialog';
 import FloatingActionButton from '../../ui/FloatingActionButton';
 import InputText from '../../ui/InputText';
 import ListItem from '../../ui/ListItem';
-import Spinner from '../../ui/Spinner';
 import Switcher from '../../ui/Switcher';
 import TextArea from '../../ui/TextArea';
 
@@ -446,6 +444,7 @@ const ManageGroup: FC<OwnProps & StateProps> = ({
           {!isPublicGroup && !hasLinkedChannel && Boolean(chatFullInfo) && (
             <div className="ListItem narrow" ref={isPreHistoryHiddenCheckboxRef}>
               <Checkbox
+                className="align-checkbox-with-list-buttons"
                 checked={!chatFullInfo.isPreHistoryHidden}
                 label={lang('ChatHistory')}
                 onChange={handleTogglePreHistory}
@@ -468,13 +467,9 @@ const ManageGroup: FC<OwnProps & StateProps> = ({
         onClick={handleUpdateGroup}
         disabled={isLoading}
         ariaLabel={lang('Save')}
-      >
-        {isLoading ? (
-          <Spinner color="white" />
-        ) : (
-          <Icon name="check" />
-        )}
-      </FloatingActionButton>
+        iconName="check"
+        isLoading={isLoading}
+      />
       <ConfirmDialog
         isOpen={isDeleteDialogOpen}
         onClose={closeDeleteDialog}
@@ -493,7 +488,7 @@ const ManageGroup: FC<OwnProps & StateProps> = ({
 };
 
 export default memo(withGlobal<OwnProps>(
-  (global, { chatId }): StateProps => {
+  (global, { chatId }): Complete<StateProps> => {
     const chat = selectChat(global, chatId)!;
     const chatFullInfo = selectChatFullInfo(global, chatId);
     const { management, limitReachedModal } = selectTabState(global);

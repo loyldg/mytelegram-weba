@@ -59,7 +59,6 @@ export type OwnProps = {
 
 type StateProps = {
   chat?: ApiChat;
-  isGroup?: boolean;
   isChannel?: boolean;
   isSuperGroup?: boolean;
   messageIds?: number[];
@@ -358,7 +357,7 @@ const DeleteMessageModal: FC<OwnProps & StateProps> = ({
     return (
       <div
         className={shouldShowOption && styles.container}
-        dir={oldLang.isRtl ? 'rtl' : undefined}
+        dir={lang.isRtl ? 'rtl' : undefined}
       >
         {shouldShowOption && (
           <AvatarList
@@ -492,7 +491,7 @@ const DeleteMessageModal: FC<OwnProps & StateProps> = ({
 };
 
 export default memo(withGlobal<OwnProps>(
-  (global): StateProps => {
+  (global): Complete<StateProps> => {
     const {
       deleteMessageModal,
     } = selectTabState(global);

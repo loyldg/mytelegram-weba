@@ -1,3 +1,5 @@
+@use '../../../styles/mixins';
+
 .businessLocation {
   flex-shrink: 0;
 
@@ -67,4 +69,65 @@
 .openAppButton {
   margin-top: 0.5rem;
   margin-bottom: 0.5rem;
+}
+
+.noteSubtitle {
+  display: flex !important;
+  align-items: center;
+}
+
+.noteListItemIcon {
+  align-self: flex-start;
+  padding-top: 1rem;
+}
+
+.noteHint {
+  margin-left: auto;
+}
+
+.noteText {
+  position: relative;
+
+  overflow: hidden;
+  display: inline-block;
+
+  width: 100%;
+  /* stylelint-disable-next-line plugin/no-low-performance-animation-properties */
+  transition: max-height 0.3s ease;
+
+  &::after {
+    pointer-events: none;
+    content: '';
+
+    position: absolute;
+    bottom: 0;
+    left: 0;
+
+    width: 100%;
+    height: 1.5rem;
+
+    opacity: 0;
+    background: linear-gradient(to top, var(--color-background) 0%, transparent 100%);
+
+    transition: opacity 0.3s ease;
+  }
+}
+
+.noteTextCollapsed::after {
+  opacity: 1;
+}
+
+.noteCollapseIcon {
+  margin-inline-start: 0.125rem;
+  font-size: 0.9375rem;
+  line-height: 0.9375rem;
+  transition: transform 0.3s ease;
+}
+
+.expandedIcon {
+  transform: rotate(-180deg);
+}
+
+.clickable {
+  cursor: var(--custom-cursor, pointer);
 }

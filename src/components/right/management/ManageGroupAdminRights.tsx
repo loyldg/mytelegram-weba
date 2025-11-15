@@ -17,14 +17,12 @@ import useFlag from '../../../hooks/useFlag';
 import useHistoryBack from '../../../hooks/useHistoryBack';
 import useOldLang from '../../../hooks/useOldLang';
 
-import Icon from '../../common/icons/Icon';
 import PrivateChatInfo from '../../common/PrivateChatInfo';
 import Checkbox from '../../ui/Checkbox';
 import ConfirmDialog from '../../ui/ConfirmDialog';
 import FloatingActionButton from '../../ui/FloatingActionButton';
 import InputText from '../../ui/InputText';
 import ListItem from '../../ui/ListItem';
-import Spinner from '../../ui/Spinner';
 
 type OwnProps = {
   chatId: string;
@@ -401,13 +399,9 @@ const ManageGroupAdminRights: FC<OwnProps & StateProps> = ({
         onClick={handleSavePermissions}
         ariaLabel={lang('Save')}
         disabled={isLoading}
-      >
-        {isLoading ? (
-          <Spinner color="white" />
-        ) : (
-          <Icon name="check" />
-        )}
-      </FloatingActionButton>
+        iconName="check"
+        isLoading={isLoading}
+      />
 
       {!isNewAdmin && (
         <ConfirmDialog
@@ -424,7 +418,7 @@ const ManageGroupAdminRights: FC<OwnProps & StateProps> = ({
 };
 
 export default memo(withGlobal<OwnProps>(
-  (global, { chatId, isPromotedByCurrentUser }): StateProps => {
+  (global, { chatId, isPromotedByCurrentUser }): Complete<StateProps> => {
     const chat = selectChat(global, chatId)!;
     const fullInfo = selectChatFullInfo(global, chatId);
     const { byId: usersById } = global.users;

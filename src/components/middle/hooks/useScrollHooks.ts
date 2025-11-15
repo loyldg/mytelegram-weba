@@ -21,17 +21,27 @@ const NOTCH_THRESHOLD = 1; // Notch has zero height so we at least need a 1px ma
 const CONTAINER_HEIGHT_DEBOUNCE = 200;
 const TOOLS_FREEZE_TIMEOUT = 350; // Approximate message sending animation duration
 
-export default function useScrollHooks(
-  type: MessageListType,
-  containerRef: ElementRef<HTMLDivElement>,
-  messageIds: number[],
-  getContainerHeight: Signal<number | undefined>,
-  isViewportNewest: boolean,
-  isUnread: boolean,
-  onScrollDownToggle: BooleanToVoidFunction,
-  onNotchToggle: BooleanToVoidFunction,
-  isReady: boolean,
-) {
+export default function useScrollHooks({
+  type,
+  containerRef,
+  messageIds,
+  getContainerHeight,
+  isViewportNewest,
+  isUnread,
+  isReady,
+  onScrollDownToggle,
+  onNotchToggle,
+}: {
+  type: MessageListType;
+  containerRef: ElementRef<HTMLDivElement>;
+  messageIds: number[];
+  getContainerHeight: Signal<number | undefined>;
+  isViewportNewest: boolean;
+  isUnread: boolean;
+  isReady: boolean;
+  onScrollDownToggle: BooleanToVoidFunction | undefined;
+  onNotchToggle: AnyToVoidFunction | undefined;
+}) {
   const { loadViewportMessages } = getActions();
 
   const [loadMoreBackwards, loadMoreForwards] = useMemo(
@@ -51,14 +61,16 @@ export default function useScrollHooks(
     if (!isReady) return;
 
     if (!messageIds?.length) {
-      onScrollDownToggle(false);
-      onNotchToggle(false);
+      onScrollDownToggle?.(false);
+      onNotchToggle?.(false);
+
       return;
     }
 
     if (!isViewportNewest) {
-      onScrollDownToggle(true);
-      onNotchToggle(true);
+      onScrollDownToggle?.(true);
+      onNotchToggle?.(true);
+
       return;
     }
 
@@ -74,8 +86,8 @@ export default function useScrollHooks(
 
     if (scrollHeight === 0) return;
 
-    onScrollDownToggle(isUnread ? !isAtBottom : !isNearBottom);
-    onNotchToggle(!isAtBottom);
+    onScrollDownToggle?.(isUnread ? !isAtBottom : !isNearBottom);
+    onNotchToggle?.(!isAtBottom);
   });
 
   const {
@@ -134,7 +146,18 @@ export default function useScrollHooks(
     if (isReady) {
       toggleScrollTools();
     }
-  }, [isReady, toggleScrollTools]);
+  }, [isReady]);
+
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+
+    container.addEventListener('scrollend', toggleScrollTools);
+
+    return () => {
+      container.removeEventListener('scrollend', toggleScrollTools);
+    };
+  }, [containerRef]);
 
   const freezeShortly = useLastCallback(() => {
     freezeForFab();

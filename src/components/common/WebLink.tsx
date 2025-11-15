@@ -1,4 +1,4 @@
-import { memo } from '../../lib/teact/teact';
+import { memo, useMemo } from '../../lib/teact/teact';
 import { withGlobal } from '../../global';
 
 import type { ApiMessage, ApiWebPage } from '../../api/types';
@@ -6,7 +6,8 @@ import type { ObserveFn } from '../../hooks/useIntersectionObserver';
 import type { TextPart } from '../../types';
 
 import {
-  getFirstLinkInMessage, getMessageText,
+  getFirstLinkInMessage,
+  getMessageTextWithFallback,
 } from '../../global/helpers';
 import { selectWebPageFromMessage } from '../../global/selectors';
 import buildClassName from '../../util/buildClassName';
@@ -15,6 +16,7 @@ import trimText from '../../util/trimText';
 import { renderMessageSummary } from './helpers/renderMessageText';
 import renderText from './helpers/renderText';
 
+import useLang from '../../hooks/useLang';
 import useLastCallback from '../../hooks/useLastCallback';
 import useOldLang from '../../hooks/useOldLang';
 
@@ -45,43 +47,67 @@ type StateProps = {
 const WebLink = ({
   message, webPage, senderTitle, isProtected, observeIntersection, onMessageClick,
 }: OwnProps & StateProps) => {
-  const lang = useOldLang();
+  const lang = useLang();
+  const oldLang = useOldLang();
+
+  const handleMessageClick = useLastCallback(() => {
+    onMessageClick(message);
+  });
 
   let linkData: ApiWebPageWithFormatted | undefined = webPage;
 
   if (!linkData) {
     const link = getFirstLinkInMessage(message);
     if (link) {
-      const { url, domain } = link;
+      const { url: linkUrl, domain } = link;
 
       linkData = {
+        mediaType: 'webpage',
+        webpageType: 'full',
+        id: '',
+        displayUrl: linkUrl,
         siteName: domain.replace(/^www./, ''),
-        url: url.includes('://') ? url : url.includes('@') ? `mailto:${url}` : `http://${url}`,
-        formattedDescription: getMessageText(message)?.text !== url
+        url: linkUrl.includes('://') ? linkUrl : linkUrl.includes('@') ? `mailto:${linkUrl}` : `http://${linkUrl}`,
+        formattedDescription: getMessageTextWithFallback(lang, message)?.text !== linkUrl
           ? renderMessageSummary(lang, message, undefined, undefined, MAX_TEXT_LENGTH)
           : undefined,
-      } as ApiWebPageWithFormatted;
+      } satisfies ApiWebPageWithFormatted;
     }
   }
 
-  const handleMessageClick = useLastCallback(() => {
-    onMessageClick(message);
-  });
+  const fullLinkData = linkData?.webpageType === 'full' ? linkData : undefined;
 
-  if (linkData?.webpageType !== 'full') {
-    return undefined;
-  }
+  const { url } = linkData || {};
+
+  const fallbackDescription = useMemo(() => {
+    return getMessageTextWithFallback(lang, message)?.text !== url
+      ? renderMessageSummary(lang, message, undefined, undefined, MAX_TEXT_LENGTH)
+      : undefined;
+  }, [lang, message, url]);
 
   const {
     siteName,
-    url,
     displayUrl,
     title,
     description,
-    formattedDescription,
+    formattedDescription = fallbackDescription,
     photo,
     video,
-  } = linkData;
+  } = fullLinkData || {};
+
+  const siteTitle = useMemo(() => {
+    const text = title || siteName || displayUrl;
+    if (text) return text;
+    if (!url) return '';
+    try {
+      const parsedUrl = new URL(url);
+      return parsedUrl.hostname;
+    } catch (e) {
+      return '';
+    }
+  }, [title, siteName, displayUrl, url]);
+
+  if (!url) return undefined;
 
   const truncatedDescription = !senderTitle && description && trimText(description, MAX_TEXT_LENGTH);
 
@@ -90,12 +116,12 @@ const WebLink = ({
     (!photo && !video) && 'without-media',
   );
 
-  const safeLinkContent = url.replace('mailto:', '') || displayUrl;
+  const safeLinkContent = displayUrl || url.replace('mailto:', '');
 
   return (
     <div
       className={className}
-      data-initial={(siteName || displayUrl)[0]}
+      data-initial={siteTitle[0]}
       dir={lang.isRtl ? 'rtl' : undefined}
     >
       {photo && (
@@ -103,7 +129,7 @@ const WebLink = ({
       )}
       <div className="content">
         <Link isRtl={lang.isRtl} className="site-title" onClick={handleMessageClick}>
-          {renderText(title || siteName || displayUrl)}
+          {renderText(siteTitle)}
         </Link>
         {(truncatedDescription || formattedDescription) && (
           <Link isRtl={lang.isRtl} className="site-description" onClick={handleMessageClick}>
@@ -125,7 +151,7 @@ const WebLink = ({
             onClick={handleMessageClick}
             isRtl={lang.isRtl}
           >
-            {formatPastTimeShort(lang, message.date * 1000)}
+            {formatPastTimeShort(oldLang, message.date * 1000)}
           </Link>
         </div>
       )}
@@ -136,7 +162,7 @@ const WebLink = ({
 export default memo(withGlobal<OwnProps>(
   (global, {
     message,
-  }): StateProps => {
+  }): Complete<StateProps> => {
     const webPage = selectWebPageFromMessage(global, message);
 
     return {

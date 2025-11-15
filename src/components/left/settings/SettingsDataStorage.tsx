@@ -61,8 +61,9 @@ const SettingsDataStorage: FC<OwnProps & StateProps> = ({
   });
 
   const renderFileSizeCallback = useCallback((value: number) => {
+    const size = AUTODOWNLOAD_FILESIZE_MB_LIMITS[value];
     return lang('AutodownloadSizeLimitUpTo', {
-      limit: lang('FileSizeMB', { count: AUTODOWNLOAD_FILESIZE_MB_LIMITS[value] }),
+      limit: lang('MediaSizeMB', { size }, { pluralValue: size }),
     });
   }, [lang]);
 
@@ -161,7 +162,7 @@ const SettingsDataStorage: FC<OwnProps & StateProps> = ({
 };
 
 export default memo(withGlobal<OwnProps>(
-  (global): StateProps => {
+  (global): Complete<StateProps> => {
     return pick(global.settings.byKey, [
       'canAutoLoadPhotoFromContacts',
       'canAutoLoadPhotoInPrivateChats',

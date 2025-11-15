@@ -4,19 +4,17 @@ import { getGlobal } from '../../../global';
 import type { ApiSticker } from '../../../api/types';
 import type { GlobalState } from '../../../global/types';
 
-import { selectCanPlayAnimatedEmojis } from '../../../global/selectors';
+import { selectCanPlayAnimatedEmojis, selectCustomEmoji } from '../../../global/selectors';
 import { addCustomEmojiCallback, removeCustomEmojiCallback } from '../../../util/emoji/customEmojiManager';
+import ensureCustomEmoji from '../../../util/emoji/ensureCustomEmoji';
 
-import useEnsureCustomEmoji from '../../../hooks/useEnsureCustomEmoji';
 import useLastCallback from '../../../hooks/useLastCallback';
 
 export default function useCustomEmoji(documentId?: string) {
-  const [customEmoji, setCustomEmoji] = useState<ApiSticker | undefined>(
-    documentId ? getGlobal().customEmojis.byId[documentId] : undefined,
-  );
-  const [canPlay, setCanPlay] = useState(selectCanPlayAnimatedEmojis(getGlobal()));
-
-  useEnsureCustomEmoji(documentId);
+  const [customEmoji, setCustomEmoji] = useState<ApiSticker | undefined>(() => (
+    documentId ? selectCustomEmoji(getGlobal(), documentId) : undefined
+  ));
+  const [canPlay, setCanPlay] = useState(() => selectCanPlayAnimatedEmojis(getGlobal()));
 
   const handleGlobalChange = useLastCallback((customEmojis?: GlobalState['customEmojis']) => {
     if (!documentId) return;
@@ -26,7 +24,11 @@ export default function useCustomEmoji(documentId?: string) {
     setCanPlay(selectCanPlayAnimatedEmojis(newGlobal));
   });
 
-  useEffect(handleGlobalChange, [documentId, handleGlobalChange]);
+  useEffect(() => {
+    ensureCustomEmoji(documentId);
+  }, [documentId]);
+
+  useEffect(() => handleGlobalChange(), [documentId]);
 
   useEffect(() => {
     if (!documentId) return undefined;
@@ -36,7 +38,7 @@ export default function useCustomEmoji(documentId?: string) {
     return () => {
       removeCustomEmojiCallback(handleGlobalChange);
     };
-  }, [customEmoji, documentId, handleGlobalChange]);
+  }, [documentId]);
 
   return { customEmoji, canPlay };
 }

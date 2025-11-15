@@ -64,7 +64,7 @@ const ToDoListModal = ({
   const itemsListRef = useRef<HTMLDivElement>();
 
   const [title, setTitle] = useState<string>('');
-  const [items, setItems] = useState<Item[]>([{ id: generateUniqueNumberId(), text: '' }]);
+  const [items, setItems] = useState<Item[]>(() => [{ id: generateUniqueNumberId(), text: '' }]);
   const [isOthersCanAppend, setIsOthersCanAppend] = useState(true);
   const [isOthersCanComplete, setIsOthersCanComplete] = useState(true);
   const [hasErrors, setHasErrors] = useState<boolean>(false);
@@ -287,13 +287,14 @@ const ToDoListModal = ({
   });
 
   function renderHeader() {
-    const title = isAddTaskMode ? 'TitleAppendToDoList' : editingMessage ? 'TitleEditToDoList' : 'TitleNewToDoList';
+    const modalTitle = isAddTaskMode ? 'TitleAppendToDoList'
+      : editingMessage ? 'TitleEditToDoList' : 'TitleNewToDoList';
     return (
       <div className="modal-header-condensed">
         <Button round color="translucent" size="smaller" ariaLabel={lang('AriaToDoCancel')} onClick={onClear}>
           <Icon name="close" />
         </Button>
-        <div className="modal-title">{lang(title)}</div>
+        <div className="modal-title">{lang(modalTitle)}</div>
         <Button
           color="primary"
           size="smaller"
@@ -340,6 +341,8 @@ const ToDoListModal = ({
     });
   }
 
+  const moreTasksCount = maxItemsCount - items.length - (isAddTaskMode && editingTodo ? editingTodo.items.length : 0);
+
   return (
     <Modal isOpen={isOpen} onClose={onClear} header={renderHeader()} className="ToDoListModal">
       {!isAddTaskMode && (
@@ -369,8 +372,10 @@ const ToDoListModal = ({
       </div>
 
       <div className="items-count-hint">
-        {lang('HintTodoListTasksCount', {
-          count: maxItemsCount - items.length - (isAddTaskMode && editingTodo ? editingTodo.items.length : 0),
+        {lang('HintTodoListTasksCount2', {
+          count: moreTasksCount,
+        }, {
+          pluralValue: moreTasksCount,
         })}
       </div>
 
@@ -397,7 +402,7 @@ const ToDoListModal = ({
 };
 
 export default memo(withGlobal<OwnProps>(
-  (global, { modal }): StateProps => {
+  (global, { modal }): Complete<StateProps> => {
     const { appConfig } = global;
     const editingMessage = modal?.messageId ? selectChatMessage(global, modal.chatId, modal.messageId) : undefined;
     return {
