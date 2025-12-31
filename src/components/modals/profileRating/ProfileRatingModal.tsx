@@ -12,7 +12,6 @@ import { formatShortDuration } from '../../../util/dates/dateFormat';
 import useLang from '../../../hooks/useLang';
 import useLastCallback from '../../../hooks/useLastCallback';
 
-import Icon from '../../common/icons/Icon';
 import PremiumProgress, { type AnimationDirection } from '../../common/PremiumProgress';
 import Button from '../../ui/Button';
 import Transition from '../../ui/Transition';
@@ -194,19 +193,19 @@ const ProfileRatingModal = ({
 
   const listItemData = [
     ['closed-gift', lang('RatingGiftsFromTelegram'), (
-      <span className={styles.subtitle}>
+      <span>
         {renderBadge('added')}
         {lang('RatingGiftsFromTelegramDesc')}
       </span>
     )],
     ['user-stars', lang('RatingGiftsAndPostsFromUsers'), (
-      <span className={styles.subtitle}>
+      <span>
         {renderBadge('added')}
         {lang('RatingGiftsAndPostsFromUsersDesc')}
       </span>
     )],
     ['stars-refund', lang('RatingRefundsAndConversions'), (
-      <span className={styles.subtitle}>
+      <span>
         {renderBadge('deducted')}
         {lang('RatingRefundsAndConversionsDesc')}
       </span>
@@ -219,8 +218,9 @@ const ProfileRatingModal = ({
       <div className={styles.footer}>
         <Button
           onClick={handleClose}
+          iconName="understood"
+          iconClassName={styles.understoodIcon}
         >
-          <Icon name="understood" className={styles.understoodIcon} />
           {lang('ButtonUnderstood')}
         </Button>
       </div>

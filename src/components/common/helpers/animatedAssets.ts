@@ -27,20 +27,24 @@ import Search from '../../../assets/tgs/Search.tgs';
 import SearchingDuck from '../../../assets/tgs/SearchingDuck.tgs';
 import Congratulations from '../../../assets/tgs/settings/Congratulations.tgs';
 import DiscussionGroups from '../../../assets/tgs/settings/DiscussionGroupsDucks.tgs';
+import DuckCake from '../../../assets/tgs/settings/DuckCake.tgs';
 import Experimental from '../../../assets/tgs/settings/Experimental.tgs';
 import FoldersAll from '../../../assets/tgs/settings/FoldersAll.tgs';
 import FoldersNew from '../../../assets/tgs/settings/FoldersNew.tgs';
 import FoldersShare from '../../../assets/tgs/settings/FoldersShare.tgs';
 import Lock from '../../../assets/tgs/settings/Lock.tgs';
+import Passkeys from '../../../assets/tgs/settings/Passkeys.tgs';
 import StarReaction from '../../../assets/tgs/stars/StarReaction.tgs';
 import StarReactionEffect from '../../../assets/tgs/stars/StarReactionEffect.tgs';
 import Unlock from '../../../assets/tgs/Unlock.tgs';
 import DuckNothingFoundPreview from '../../../assets/tgs-previews/DuckNothingFound.svg';
 import SearchPreview from '../../../assets/tgs-previews/Search.svg';
+import PasskeysPreview from '../../../assets/tgs-previews/settings/Passkeys.svg';
 
 export const LOCAL_TGS_PREVIEW_URLS = {
   DuckNothingFound: DuckNothingFoundPreview,
   Search: SearchPreview,
+  Passkeys: PasskeysPreview,
 };
 
 export const LOCAL_TGS_URLS = {
@@ -81,4 +85,6 @@ export const LOCAL_TGS_URLS = {
   Diamond,
   Search,
   DuckNothingFound,
+  Passkeys,
+  DuckCake,
 };

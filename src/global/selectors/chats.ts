@@ -91,7 +91,7 @@ export function selectChatOnlineCount<T extends GlobalState>(global: T, chat: Ap
 }
 
 export function selectIsTrustedBot<T extends GlobalState>(global: T, botId: string) {
-  return global.trustedBotIds.includes(botId);
+  return global.trustedBotIds.includes(botId) || global.appConfig.whitelistedBotIds?.includes(botId);
 }
 
 export function selectChatType<T extends GlobalState>(global: T, chatId: string): ApiChatType | undefined {
@@ -382,4 +382,9 @@ export function selectIsChatRestricted<T extends GlobalState>(global: T, chatId:
 
   const activeRestrictions = selectActiveRestrictionReasons(global, chat.restrictionReasons);
   return activeRestrictions.length > 0;
+}
+
+export function selectAreFoldersPresent<T extends GlobalState>(global: T) {
+  const ids = global.chatFolders.orderedIds;
+  return Boolean(ids && ids.length > 1);
 }

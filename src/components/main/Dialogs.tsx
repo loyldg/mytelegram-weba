@@ -1,4 +1,3 @@
-import type { FC } from '../../lib/teact/teact';
 import { memo, useEffect } from '../../lib/teact/teact';
 import { getActions, withGlobal } from '../../global';
 
@@ -22,7 +21,7 @@ type StateProps = {
   dialogs: (ApiError | ApiContact)[];
 };
 
-const Dialogs: FC<StateProps> = ({ dialogs, currentMessageList }) => {
+const Dialogs = ({ dialogs, currentMessageList }: StateProps) => {
   const {
     dismissDialog,
     sendMessage,
@@ -65,7 +64,7 @@ const Dialogs: FC<StateProps> = ({ dialogs, currentMessageList }) => {
         {lang(
           'AreYouSureShareMyContactInfoBot',
           undefined,
-          { withNodes: true, withMarkdown: true, renderTextFilters: ['br', 'emoji'],
+          { withNodes: true, withMarkdown: true, renderTextFilters: ['br'],
           })}
         <div className="dialog-buttons mt-2">
           <Button

@@ -23,17 +23,16 @@ import useMediaTransitionDeprecated from '../../hooks/useMediaTransitionDeprecat
 import useMultiaccountInfo from '../../hooks/useMultiaccountInfo';
 
 import AnimatedIcon from '../common/AnimatedIcon';
-import Icon from '../common/icons/Icon';
 import Button from '../ui/Button';
 import Loading from '../ui/Loading';
 
 import blankUrl from '../../assets/blank.png';
 
-type StateProps =
-  Pick<GlobalState, 'connectionState' | 'authState' | 'authQrCode'>
-  & {
-    language?: string;
-  };
+type StateProps = {
+  auth: GlobalState['auth'];
+  connectionState: GlobalState['connectionState'];
+  language?: string;
+};
 
 const DATA_PREFIX = 'tg://login?token=';
 const QR_SIZE = 280;
@@ -51,14 +50,16 @@ function ensureQrCodeStyling() {
 
 const AuthCode = ({
   connectionState,
-  authState,
-  authQrCode,
+  auth,
   language,
 }: StateProps) => {
   const {
     returnToAuthPhoneNumber,
     setSharedSettingOption,
+    loginWithPasskey,
   } = getActions();
+
+  const { state, qrCode: authQrCode, passkeyOption } = auth;
 
   const suggestedLanguage = getSuggestedLanguage();
   const lang = useLang();
@@ -152,14 +153,23 @@ const AuthCode = ({
     returnToAuthPhoneNumber();
   });
 
-  const isAuthReady = authState === 'authorizationStateWaitQrCode';
+  const handleLoginWithPasskey = useLastCallback(() => {
+    loginWithPasskey();
+  });
+
+  const isAuthReady = state === 'authorizationStateWaitQrCode';
 
   return (
     <div id="auth-qr-form" className="custom-scroll">
       {hasActiveAccount && (
-        <Button size="smaller" round color="translucent" className="auth-close" onClick={handleBackNavigation}>
-          <Icon name="close" />
-        </Button>
+        <Button
+          size="smaller"
+          round
+          color="translucent"
+          className="auth-close"
+          iconName="close"
+          onClick={handleBackNavigation}
+        />
       )}
       <div className="auth-form qr">
         <div className="qr-outer">
@@ -194,6 +204,11 @@ const AuthCode = ({
             {lang('LoginQRCancel')}
           </Button>
         )}
+        {passkeyOption && (
+          <Button className="auth-button" isText onClick={handleLoginWithPasskey}>
+            {lang('LoginPasskey')}
+          </Button>
+        )}
         {suggestedLanguage && suggestedLanguage !== language && continueText && (
           <Button className="auth-button" isText isLoading={isLoading} onClick={handleLangChange}>
             {continueText}
@@ -207,15 +222,14 @@ const AuthCode = ({
 export default memo(withGlobal(
   (global): Complete<StateProps> => {
     const {
-      connectionState, authState, authQrCode,
+      connectionState, auth,
     } = global;
 
     const { language } = selectSharedSettings(global);
 
     return {
       connectionState,
-      authState,
-      authQrCode,
+      auth,
       language,
     };
   },

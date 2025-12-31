@@ -425,12 +425,12 @@ export function buildApiGiveawayInfo(info: GramJs.payments.TypeGiveawayInfo): Ap
 
 export function buildApiCheckedGiftCode(giftcode: GramJs.payments.TypeCheckedGiftCode): ApiCheckedGiftCode {
   const {
-    date, fromId, months, giveawayMsgId, toId, usedDate, viaGiveaway,
+    date, fromId, days, giveawayMsgId, toId, usedDate, viaGiveaway,
   } = giftcode;
 
   return {
     date,
-    months,
+    days,
     toId: toId !== undefined ? buildApiPeerId(toId, 'user') : undefined,
     fromId: fromId && getApiChatIdFromMtpPeer(fromId),
     usedAt: usedDate,
@@ -553,7 +553,7 @@ export function buildApiStarsTransaction(transaction: GramJs.StarsTransaction): 
   const {
     date, id, peer, amount, description, photo, title, refund, extendedMedia, failed, msgId, pending, gift, reaction,
     subscriptionPeriod, stargift, giveawayPostId, starrefCommissionPermille, stargiftUpgrade, paidMessages,
-    stargiftResale, postsSearch, stargiftPrepaidUpgrade, stargiftDropOriginalDetails,
+    stargiftResale, postsSearch, stargiftPrepaidUpgrade, stargiftDropOriginalDetails, stargiftAuctionBid,
   } = transaction;
 
   if (photo) {
@@ -595,6 +595,7 @@ export function buildApiStarsTransaction(transaction: GramJs.StarsTransaction): 
     isPostsSearch: postsSearch,
     isDropOriginalDetails: stargiftDropOriginalDetails,
     isPrepaidUpgrade: stargiftPrepaidUpgrade,
+    isStarGiftAuctionBid: stargiftAuctionBid,
   };
 }
 

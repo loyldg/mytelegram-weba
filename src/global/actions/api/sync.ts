@@ -156,7 +156,8 @@ async function loadAndReplaceMessages<T extends GlobalState>(global: T, actions:
           currentChatId,
           activeThreadId,
         ),
-        activeThreadId !== MAIN_THREAD_ID && !getIsSavedDialog(currentChat.id, activeThreadId, global.currentUserId)
+        activeThreadId !== MAIN_THREAD_ID && !currentChat.isForum
+        && !getIsSavedDialog(currentChat.id, activeThreadId, global.currentUserId)
           ? callApi('fetchDiscussionMessage', {
             chat: currentChat,
             messageId: Number(activeThreadId),
@@ -312,15 +313,15 @@ function loadTopMessages<T extends GlobalState>(global: T, chatId: string, threa
 let previousGlobal: GlobalState | undefined;
 // RAF can be unreliable when device goes into sleep mode, so sync logic is handled outside any component
 addCallback((global: GlobalState) => {
-  const { connectionState, authState, isSynced } = global;
+  const { connectionState, auth, isSynced } = global;
   const { isMasterTab } = selectTabState(global);
   if (!isMasterTab || isSynced || (previousGlobal?.connectionState === connectionState
-    && previousGlobal?.authState === authState)) {
+    && previousGlobal?.auth.state === auth.state)) {
     previousGlobal = global;
     return;
   }
 
-  if (connectionState === 'connectionStateReady' && authState === 'authorizationStateReady') {
+  if (connectionState === 'connectionStateReady' && auth.state === 'authorizationStateReady') {
     getActions().sync();
   }
 

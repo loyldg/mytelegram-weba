@@ -142,7 +142,7 @@ export interface ApiMessageActionGiftPremium extends ActionMediaType {
   type: 'giftPremium';
   currency: string;
   amount: number;
-  months: number;
+  days: number;
   cryptoCurrency?: string;
   cryptoAmount?: number;
   message?: ApiFormattedText;
@@ -173,7 +173,7 @@ export interface ApiMessageActionGiftCode extends ActionMediaType {
   isViaGiveaway?: true;
   isUnclaimed?: true;
   boostPeerId?: string;
-  months: number;
+  days: number;
   slug: string;
   currency?: string;
   amount?: number;
@@ -243,6 +243,7 @@ export interface ApiMessageActionStarGift extends ActionMediaType {
   isRefunded?: true;
   canUpgrade?: true;
   isPrepaidUpgrade?: true;
+  isAuctionAcquired?: true;
   gift: ApiStarGiftRegular;
   message?: ApiFormattedText;
   starsToConvert?: number;
@@ -253,6 +254,8 @@ export interface ApiMessageActionStarGift extends ActionMediaType {
   peerId?: string;
   savedId?: string;
   prepaidUpgradeHash?: string;
+  toId?: string;
+  giftNumber?: number;
 }
 
 export interface ApiMessageActionStarGiftUnique extends ActionMediaType {

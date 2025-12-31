@@ -233,6 +233,10 @@ body:not(.is-ios) {
   touch-action: none;
 }
 
+.flex-grow {
+  flex-grow: 1;
+}
+
 .icon {
   @include iconsMixins.icon;
 }
@@ -376,7 +380,7 @@ body:not(.is-ios) {
     content: "";
 
     position: absolute;
-    z-index: 1;
+    z-index: var(--z-scroll-notch);
     top: 0;
     left: 0;
 
@@ -393,6 +397,15 @@ body:not(.is-ios) {
     &::before {
       opacity: 1;
     }
+  }
+}
+
+.with-bottom-notch {
+  border-bottom: 1px solid var(--color-borders);
+  transition: border-color 0.2s ease-in-out;
+
+  &.scrolled-to-end {
+    border-bottom-color: transparent;
   }
 }
 
@@ -421,6 +434,18 @@ body:not(.is-ios) {
   to {
     transform: scale(0.5);
     opacity: 0;
+  }
+}
+
+@keyframes vt-expand-icon-spin {
+  to {
+    transform: rotate(180deg);
+  }
+}
+
+@keyframes vt-collapse-icon-spin {
+  to {
+    transform: rotate(-180deg);
   }
 }
 

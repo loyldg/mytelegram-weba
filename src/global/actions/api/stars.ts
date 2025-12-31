@@ -8,14 +8,16 @@ import {
 } from '../../../config';
 import { getCurrentTabId } from '../../../util/establishMultitabRole';
 import { buildCollectionByCallback, buildCollectionByKey } from '../../../util/iteratees';
+import { getServerTime } from '../../../util/serverTime';
 import { callApi } from '../../../api/gramjs';
 import { RESALE_GIFTS_LIMIT } from '../../../limits';
 import { areInputSavedGiftsEqual, getRequestInputSavedStarGift } from '../../helpers/payments';
-import { addActionHandler, getGlobal, setGlobal } from '../../index';
+import { addActionHandler, getGlobal, getPromiseActions, setGlobal } from '../../index';
 import {
   appendStarsSubscriptions,
   appendStarsTransactions,
   replacePeerSavedGifts,
+  updateActiveGiftAuction,
   updateChats,
   updatePeerStarGiftCollections,
   updateStarsBalance,
@@ -494,11 +496,24 @@ addActionHandler('openGiftUpgradeModal', async (global, actions, payload): Promi
     giftId, gift, peerId, tabId = getCurrentTabId(),
   } = payload;
 
-  const samples = await callApi('fetchStarGiftUpgradePreview', {
+  const preview = await callApi('fetchStarGiftUpgradePreview', {
     giftId,
   });
 
-  if (!samples) return;
+  if (!preview) return;
+
+  const serverTime = getServerTime();
+  const filteredPrices = preview.prices.filter((price) => price.date > serverTime);
+  const filteredNextPrices = preview.nextPrices.filter((price) => price.date > serverTime);
+
+  const passedPrices = preview.nextPrices.filter((price) => price.date <= serverTime);
+  const regularGift = gift?.gift.type === 'starGift' ? gift.gift : undefined;
+  const currentUpgradeStars = passedPrices.length
+    ? passedPrices[passedPrices.length - 1].upgradeStars
+    : regularGift?.upgradeStars;
+
+  const maxPrice = preview.prices[0]?.upgradeStars;
+  const minPrice = preview.prices.at(-1)?.upgradeStars;
 
   global = getGlobal();
 
@@ -506,11 +521,100 @@ addActionHandler('openGiftUpgradeModal', async (global, actions, payload): Promi
     giftUpgradeModal: {
       recipientId: peerId,
       gift,
-      sampleAttributes: samples,
+      sampleAttributes: preview.sampleAttributes,
+      prices: filteredPrices,
+      nextPrices: filteredNextPrices,
+      currentUpgradeStars,
+      minPrice,
+      maxPrice,
     },
   }, tabId);
 
   setGlobal(global);
+});
+
+addActionHandler('shiftGiftUpgradeNextPrice', async (global, _actions, payload): Promise<void> => {
+  const { tabId = getCurrentTabId() } = payload || {};
+  const tabState = selectTabState(global, tabId);
+  const giftUpgradeModal = tabState?.giftUpgradeModal;
+  if (!giftUpgradeModal?.nextPrices?.length) return;
+
+  const currentUpgradeStars = giftUpgradeModal.nextPrices[0].upgradeStars;
+  const newNextPrices = giftUpgradeModal.nextPrices.slice(1);
+
+  if (newNextPrices.length) {
+    global = updateTabState(global, {
+      giftUpgradeModal: {
+        ...giftUpgradeModal,
+        nextPrices: newNextPrices,
+        currentUpgradeStars,
+      },
+    }, tabId);
+    setGlobal(global);
+
+    return;
+  }
+
+  const gift = giftUpgradeModal.gift?.gift;
+  const giftId = gift?.type === 'starGift' ? gift.id : undefined;
+  if (!giftId) return;
+
+  const preview = await callApi('fetchStarGiftUpgradePreview', { giftId });
+  if (!preview) return;
+
+  const serverTime = getServerTime();
+  const filteredNextPrices = preview.nextPrices.filter((price) => price.date > serverTime);
+
+  global = getGlobal();
+  const currentTabState = selectTabState(global, tabId);
+  const currentModal = currentTabState?.giftUpgradeModal;
+  if (!currentModal) return;
+
+  global = updateTabState(global, {
+    giftUpgradeModal: {
+      ...currentModal,
+      nextPrices: filteredNextPrices,
+      currentUpgradeStars,
+    },
+  }, tabId);
+  setGlobal(global);
+});
+
+addActionHandler('openGiftAuctionModal', async (global, _actions, payload): Promise<void> => {
+  const { gift, tabId = getCurrentTabId() } = payload;
+
+  await getPromiseActions().loadActiveGiftAuction({ giftId: gift.id, tabId });
+
+  global = getGlobal();
+  global = updateTabState(global, {
+    giftAuctionModal: { isOpen: true },
+  }, tabId);
+  setGlobal(global);
+});
+
+addActionHandler('loadActiveGiftAuction', async (global, _actions, payload): Promise<void> => {
+  const { giftId, tabId = getCurrentTabId() } = payload;
+
+  const currentAuction = selectTabState(global, tabId).activeGiftAuction;
+  const currentVersion = currentAuction?.state.type === 'active' ? currentAuction.state.version : 0;
+
+  const auctionState = await callApi('fetchStarGiftAuctionState', {
+    giftId,
+    version: currentVersion,
+  });
+  if (!auctionState) return;
+
+  global = getGlobal();
+  global = updateActiveGiftAuction(global, auctionState, tabId);
+  setGlobal(global);
+});
+
+addActionHandler('clearActiveGiftAuction', (global, _actions, payload): ActionReturnType => {
+  const { tabId = getCurrentTabId() } = payload || {};
+
+  return updateTabState(global, {
+    activeGiftAuction: undefined,
+  }, tabId);
 });
 
 addActionHandler('toggleSavedGiftPinned', async (global, actions, payload): Promise<void> => {
@@ -582,5 +686,28 @@ addActionHandler('loadStarGiftCollections', async (global, actions, payload): Pr
   global = getGlobal();
 
   global = updatePeerStarGiftCollections(global, peerId, result.collections);
+  setGlobal(global);
+});
+
+addActionHandler('openGiftAuctionAcquiredModal', async (global, actions, payload): Promise<void> => {
+  const {
+    giftId, giftTitle, giftSticker, tabId = getCurrentTabId(),
+  } = payload;
+
+  const result = await callApi('fetchStarGiftAuctionAcquiredGifts', { giftId });
+
+  if (!result) return;
+
+  global = getGlobal();
+
+  global = updateTabState(global, {
+    giftAuctionAcquiredModal: {
+      giftId,
+      giftTitle,
+      giftSticker,
+      acquiredGifts: result.gifts,
+    },
+  }, tabId);
+
   setGlobal(global);
 });

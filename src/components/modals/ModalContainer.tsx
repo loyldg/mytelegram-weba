@@ -1,5 +1,4 @@
-import type { FC } from '../../lib/teact/teact';
-import { memo } from '../../lib/teact/teact';
+import { type FC, memo } from '../../lib/teact/teact';
 import { withGlobal } from '../../global';
 
 import type { TabState } from '../../global/types';
@@ -12,6 +11,7 @@ import WebAppsCloseConfirmationModal from '../main/WebAppsCloseConfirmationModal
 import AboutAdsModal from './aboutAds/AboutAdsModal.async';
 import AgeVerificationModal from './ageVerification/AgeVerificationModal.async';
 import AttachBotInstallModal from './attachBotInstall/AttachBotInstallModal.async';
+import BirthdaySetupModal from './birthday/BirthdaySetupModal.async';
 import BoostModal from './boost/BoostModal.async';
 import ChatInviteModal from './chatInvite/ChatInviteModal.async';
 import ChatlistModal from './chatlist/ChatlistModal.async';
@@ -19,12 +19,18 @@ import CollectibleInfoModal from './collectible/CollectibleInfoModal.async';
 import DeleteAccountModal from './deleteAccount/DeleteAccountModal.async';
 import EmojiStatusAccessModal from './emojiStatusAccess/EmojiStatusAccessModal.async';
 import FrozenAccountModal from './frozenAccount/FrozenAccountModal.async';
+import GiftAuctionAcquiredModal from './gift/auction/GiftAuctionAcquiredModal.async';
+import GiftAuctionBidModal from './gift/auction/GiftAuctionBidModal.async';
+import GiftAuctionChangeRecipientModal from './gift/auction/GiftAuctionChangeRecipientModal.async';
+import GiftAuctionInfoModal from './gift/auction/GiftAuctionInfoModal.async';
+import GiftAuctionModal from './gift/auction/GiftAuctionModal.async';
 import PremiumGiftModal from './gift/GiftModal.async';
 import GiftInfoModal from './gift/info/GiftInfoModal.async';
 import GiftLockedModal from './gift/locked/GiftLockedModal.async';
 import GiftDescriptionRemoveModal from './gift/message/GiftDescriptionRemoveModal.async';
 import GiftRecipientPicker from './gift/recipient/GiftRecipientPicker.async';
 import GiftResalePriceComposerModal from './gift/resale/GiftResalePriceComposerModal.async';
+import StarGiftPriceDecreaseInfoModal from './gift/StarGiftPriceDecreaseInfoModal.async';
 import GiftStatusInfoModal from './gift/status/GiftStatusInfoModal.async';
 import GiftTransferConfirmModal from './gift/transfer/GiftTransferConfirmModal.async';
 import GiftTransferModal from './gift/transfer/GiftTransferModal.async';
@@ -37,6 +43,7 @@ import LocationAccessModal from './locationAccess/LocationAccessModal.async';
 import MapModal from './map/MapModal.async';
 import OneTimeMediaModal from './oneTimeMedia/OneTimeMediaModal.async';
 import PaidReactionModal from './paidReaction/PaidReactionModal.async';
+import PasskeyModal from './passkey/PasskeyModal.async';
 import PreparedMessageModal from './preparedMessage/PreparedMessageModal.async';
 import PriceConfirmModal from './priceConfirm/PriceConfirmModal.async';
 import ProfileRatingModal from './profileRating/ProfileRatingModal.async';
@@ -50,6 +57,7 @@ import StarsBalanceModal from './stars/StarsBalanceModal.async';
 import StarsPaymentModal from './stars/StarsPaymentModal.async';
 import StarsSubscriptionModal from './stars/subscription/StarsSubscriptionModal.async';
 import StarsTransactionInfoModal from './stars/transaction/StarsTransactionModal.async';
+import StealthModeModal from './storyStealthMode/StealthModeModal.async';
 import SuggestedPostApprovalModal from './suggestedPostApproval/SuggestedPostApprovalModal.async';
 import SuggestedStatusModal from './suggestedStatus/SuggestedStatusModal.async';
 import SuggestMessageModal from './suggestMessage/SuggestMessageModal.async';
@@ -91,6 +99,12 @@ type ModalKey = keyof Pick<TabState,
   'locationAccessModal' |
   'aboutAdsModal' |
   'giftUpgradeModal' |
+  'giftAuctionModal' |
+  'giftAuctionBidModal' |
+  'giftAuctionInfoModal' |
+  'giftAuctionChangeRecipientModal' |
+  'giftAuctionAcquiredModal' |
+  'starGiftPriceDecreaseInfoModal' |
   'monetizationVerificationModal' |
   'giftWithdrawModal' |
   'preparedMessageModal' |
@@ -105,7 +119,10 @@ type ModalKey = keyof Pick<TabState,
   'deleteAccountModal' |
   'isAgeVerificationModalOpen' |
   'profileRatingModal' |
-  'quickPreview'
+  'quickPreview' |
+  'storyStealthModal' |
+  'isPasskeyModalOpen' |
+  'birthdaySetupModal'
 >;
 
 type StateProps = {
@@ -154,6 +171,12 @@ const MODALS: ModalRegistry = {
   locationAccessModal: LocationAccessModal,
   aboutAdsModal: AboutAdsModal,
   giftUpgradeModal: GiftUpgradeModal,
+  giftAuctionModal: GiftAuctionModal,
+  giftAuctionBidModal: GiftAuctionBidModal,
+  giftAuctionInfoModal: GiftAuctionInfoModal,
+  giftAuctionChangeRecipientModal: GiftAuctionChangeRecipientModal,
+  giftAuctionAcquiredModal: GiftAuctionAcquiredModal,
+  starGiftPriceDecreaseInfoModal: StarGiftPriceDecreaseInfoModal,
   monetizationVerificationModal: VerificationMonetizationModal,
   giftWithdrawModal: GiftWithdrawModal,
   giftStatusInfoModal: GiftStatusInfoModal,
@@ -169,6 +192,9 @@ const MODALS: ModalRegistry = {
   isAgeVerificationModalOpen: AgeVerificationModal,
   profileRatingModal: ProfileRatingModal,
   quickPreview: QuickPreviewModal,
+  storyStealthModal: StealthModeModal,
+  isPasskeyModalOpen: PasskeyModal,
+  birthdaySetupModal: BirthdaySetupModal,
 };
 const MODAL_KEYS = Object.keys(MODALS) as ModalKey[];
 const MODAL_ENTRIES = Object.entries(MODALS) as Entries<ModalRegistry>;

@@ -74,6 +74,7 @@ $color-message-story-mention-to: #74bcff;
   --color-background-selected: #f4f4f5;
   --color-background-secondary: #f4f4f5;
   --color-background-secondary-accent: #e4e4e5;
+  --color-background-sidebar: #E4E4E5;
   --color-background-own: #{$color-light-green};
   --color-background-own-selected: color.adjust($color-light-green, -10%);
   --color-text: #{$color-black};
@@ -101,6 +102,7 @@ $color-message-story-mention-to: #74bcff;
   --color-interactive-buffered: rgba(var(--color-text-secondary-rgb), 0.25); // Overlays underlying inactive element
   --color-interactive-element-hover: rgba(var(--color-text-secondary-rgb), 0.08);
   --color-composer-button: #{$color-text-secondary}CC;
+  --color-toast-background: #202020CC;
 
   --color-voice-transcribe-button: #e8f3ff;
   --color-voice-transcribe-button-own: #cceebf;
@@ -211,7 +213,10 @@ $color-message-story-mention-to: #74bcff;
 
   --vh: 1vh;
 
-  --border-radius-modal: 1rem;
+  --border-radius-button: 1rem;
+  --border-radius-button-tiny: 0.875rem;
+  --border-radius-modal: 2rem;
+  --border-radius-toast: 1rem;
   --border-radius-default: 0.75rem;
   --border-radius-default-small: 0.625rem;
   --border-radius-default-tiny: 0.375rem;
@@ -220,6 +225,7 @@ $color-message-story-mention-to: #74bcff;
   --border-radius-forum-avatar: 33.3333%;
   --messages-container-width: 45.5rem;
   --right-column-width: 26.5rem;
+  --folders-sidebar-width: 5rem;
   --window-controls-width: 0rem;
   --header-height: 3.5rem;
   --custom-emoji-size: 1.25rem;
@@ -232,15 +238,15 @@ $color-message-story-mention-to: #74bcff;
 
   --scrollbar-width: 0;
 
-  --z-overlay-effects: 10001;
-  --z-modal-confirm: 10000;
+  --z-overlay-effects: 12000;
+  --z-modal-confirm: 10500;
+  --z-reaction-picker: 10200;
   --z-portal-menu: 10000;
   --z-symbol-menu-modal: 5000;
   --z-lock-screen: 3000;
   --z-ui-loader-mask: 2000;
   --z-notification: 1700;
   --z-confetti: 1600;
-  --z-reaction-picker: 1200;
   --z-story-viewer: 1150;
   --z-reaction-interaction-effect: 1100;
   --z-right-column: 900;
@@ -266,6 +272,7 @@ $color-message-story-mention-to: #74bcff;
   --z-left-header: 11;
   --z-middle-header: 11;
   --z-middle-footer: 11;
+  --z-scroll-notch: 10;
   --z-story-ribbon: 10;
   --z-country-code-input-group: 10;
   --z-message-select-control: 9;
@@ -296,6 +303,7 @@ $color-message-story-mention-to: #74bcff;
   --layer-transition-behind: 300ms cubic-bezier(0.33, 1, 0.68, 1);
   --slide-transition: 300ms cubic-bezier(0.25, 1, 0.5, 1);
   --select-transition: 200ms ease-out;
+  --chat-transform-transition: 0.2s ease-out;
 
   --safe-area-top: env(safe-area-inset-top);
   --safe-area-right: env(safe-area-inset-right);

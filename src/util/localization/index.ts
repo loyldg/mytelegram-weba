@@ -24,7 +24,7 @@ import {
 
 import { DEBUG, FORCE_FALLBACK_LANG, LANG_PACK } from '../../config';
 import { callApi } from '../../api/gramjs';
-import renderText from '../../components/common/helpers/renderText';
+import renderText, { type TextFilter } from '../../components/common/helpers/renderText';
 import { IS_INTL_LIST_FORMAT_SUPPORTED } from '../browser/globalEnvironment';
 import { MAIN_IDB_STORE } from '../browser/idb';
 import { getBasicListFormat } from '../browser/intlListFormat';
@@ -369,9 +369,12 @@ function processTranslation(
   variables?: Record<string, LangVariable | RegularLangFnParameters>,
   options?: LangFnOptions | LangFnOptionsWithPlural,
 ): string {
-  const cacheKey = `${langKey}-${JSON.stringify(variables)}-${JSON.stringify(options)}`;
-  if (TRANSLATION_CACHE.has(cacheKey)) {
-    return TRANSLATION_CACHE.get(cacheKey)!;
+  const isCacheable = !options?.withNodes;
+  const cacheKey = isCacheable ? `${langKey}-${JSON.stringify(variables)}-${JSON.stringify(options)}` : undefined;
+  if (cacheKey) {
+    if (TRANSLATION_CACHE.has(cacheKey)) {
+      return TRANSLATION_CACHE.get(cacheKey)!;
+    }
   }
 
   const pluralValue = options && 'pluralValue' in options ? Number(options.pluralValue) : 0;
@@ -390,7 +393,9 @@ function processTranslation(
     return result.replaceAll(`{${key}}`, valueAsString);
   }, string);
 
-  TRANSLATION_CACHE.set(cacheKey, finalString);
+  if (cacheKey) {
+    TRANSLATION_CACHE.set(cacheKey, finalString);
+  }
 
   return finalString;
 }
@@ -406,40 +411,41 @@ function processTranslationAdvanced(
 
   const variableEntries = variables ? Object.entries(variables) : [];
 
-  let tempResult: TeactNode = [string];
+  let tempResult: TeactNode = string;
   if (options?.specialReplacement) {
     const specialReplacements = Object.entries(options.specialReplacement);
     tempResult = specialReplacements.reduce((acc, [key, value]) => {
       return replaceInStringsWithTeact(acc, key, value);
-    }, tempResult);
+    }, tempResult as TeactNode);
   }
 
-  const withRenderText = options?.withMarkdown || options?.renderTextFilters;
+  const withRenderText = options?.withNodes;
 
   if (withRenderText) {
-    const filters = options?.withMarkdown
-      ? unique((options.renderTextFilters || []).concat(['simple_markdown', 'emoji']))
-      : options.renderTextFilters;
+    const initialFilters: TextFilter[] = options.withMarkdown ? ['simple_markdown', 'emoji'] : ['emoji'];
 
-    return tempResult.flatMap((curr: TeactNode) => {
+    const filters = unique([...initialFilters, ...options.renderTextFilters || []]);
+
+    const tempResultArray = Array.isArray(tempResult) ? tempResult : [tempResult];
+    return tempResultArray.flatMap((curr: TeactNode) => {
       if (typeof curr !== 'string') {
         return curr;
       }
 
       return renderText(curr, filters, {
         markdownPostProcessor: (part: string) => {
-          return variableEntries.reduce((result, [key, value]): TeactNode[] => {
+          return variableEntries.reduce((result, [key, value]): TeactNode => {
             if (value === undefined) return result;
 
             const preparedValue = Number.isFinite(value) ? formatters!.number.format(value as number) : value;
             return replaceInStringsWithTeact(result, `{${key}}`, renderText(preparedValue));
-          }, [part] as TeactNode[]);
+          }, part as TeactNode);
         },
       });
     });
   }
 
-  return variableEntries.reduce((result, [key, value]): TeactNode[] => {
+  return variableEntries.reduce((result, [key, value]): TeactNode => {
     if (value === undefined) return result;
 
     const preparedValue = Number.isFinite(value) ? formatters!.number.format(value as number) : value;

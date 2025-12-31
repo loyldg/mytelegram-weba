@@ -689,18 +689,9 @@ const GiveawayModal: FC<OwnProps & StateProps> = ({
       isOpen={isOpen}
       dialogRef={dialogRef}
       onEnter={(dataPrepaidGiveaway || dataStarsPrepaidGiveaway) ? openConfirmModal : handleClick}
+      hasAbsoluteCloseButton
     >
       <div className={buildClassName(styles.main, 'custom-scroll')} onScroll={handleScroll}>
-        <Button
-          round
-          size="smaller"
-          className={styles.closeButton}
-          color="translucent"
-          onClick={handleClose}
-          ariaLabel={lang('Close')}
-        >
-          <Icon name="close" />
-        </Button>
         <img className={styles.logo} src={PremiumLogo} alt="" draggable={false} />
         <h2 className={styles.headerText}>
           {renderText(lang('BoostingBoostsViaGifts'))}

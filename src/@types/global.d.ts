@@ -1,3 +1,5 @@
+/// <reference types="user-agent-data-types" />
+
 declare const process: NodeJS.Process;
 
 declare module '*.module.scss';
@@ -175,7 +177,6 @@ interface BooleanConstructor {
 
 interface Array<T> {
   filter<S extends T>(predicate: BooleanConstructor, thisArg?: unknown): Exclude<S, Falsy>[];
-  at(index: number): T; // Make it behave like arr[arr.length - 1]
 }
 interface ReadonlyArray<T> {
   filter<S extends T>(predicate: BooleanConstructor, thisArg?: unknown): Exclude<S, Falsy>[];

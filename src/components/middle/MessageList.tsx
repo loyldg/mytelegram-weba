@@ -1,4 +1,3 @@
-import type { FC } from '@teact';
 import { beginHeavyAnimation, memo, useEffect, useMemo, useRef } from '@teact';
 import { addExtraClass, removeExtraClass } from '@teact/teact-dom';
 import { getActions, getGlobal, withGlobal } from '../../global';
@@ -14,7 +13,7 @@ import {
   MESSAGE_LIST_SLICE,
   SERVICE_NOTIFICATIONS_USER_ID,
 } from '../../config';
-import { forceMeasure, requestForcedReflow, requestMeasure } from '../../lib/fasterdom/fasterdom';
+import { forceMeasure, requestForcedReflow, requestMeasure, requestMutation } from '../../lib/fasterdom/fasterdom';
 import {
   getIsSavedDialog,
   getMessageHtmlId,
@@ -54,6 +53,7 @@ import {
 import { selectIsChatRestricted } from '../../global/selectors/chats';
 import { selectActiveRestrictionReasons, selectCurrentMessageList } from '../../global/selectors/messages';
 import animateScroll, { isAnimatingScroll, restartCurrentScrollAnimation } from '../../util/animateScroll';
+import { IS_FIREFOX } from '../../util/browser/windowEnvironment';
 import buildClassName from '../../util/buildClassName';
 import { isUserId } from '../../util/entities/ids';
 import { orderBy } from '../../util/iteratees';
@@ -145,6 +145,7 @@ type StateProps = {
   translationLanguage?: string;
   shouldAutoTranslate?: boolean;
   isActive?: boolean;
+  isBotForum?: boolean;
   shouldScrollToBottom?: boolean;
 };
 
@@ -166,17 +167,23 @@ const MESSAGE_REACTIONS_POLLING_INTERVAL = 20 * 1000;
 const MESSAGE_COMMENTS_POLLING_INTERVAL = 20 * 1000;
 const MESSAGE_FACT_CHECK_UPDATE_INTERVAL = 5 * 1000;
 const MESSAGE_STORY_POLLING_INTERVAL = 5 * 60 * 1000;
+
 const BOTTOM_THRESHOLD = 50;
+const BOTTOM_SNAP_THRESHOLD = 7;
+
 const UNREAD_DIVIDER_TOP = 10;
 const SCROLL_DEBOUNCE = 200;
 const MESSAGE_ANIMATION_DURATION = 500;
 const BOTTOM_FOCUS_MARGIN = 0.5 * REM;
 const SELECT_MODE_ANIMATION_DURATION = 200;
+
 const UNREAD_DIVIDER_CLASS = 'unread-divider';
+const FORCE_MESSAGES_SCROLL_CLASS = 'force-messages-scroll';
+const BOTTOM_SNAP_CLASS = 'with-bottom-snap';
 
 const runDebouncedForScroll = debounce((cb) => cb(), SCROLL_DEBOUNCE, false);
 
-const MessageList: FC<OwnProps & StateProps> = ({
+const MessageList = ({
   chatId,
   threadId,
   type,
@@ -188,6 +195,7 @@ const MessageList: FC<OwnProps & StateProps> = ({
   canPost,
   isSynced,
   isActive,
+  isBotForum,
   shouldScrollToBottom,
   // eslint-disable-next-line @typescript-eslint/no-shadow
   isChatMonoforum,
@@ -234,7 +242,7 @@ const MessageList: FC<OwnProps & StateProps> = ({
   onIntersectPinnedMessage,
   onScrollDownToggle,
   onNotchToggle,
-}) => {
+}: OwnProps & StateProps) => {
   const {
     loadViewportMessages, setScrollOffset, loadSponsoredMessages, loadMessageReactions, copyMessagesByIds,
     loadMessageViews, loadPeerStoriesByIds, loadFactChecks, requestChatTranslation,
@@ -258,6 +266,7 @@ const MessageList: FC<OwnProps & StateProps> = ({
   const memoFocusingIdRef = useRef<number>();
   const isScrollTopJustUpdatedRef = useRef(false);
   const shouldAnimateAppearanceRef = useRef(Boolean(lastMessage));
+  const scrollSnapDisabledTimerRef = useRef<number>();
 
   const isSavedDialog = getIsSavedDialog(chatId, threadId, currentUserId);
   const hasOpenChatButton = isSavedDialog && threadId !== ANONYMOUS_USER_ID;
@@ -461,6 +470,34 @@ const MessageList: FC<OwnProps & StateProps> = ({
 
   const { isScrolled, updateStickyDates } = useStickyDates();
 
+  const updateBottomSnapClass = useLastCallback(() => {
+    const container = containerRef.current;
+    const bottomTrigger = container?.querySelector<HTMLDivElement>('.fab-trigger');
+    if (!container || !bottomTrigger) return;
+
+    // Check if fab-trigger + threshold are entering the viewport
+    const viewportBottom = container.scrollTop + container.offsetHeight;
+    const triggerPosition = bottomTrigger.offsetTop;
+    // Scroll is near fab-trigger + threshold. Prevents snap on sponsored message
+    const shouldSnapBeActive = triggerPosition - BOTTOM_SNAP_THRESHOLD <= viewportBottom
+      && viewportBottom <= triggerPosition + BOTTOM_SNAP_THRESHOLD * 2;
+
+    const hasSnap = container.classList.contains(BOTTOM_SNAP_CLASS);
+    if (hasSnap === shouldSnapBeActive) return;
+
+    if (shouldSnapBeActive) {
+      requestMutation(() => {
+        addExtraClass(container, BOTTOM_SNAP_CLASS);
+      });
+    } else {
+      clearTimeout(scrollSnapDisabledTimerRef.current);
+      scrollSnapDisabledTimerRef.current = undefined;
+      requestMutation(() => {
+        removeExtraClass(container, BOTTOM_SNAP_CLASS);
+      });
+    }
+  });
+
   const handleScroll = useLastCallback(() => {
     if (isScrollTopJustUpdatedRef.current) {
       isScrollTopJustUpdatedRef.current = false;
@@ -474,6 +511,11 @@ const MessageList: FC<OwnProps & StateProps> = ({
 
     if (!memoFocusingIdRef.current) {
       updateStickyDates(container);
+    }
+
+    // Check if scroll should be snapped, but only if there's no new message animation in progress
+    if (scrollSnapDisabledTimerRef.current === undefined) {
+      updateBottomSnapClass();
     }
 
     runDebouncedForScroll(() => {
@@ -497,6 +539,19 @@ const MessageList: FC<OwnProps & StateProps> = ({
   });
 
   const [getContainerHeight, prevContainerHeightRef] = useContainerHeight(containerRef, canPost && !isSelectModeActive);
+
+  const handleWheel = useLastCallback((e: React.WheelEvent<HTMLDivElement>) => {
+    // Remove snap when scrolling up to avoid scroll bug
+    // https://bugzilla.mozilla.org/show_bug.cgi?id=1753188
+    if (IS_FIREFOX && e.deltaY < 0) {
+      const container = containerRef.current;
+      if (!container) return;
+
+      requestMutation(() => {
+        removeExtraClass(container, BOTTOM_SNAP_CLASS);
+      });
+    }
+  });
 
   // Initial message loading
   useEffect(() => {
@@ -591,18 +646,31 @@ const MessageList: FC<OwnProps & StateProps> = ({
       isViewportNewest
       && wasMessageAdded
       && (messageIds && messageIds.length < MESSAGE_LIST_SLICE / 2)
-      && !container.parentElement!.classList.contains('force-messages-scroll')
+      && !container.parentElement!.classList.contains(FORCE_MESSAGES_SCROLL_CLASS)
       && forceMeasure(() => (
         (container.firstElementChild as HTMLDivElement).clientHeight <= container.offsetHeight * 2
       ))
     ) {
-      addExtraClass(container.parentElement!, 'force-messages-scroll');
-      container.parentElement!.classList.add('force-messages-scroll');
+      addExtraClass(container.parentElement!, FORCE_MESSAGES_SCROLL_CLASS);
 
       setTimeout(() => {
         if (container.parentElement) {
-          removeExtraClass(container.parentElement, 'force-messages-scroll');
+          removeExtraClass(container.parentElement, FORCE_MESSAGES_SCROLL_CLASS);
         }
+      }, MESSAGE_ANIMATION_DURATION);
+    }
+
+    if (wasMessageAdded) {
+      clearTimeout(scrollSnapDisabledTimerRef.current);
+      scrollSnapDisabledTimerRef.current = undefined;
+
+      removeExtraClass(container, BOTTOM_SNAP_CLASS);
+
+      scrollSnapDisabledTimerRef.current = window.setTimeout(() => {
+        requestMutation(() => {
+          addExtraClass(container, BOTTOM_SNAP_CLASS);
+          scrollSnapDisabledTimerRef.current = undefined;
+        });
       }, MESSAGE_ANIMATION_DURATION);
     }
 
@@ -674,6 +742,8 @@ const MessageList: FC<OwnProps & StateProps> = ({
 
           requestMeasure(() => {
             isScrollTopJustUpdatedRef.current = false;
+
+            updateBottomSnapClass();
           });
         }
 
@@ -804,6 +874,7 @@ const MessageList: FC<OwnProps & StateProps> = ({
         noAppearanceAnimation={!messageGroups || !shouldAnimateAppearanceRef.current}
         isQuickPreview={isQuickPreview}
         canPost={canPost}
+        isBotForum={isBotForum}
         shouldScrollToBottom={shouldScrollToBottom}
         onScrollDownToggle={onScrollDownToggle}
         onNotchToggle={onNotchToggle}
@@ -822,6 +893,7 @@ const MessageList: FC<OwnProps & StateProps> = ({
       activeKey={activeKey}
       shouldCleanup
       onScroll={handleScroll}
+      onWheel={handleWheel}
       onMouseDown={preventMessageInputBlur}
     >
       {renderContent()}
@@ -937,6 +1009,7 @@ export default memo(withGlobal<OwnProps>(
       canTranslate,
       translationLanguage,
       shouldAutoTranslate,
+      isBotForum: chat.isBotForum,
       shouldScrollToBottom,
     };
   },

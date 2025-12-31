@@ -81,7 +81,7 @@ function buildApiChatFieldsFromPeerEntity(
   const isScam = userOrChannel?.scam;
   const isFake = userOrChannel?.fake;
   const areStoriesHidden = userOrChannel?.storiesHidden;
-  const maxStoryId = userOrChannel?.storiesMaxId;
+  const maxStoryId = userOrChannel?.storiesMaxId?.maxId;
   const botVerificationIconId = userOrChannel?.botVerificationIcon?.toString();
   const storiesUnavailable = userOrChannel?.storiesUnavailable;
   const color = userOrChannel?.color ? buildApiPeerColor(userOrChannel.color) : undefined;
@@ -89,6 +89,7 @@ function buildApiChatFieldsFromPeerEntity(
   const emojiStatus = userOrChannel?.emojiStatus ? buildApiEmojiStatus(userOrChannel.emojiStatus) : undefined;
   const paidMessagesStars = userOrChannel?.sendPaidMessagesStars;
   const isVerified = userOrChannel?.verified;
+  const isForum = channel?.forum || user?.botForumView;
 
   return {
     isMin,
@@ -113,7 +114,8 @@ function buildApiChatFieldsFromPeerEntity(
     profileColor,
     isJoinToSend: channel?.joinToSend,
     isJoinRequest: channel?.joinRequest,
-    isForum: channel?.forum,
+    isForum,
+    isBotForum: user?.botForumView,
     isMonoforum: channel?.monoforum,
     linkedMonoforumId: channel?.linkedMonoforumId !== undefined
       ? buildApiPeerId(channel.linkedMonoforumId, 'channel') : undefined,

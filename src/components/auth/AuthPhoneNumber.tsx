@@ -1,6 +1,3 @@
-import type { ChangeEvent } from 'react';
-import type { FC } from '../../lib/teact/teact';
-import type React from '../../lib/teact/teact';
 import {
   memo, useEffect, useLayoutEffect, useMemo, useRef, useState,
 } from '../../lib/teact/teact';
@@ -13,7 +10,6 @@ import { requestMeasure } from '../../lib/fasterdom/fasterdom';
 import { IS_SAFARI, IS_TOUCH_ENV } from '../../util/browser/windowEnvironment';
 import { preloadImage } from '../../util/files';
 import preloadFonts from '../../util/fonts';
-import { pick } from '../../util/iteratees';
 import { getAccountSlotUrl } from '../../util/multiaccount';
 import { oldSetLanguage } from '../../util/oldLangProvider';
 import { formatPhoneNumber, getCountryCodeByIso, getCountryFromPhoneNumber } from '../../util/phoneNumber';
@@ -26,7 +22,6 @@ import useLangString from '../../hooks/useLangString';
 import useLastCallback from '../../hooks/useLastCallback';
 import useMultiaccountInfo from '../../hooks/useMultiaccountInfo';
 
-import Icon from '../common/icons/Icon';
 import Button from '../ui/Button';
 import Checkbox from '../ui/Checkbox';
 import InputText from '../ui/InputText';
@@ -35,12 +30,9 @@ import CountryCodeInput from './CountryCodeInput';
 
 import monkeyPath from '../../assets/monkey.svg';
 
-type StateProps = Pick<GlobalState, (
-  'connectionState' | 'authState' |
-  'authPhoneNumber' | 'authIsLoading' |
-  'authIsLoadingQrCode' | 'authErrorKey' |
-  'authRememberMe' | 'authNearestCountry'
-)> & {
+type StateProps = {
+  auth: GlobalState['auth'];
+  connectionState: GlobalState['connectionState'];
   language?: string;
   phoneCodeList: ApiCountryCode[];
   isTestServer?: boolean;
@@ -50,19 +42,13 @@ const MIN_NUMBER_LENGTH = 7;
 
 let isPreloadInitiated = false;
 
-const AuthPhoneNumber: FC<StateProps> = ({
+const AuthPhoneNumber = ({
+  auth,
   connectionState,
-  authState,
-  authPhoneNumber,
-  authIsLoading,
-  authIsLoadingQrCode,
-  authErrorKey,
-  authRememberMe,
-  authNearestCountry,
   phoneCodeList,
   language,
   isTestServer,
-}) => {
+}: StateProps) => {
   const {
     setAuthPhoneNumber,
     setAuthRememberMe,
@@ -71,7 +57,19 @@ const AuthPhoneNumber: FC<StateProps> = ({
     clearAuthErrorKey,
     goToAuthQrCode,
     setSharedSettingOption,
+    loginWithPasskey,
   } = getActions();
+
+  const {
+    state,
+    phoneNumber: authPhoneNumber,
+    nearestCountry,
+    isLoading: authIsLoading,
+    errorKey,
+    rememberMe,
+    isLoadingQrCode,
+    passkeyOption,
+  } = auth;
 
   const lang = useLang();
   const inputRef = useRef<HTMLInputElement>();
@@ -106,10 +104,10 @@ const AuthPhoneNumber: FC<StateProps> = ({
   }, [country]);
 
   useEffect(() => {
-    if (isConnected && !authNearestCountry) {
+    if (isConnected && !nearestCountry) {
       loadNearestCountry();
     }
-  }, [isConnected, authNearestCountry]);
+  }, [isConnected, nearestCountry]);
 
   useEffect(() => {
     if (isConnected) {
@@ -118,10 +116,10 @@ const AuthPhoneNumber: FC<StateProps> = ({
   }, [isConnected, language]);
 
   useEffect(() => {
-    if (authNearestCountry && phoneCodeList && !country && !isTouched) {
-      setCountry(getCountryCodeByIso(phoneCodeList, authNearestCountry));
+    if (nearestCountry && phoneCodeList && !country && !isTouched) {
+      setCountry(getCountryCodeByIso(phoneCodeList, nearestCountry));
     }
-  }, [country, authNearestCountry, isTouched, phoneCodeList]);
+  }, [country, nearestCountry, isTouched, phoneCodeList]);
 
   const parseFullNumber = useLastCallback((newFullNumber: string) => {
     if (!newFullNumber.length) {
@@ -182,8 +180,8 @@ const AuthPhoneNumber: FC<StateProps> = ({
     setPhoneNumber('');
   });
 
-  const handlePhoneNumberChange = useLastCallback((e: ChangeEvent<HTMLInputElement>) => {
-    if (authErrorKey) {
+  const handlePhoneNumberChange = useLastCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    if (errorKey) {
       clearAuthErrorKey();
     }
 
@@ -210,7 +208,7 @@ const AuthPhoneNumber: FC<StateProps> = ({
     parseFullNumber(shouldFixSafariAutoComplete ? `${country.countryCode} ${value}` : value);
   });
 
-  const handleKeepSessionChange = useLastCallback((e: ChangeEvent<HTMLInputElement>) => {
+  const handleKeepSessionChange = useLastCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     setAuthRememberMe({ value: e.target.checked });
   });
 
@@ -236,14 +234,23 @@ const AuthPhoneNumber: FC<StateProps> = ({
     goToAuthQrCode();
   });
 
-  const isAuthReady = authState === 'authorizationStateWaitPhoneNumber';
+  const handleLoginWithPasskey = useLastCallback(() => {
+    loginWithPasskey();
+  });
+
+  const isAuthReady = state === 'authorizationStateWaitPhoneNumber';
 
   return (
     <div id="auth-phone-number-form" className="custom-scroll">
       {hasActiveAccount && (
-        <Button size="smaller" round color="translucent" className="auth-close" onClick={handleBackNavigation}>
-          <Icon name="close" />
-        </Button>
+        <Button
+          size="smaller"
+          round
+          color="translucent"
+          className="auth-close"
+          iconName="close"
+          onClick={handleBackNavigation}
+        />
       )}
       <div className="auth-form">
         <div id="logo" />
@@ -253,7 +260,7 @@ const AuthPhoneNumber: FC<StateProps> = ({
           <CountryCodeInput
             id="sign-in-phone-code"
             value={country}
-            isLoading={!authNearestCountry && !country}
+            isLoading={!nearestCountry && !country}
             onChange={handleCountryChange}
           />
           <InputText
@@ -261,7 +268,7 @@ const AuthPhoneNumber: FC<StateProps> = ({
             id="sign-in-phone-number"
             label={lang('LoginPhonePlaceholder')}
             value={fullNumber}
-            error={authErrorKey && lang.withRegular(authErrorKey)}
+            error={errorKey && lang.withRegular(errorKey)}
             inputMode="tel"
             onChange={handlePhoneNumberChange}
             onPaste={IS_SAFARI ? handlePaste : undefined}
@@ -269,7 +276,7 @@ const AuthPhoneNumber: FC<StateProps> = ({
           <Checkbox
             id="sign-in-keep-session"
             label={lang('AuthKeepSignedIn')}
-            checked={Boolean(authRememberMe)}
+            checked={Boolean(rememberMe)}
             onChange={handleKeepSessionChange}
           />
           {canSubmit && (
@@ -291,10 +298,15 @@ const AuthPhoneNumber: FC<StateProps> = ({
               className="auth-button"
               isText
               ripple
-              isLoading={authIsLoadingQrCode}
+              isLoading={isLoadingQrCode}
               onClick={handleGoToAuthQrCode}
             >
               {lang('LoginQRLogin')}
+            </Button>
+          )}
+          {passkeyOption && (
+            <Button className="auth-button" isText onClick={handleLoginWithPasskey}>
+              {lang('LoginPasskey')}
             </Button>
           )}
           {suggestedLanguage && suggestedLanguage !== language && continueText && (
@@ -319,22 +331,16 @@ export default memo(withGlobal(
       sharedState: { settings: { language } },
       countryList: { phoneCodes: phoneCodeList },
       config,
+      auth,
+      connectionState,
     } = global;
 
     return {
-      ...pick(global, [
-        'connectionState',
-        'authState',
-        'authPhoneNumber',
-        'authIsLoading',
-        'authIsLoadingQrCode',
-        'authErrorKey',
-        'authRememberMe',
-        'authNearestCountry',
-      ]),
+      auth,
+      connectionState,
       language,
       phoneCodeList,
       isTestServer: config?.isTestServer,
-    } as Complete<StateProps>;
+    };
   },
 )(AuthPhoneNumber));

@@ -148,6 +148,7 @@ import {
   selectTabState,
   selectThreadIdFromMessage,
   selectThreadInfo,
+  selectThreadParam,
   selectTopic,
   selectTranslationLanguage,
   selectUser,
@@ -423,6 +424,16 @@ addActionHandler('sendMessage', async (global, actions, payload): Promise<void> 
     suggestedMedia = suggestedMessage.content;
   }
 
+  if (chat.isBotForum && threadId === MAIN_THREAD_ID && replyInfo?.type === 'message') {
+    const replyMessage = selectChatMessage(global, chatId!, replyInfo.replyToMsgId);
+    const replyThreadId = replyMessage && selectThreadIdFromMessage(global, replyMessage);
+    actions.openThread({
+      chatId: chatId!,
+      threadId: replyThreadId || replyInfo?.replyToTopId || replyInfo?.replyToMsgId,
+      tabId,
+    });
+  }
+
   const params: SendMessageParams = {
     ...payload,
     chat,
@@ -440,6 +451,24 @@ addActionHandler('sendMessage', async (global, actions, payload): Promise<void> 
 
   if (!isStoryReply) {
     actions.clearWebPagePreview({ tabId });
+  }
+
+  // Create new bot forum topic
+  if (chat.isBotForum && threadId === MAIN_THREAD_ID && replyInfo?.type !== 'message') {
+    const baseTitle = params.text ?? getTranslationFn()('BotForumTopicTitlePlaceholder');
+    const title = baseTitle.length > 12 ? `${baseTitle.slice(0, 12)}...` : baseTitle;
+    const topic = await callApi('createTopic', {
+      chat,
+      title,
+      isTitleMissing: true,
+      sendAs: params.sendAs,
+    });
+    if (topic) {
+      params.replyInfo = params.replyInfo?.type === 'message'
+        ? { ...params.replyInfo, replyToTopId: topic }
+        : { type: 'message', replyToMsgId: topic, replyToTopId: topic };
+      getActions().openThread({ chatId: chat.id, threadId: topic });
+    }
   }
 
   const isSingle = (!payload.attachments || payload.attachments.length <= 1) && !isForwarding;
@@ -1233,6 +1262,7 @@ addActionHandler('markMessageListRead', (global, actions, payload): ActionReturn
 
   const viewportIds = selectViewportIds(global, chatId, threadId, tabId);
   const minId = selectFirstUnreadId(global, chatId, threadId);
+  const topic = selectTopic(global, chatId, threadId);
 
   if (threadId !== MAIN_THREAD_ID && !chat.isForum) {
     global = updateThreadInfo(global, chatId, threadId, {
@@ -1241,7 +1271,7 @@ addActionHandler('markMessageListRead', (global, actions, payload): ActionReturn
     return global;
   }
 
-  if (!viewportIds || !minId || !chat.unreadCount) {
+  if (!viewportIds || !minId || (!chat.unreadCount && !topic?.unreadCount)) {
     return global;
   }
 
@@ -1250,17 +1280,17 @@ addActionHandler('markMessageListRead', (global, actions, payload): ActionReturn
     return global;
   }
 
-  const topic = selectTopic(global, chatId, threadId);
   if (chat.isForum && topic) {
     global = updateThreadInfo(global, chatId, threadId, {
       lastReadInboxMessageId: maxId,
     });
     const newTopicUnreadCount = Math.max(0, topic.unreadCount - readCount);
-    if (newTopicUnreadCount === 0) {
+    if (newTopicUnreadCount === 0 && !chat.isBotForum && chat.unreadCount) {
       global = updateChat(global, chatId, {
         unreadCount: Math.max(0, chat.unreadCount - 1),
       });
     }
+
     return updateTopic(global, chatId, Number(threadId), {
       unreadCount: newTopicUnreadCount,
     });
@@ -1268,7 +1298,7 @@ addActionHandler('markMessageListRead', (global, actions, payload): ActionReturn
 
   return updateChat(global, chatId, {
     lastReadInboxMessageId: maxId,
-    unreadCount: Math.max(0, chat.unreadCount - readCount),
+    unreadCount: Math.max(0, (chat.unreadCount || 0) - readCount),
   });
 });
 
@@ -1515,7 +1545,7 @@ addActionHandler('sendScheduledMessages', (global, actions, payload): ActionRetu
 
 addActionHandler('rescheduleMessage', (global, actions, payload): ActionReturnType => {
   const {
-    chatId, messageId, scheduledAt,
+    chatId, messageId, scheduledAt, scheduleRepeatPeriod,
   } = payload;
 
   const chat = selectChat(global, chatId);
@@ -1528,6 +1558,7 @@ addActionHandler('rescheduleMessage', (global, actions, payload): ActionReturnTy
     chat,
     message,
     scheduledAt,
+    scheduleRepeatPeriod,
   });
 });
 
@@ -1580,19 +1611,21 @@ addActionHandler('loadCustomEmojis', async (global, actions, payload): Promise<v
 
 addActionHandler('forwardMessages', (global, actions, payload): ActionReturnType => {
   const {
-    isSilent, scheduledAt, tabId = getCurrentTabId(),
+    isSilent, scheduledAt, scheduleRepeatPeriod, tabId = getCurrentTabId(),
   } = payload;
   const { toChatId } = selectTabState(global, tabId).forwardMessages;
   const toChat = toChatId ? selectChat(global, toChatId) : undefined;
   if (!toChat) return;
-  executeForwardMessages(global, { chat: toChat, isSilent, scheduledAt }, tabId);
+  executeForwardMessages(global, { chat: toChat, isSilent, scheduledAt, scheduleRepeatPeriod }, tabId);
 });
 
 async function executeForwardMessages(global: GlobalState, sendParams: SendMessageParams, tabId: number) {
   const {
     fromChatId, messageIds, toChatId, withMyScore, noAuthors, noCaptions, toThreadId = MAIN_THREAD_ID,
   } = selectTabState(global, tabId).forwardMessages;
-  const { messagePriceInStars, isSilent, scheduledAt } = sendParams;
+  const { messagePriceInStars, isSilent, scheduledAt, scheduleRepeatPeriod, effectId, attachments } = sendParams;
+  const isForwardOnly = !sendParams.text && !attachments?.length;
+  const forwardEffectId = isForwardOnly ? effectId : undefined;
 
   const isCurrentUserPremium = selectIsCurrentUserPremium(global);
   const isToMainThread = toThreadId === MAIN_THREAD_ID;
@@ -1629,6 +1662,7 @@ async function executeForwardMessages(global: GlobalState, sendParams: SendMessa
         messages: slice,
         isSilent,
         scheduledAt,
+        scheduleRepeatPeriod,
         sendAs,
         withMyScore,
         noAuthors,
@@ -1637,6 +1671,7 @@ async function executeForwardMessages(global: GlobalState, sendParams: SendMessa
         wasDrafted: Boolean(draft),
         lastMessageId,
         messagePriceInStars,
+        effectId: forwardEffectId,
       };
 
       if (!messagePriceInStars) {
@@ -1666,6 +1701,7 @@ async function executeForwardMessages(global: GlobalState, sendParams: SendMessa
       sticker,
       isSilent,
       scheduledAt,
+      scheduleRepeatPeriod,
       sendAs,
       lastMessageId,
     };
@@ -1742,9 +1778,13 @@ async function loadViewportMessages<T extends GlobalState>(
 
   global = getGlobal();
 
+  const localTypingDrafts = selectThreadParam(global, chatId, threadId, 'typingDraftIdByRandomId');
+  const typingDraftMessages = localTypingDrafts ? Object.values(localTypingDrafts)
+    .map((id) => selectChatMessage(global, chatId, id))
+    .filter(Boolean) : [];
   const localMessages = chatId === SERVICE_NOTIFICATIONS_USER_ID
     ? global.serviceNotifications.filter(({ isDeleted }) => !isDeleted).map(({ message }) => message)
-    : [];
+    : typingDraftMessages;
   const allMessages = ([] as ApiMessage[]).concat(messages, localMessages);
   const byId = buildCollectionByKey(allMessages, 'id');
   const ids = Object.keys(byId).map(Number);
