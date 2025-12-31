@@ -531,7 +531,7 @@ addActionHandler('loadAllChats', async (global, actions, payload): Promise<void>
 
     global = getGlobal();
 
-    if (global.connectionState !== 'connectionStateReady' || global.authState !== 'authorizationStateReady') {
+    if (global.connectionState !== 'connectionStateReady' || global.auth.state !== 'authorizationStateReady') {
       return;
     }
 
@@ -2386,9 +2386,6 @@ addActionHandler('processAttachBotParameters', async (global, actions, payload):
 addActionHandler('loadTopics', async (global, actions, payload): Promise<void> => {
   if (selectIsCurrentUserFrozen(global)) return;
   const { chatId, force } = payload;
-  if (selectIsCurrentUserFrozen(global)) {
-    return;
-  }
   const chat = selectChat(global, chatId);
   if (!chat) return;
 

@@ -12,6 +12,7 @@ import { applyPerformanceSettings } from '../../../util/perfomanceSettings';
 import switchTheme from '../../../util/switchTheme';
 import { updatePeerColors } from '../../../util/theme';
 import { callApi, setShouldEnableDebugLog } from '../../../api/gramjs';
+import { addTabStateResetterAction } from '../../helpers/meta';
 import {
   addActionHandler, getActions, setGlobal,
 } from '../../index';
@@ -161,14 +162,16 @@ addActionHandler('openLeftColumnContent', (global, actions, payload): ActionRetu
 });
 
 addActionHandler('openSettingsScreen', (global, actions, payload): ActionReturnType => {
-  const { screen = SettingsScreens.Main, tabId = getCurrentTabId() } = payload;
+  const { screen, tabId = getCurrentTabId() } = payload;
   const tabState = selectTabState(global, tabId);
+
+  actions.loadPrivacySettings({ skipIfCached: true });
   // Force settings only if new screen is passed, do not on resets
-  if (payload.screen) actions.openLeftColumnContent({ contentKey: LeftColumnContent.Settings, tabId });
+  if (payload.screen !== undefined) actions.openLeftColumnContent({ contentKey: LeftColumnContent.Settings, tabId });
   return updateTabState(global, {
     leftColumn: {
       ...tabState.leftColumn,
-      settingsScreen: screen,
+      settingsScreen: screen || SettingsScreens.Main,
     },
   }, tabId);
 });
@@ -224,3 +227,12 @@ addActionHandler('closeShareChatFolderModal', (global, actions, payload): Action
     shareFolderScreen: undefined,
   }, tabId);
 });
+
+addActionHandler('openPasskeyModal', (global, actions, payload): ActionReturnType => {
+  const { tabId = getCurrentTabId() } = payload || {};
+  return updateTabState(global, {
+    isPasskeyModalOpen: true,
+  }, tabId);
+});
+
+addTabStateResetterAction('closePasskeyModal', 'isPasskeyModalOpen');

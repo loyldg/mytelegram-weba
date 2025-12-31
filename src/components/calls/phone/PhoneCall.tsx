@@ -1,6 +1,5 @@
 import '../../../global/actions/calls';
 
-import type { FC } from '../../../lib/teact/teact';
 import {
   memo, useCallback, useEffect, useMemo, useRef,
 } from '../../../lib/teact/teact';
@@ -32,7 +31,6 @@ import useOldLang from '../../../hooks/useOldLang';
 
 import AnimatedIcon from '../../common/AnimatedIcon';
 import Avatar from '../../common/Avatar';
-import Icon from '../../common/icons/Icon';
 import Button from '../../ui/Button';
 import Modal from '../../ui/Modal';
 import PhoneCallButton from './PhoneCallButton';
@@ -46,12 +44,12 @@ type StateProps = {
   isCallPanelVisible?: boolean;
 };
 
-const PhoneCall: FC<StateProps> = ({
+const PhoneCall = ({
   user,
   isOutgoing,
   phoneCall,
   isCallPanelVisible,
-}) => {
+}: StateProps) => {
   const lang = useOldLang();
   const {
     hangUp, requestMasterAndAcceptCall, playGroupCallSound, toggleGroupCallPanel, connectToActivePhoneCall,
@@ -271,22 +269,20 @@ const PhoneCall: FC<StateProps> = ({
             round
             size="smaller"
             color="translucent"
+            iconName={isFullscreen ? 'smallscreen' : 'fullscreen'}
             onClick={handleToggleFullscreen}
             ariaLabel={lang(isFullscreen ? 'AccExitFullscreen' : 'AccSwitchToFullscreen')}
-          >
-            <Icon name={isFullscreen ? 'smallscreen' : 'fullscreen'} />
-          </Button>
+          />
         )}
 
         <Button
           round
           size="smaller"
           color="translucent"
+          iconName="close"
           onClick={handleClose}
           className={styles.closeButton}
-        >
-          <Icon name="close" />
-        </Button>
+        />
       </div>
       <div
         className={buildClassName(styles.emojisBackdrop, isEmojiOpen && styles.open)}

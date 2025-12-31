@@ -25,6 +25,7 @@ import {
 } from '../../../global/selectors';
 import { selectPremiumLimit } from '../../../global/selectors/limits';
 import buildClassName from '../../../util/buildClassName';
+import { formatCountdownDays } from '../../../util/dates/dateFormat';
 import { formatCurrency } from '../../../util/formatCurrency';
 import { getStickerFromGift } from '../../common/helpers/gifts';
 import { REM } from '../../common/helpers/mediaDimensions';
@@ -37,7 +38,6 @@ import useOldLang from '../../../hooks/useOldLang';
 import useSyncEffect from '../../../hooks/useSyncEffect';
 
 import CustomEmoji from '../../common/CustomEmoji';
-import Icon from '../../common/icons/Icon';
 import ParticlesHeader from '../../modals/common/ParticlesHeader.tsx';
 import Button from '../../ui/Button';
 import Modal from '../../ui/Modal';
@@ -106,7 +106,7 @@ type StateProps = {
   isPremium?: boolean;
   isSuccess?: boolean;
   isGift?: boolean;
-  monthsAmount?: number;
+  daysAmount?: number;
   gift?: ApiStarGift;
   limitChannels: number;
   limitPins: number;
@@ -137,7 +137,7 @@ const PremiumMainModal: FC<OwnProps & StateProps> = ({
   isSuccess,
   isGift,
   toUser,
-  monthsAmount,
+  daysAmount,
   premiumPromoOrder,
   gift,
 }) => {
@@ -288,10 +288,11 @@ const PremiumMainModal: FC<OwnProps & StateProps> = ({
     }
 
     if (isGift) {
+      const formattedDuration = daysAmount ? formatCountdownDays(lang, daysAmount) : '';
       return renderText(
         fromUser?.id === currentUserId
-          ? oldLang('TelegramPremiumUserGiftedPremiumOutboundDialogTitle', [getUserFullName(toUser), monthsAmount])
-          : oldLang('TelegramPremiumUserGiftedPremiumDialogTitle', [getUserFullName(fromUser), monthsAmount]),
+          ? lang('DialogTitlePremiumGiftSentTo', { user: getUserFullName(toUser), amount: formattedDuration })
+          : lang('DialogTitlePremiumGiftReceivedFrom', { user: getUserFullName(fromUser), amount: formattedDuration }),
         ['simple_markdown', 'emoji'],
       );
     }
@@ -427,20 +428,11 @@ const PremiumMainModal: FC<OwnProps & StateProps> = ({
       onClose={closePremiumModal}
       isOpen={isOpen}
       dialogRef={dialogRef}
+      hasAbsoluteCloseButton
     >
       <Transition name="slide" activeKey={currentSection ? 1 : 0} className={styles.transition}>
         {!currentSection ? (
           <div className={buildClassName(styles.main, 'custom-scroll')} onScroll={handleScroll}>
-            <Button
-              round
-              size="smaller"
-              className={styles.closeButton}
-              color="translucent"
-              onClick={() => closePremiumModal()}
-              ariaLabel={oldLang('Close')}
-            >
-              <Icon name="close" />
-            </Button>
             {renderHeader()}
             {!isPremium && !isGift && renderSubscriptionOptions()}
             <div className={buildClassName(styles.header, isHeaderHidden && styles.hiddenHeader)}>
@@ -525,7 +517,7 @@ export default memo(withGlobal<OwnProps>((global): Complete<StateProps> => {
     promo: premiumModal?.promo,
     isSuccess: premiumModal?.isSuccess,
     isGift: premiumModal?.isGift,
-    monthsAmount: premiumModal?.monthsAmount,
+    daysAmount: premiumModal?.daysAmount,
     gift: premiumModal?.gift,
     fromUser,
     fromUserStatusEmoji,

@@ -14,7 +14,6 @@ import usePreviousDeprecated from '../../hooks/usePreviousDeprecated';
 
 import Button from '../ui/Button';
 import Modal from '../ui/Modal';
-import Icon from './icons/Icon';
 import ItemPicker from './pickers/ItemPicker';
 
 import styles from './CountryPickerModal.module.scss';
@@ -77,17 +76,10 @@ const CountryPickerModal: FC<OwnProps> = ({
       isOpen={isOpen}
       onClose={onClose}
       onEnter={handleSubmit}
+      hasAbsoluteCloseButton
     >
       <div className={styles.container}>
         <div className={styles.pickerSelector}>
-          <Button
-            round
-            size="smaller"
-            color="translucent"
-            onClick={onClose}
-          >
-            <Icon name="close" />
-          </Button>
 
           <h4 className={styles.pickerTitle}>
             {lang('BoostingSelectCountry')}

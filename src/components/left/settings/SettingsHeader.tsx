@@ -11,7 +11,6 @@ import useLang from '../../../hooks/useLang';
 import useMultiClick from '../../../hooks/useMultiClick';
 import useOldLang from '../../../hooks/useOldLang';
 
-import Icon from '../../common/icons/Icon';
 import Button from '../../ui/Button';
 import ConfirmDialog from '../../ui/ConfirmDialog';
 import DropdownMenu from '../../ui/DropdownMenu';
@@ -70,9 +69,8 @@ const SettingsHeader: FC<OwnProps> = ({
         className={isOpen ? 'active' : ''}
         onClick={onTrigger}
         ariaLabel="More actions"
-      >
-        <Icon name="more" />
-      </Button>
+        iconName="more"
+      />
     );
   }, [isMobile]);
 
@@ -255,6 +253,10 @@ const SettingsHeader: FC<OwnProps> = ({
             )}
           </h3>
         );
+
+      case SettingsScreens.Passkeys:
+        return <h3>{lang('SettingsPasskeyTitle')}</h3>;
+
       default:
         return (
           <div className="settings-main-header">
@@ -268,12 +270,10 @@ const SettingsHeader: FC<OwnProps> = ({
               ripple={!isMobile}
               size="smaller"
               color="translucent"
-
               onClick={() => openSettingsScreen({ screen: SettingsScreens.EditProfile })}
               ariaLabel={oldLang('lng_settings_information')}
-            >
-              <Icon name="edit" />
-            </Button>
+              iconName="edit"
+            />
             <DropdownMenu
               className="settings-more-menu"
               trigger={SettingsMenuButton}
@@ -294,9 +294,8 @@ const SettingsHeader: FC<OwnProps> = ({
         color="translucent"
         onClick={onReset}
         ariaLabel={oldLang('AccDescrGoBack')}
-      >
-        <Icon name="arrow-left" />
-      </Button>
+        iconName="arrow-left"
+      />
       {renderHeaderContent()}
       <ConfirmDialog
         isOpen={isSignOutDialogOpen}

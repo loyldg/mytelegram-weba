@@ -141,6 +141,10 @@ export const DEFAULT_MESSAGE_TEXT_SIZE_PX = 16;
 export const IOS_DEFAULT_MESSAGE_TEXT_SIZE_PX = 17;
 export const MACOS_DEFAULT_MESSAGE_TEXT_SIZE_PX = 15;
 
+export const FOLDERS_POSITION_TOP = 'top';
+export const FOLDERS_POSITION_LEFT = 'left';
+export const FOLDERS_POSITION_DEFAULT = FOLDERS_POSITION_TOP;
+
 export const PREVIEW_AVATAR_COUNT = 3;
 
 export const DRAFT_DEBOUNCE = 10000; // 10s
@@ -338,6 +342,7 @@ export const REPLIES_USER_ID = '1271266957'; // TODO For Test connection ID must
 export const VERIFICATION_CODES_USER_ID = '489000';
 export const ANONYMOUS_USER_ID = '2666000';
 export const RESTRICTED_EMOJI_SET_ID = '7173162320003080';
+export const LOCAL_MESSAGES_LIMIT = 1e6; // 1M
 export const CHANNEL_ID_BASE = 10n ** 12n;
 export const DEFAULT_GIF_SEARCH_BOT_USERNAME = 'gif';
 export const ALL_FOLDER_ID = 0;
@@ -367,7 +372,7 @@ export const BOT_VERIFICATION_PEERS_LIMIT = 20;
 export const LIGHT_THEME_BG_COLOR = '#99BA92';
 export const DARK_THEME_BG_COLOR = '#0F0F0F';
 export const DEFAULT_PATTERN_COLOR = '#4A8E3A8C';
-export const DARK_THEME_PATTERN_COLOR = '#0A0A0A8C';
+export const DARK_THEME_PATTERN_COLOR = '#48576166';
 export const PEER_COLOR_BG_OPACITY = '1a';
 export const PEER_COLOR_BG_ACTIVE_OPACITY = '2b';
 export const PEER_COLOR_GRADIENT_STEP = 5; // px

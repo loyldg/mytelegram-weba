@@ -1,6 +1,7 @@
-import type { TeactNode } from '../../lib/teact/teact';
+import type { ElementRef, TeactNode } from '../../lib/teact/teact';
 import { memo, useEffect, useRef } from '../../lib/teact/teact';
 
+import type { ApiMessageEntityCustomEmoji } from '../../api/types';
 import type { MenuItemContextAction } from './ListItem';
 
 import animateHorizontalScroll from '../../util/animateHorizontalScroll';
@@ -22,6 +23,8 @@ export type TabWithProperties = {
   isBlocked?: boolean;
   isBadgeActive?: boolean;
   contextActions?: MenuItemContextAction[];
+  emoticon?: string | ApiMessageEntityCustomEmoji;
+  noTitleAnimations?: boolean;
 };
 
 type OwnProps = {
@@ -30,6 +33,7 @@ type OwnProps = {
   className?: string;
   tabClassName?: string;
   contextRootElementSelector?: string;
+  ref?: ElementRef<HTMLDivElement>;
   onSwitchTab: (index: number) => void;
 };
 
@@ -43,9 +47,13 @@ const TabList = ({
   className,
   tabClassName,
   contextRootElementSelector,
+  ref,
   onSwitchTab,
 }: OwnProps) => {
-  const containerRef = useRef<HTMLDivElement>();
+  let containerRef = useRef<HTMLDivElement>();
+  if (ref) {
+    containerRef = ref;
+  }
   const previousActiveTab = usePreviousDeprecated(activeTab);
 
   const lang = useLang();

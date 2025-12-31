@@ -29,6 +29,8 @@ type StateProps = {
   freezeUntilDate?: number;
 };
 
+const ICON_SIZE = 130;
+
 const FrozenAccountModal = ({
   modal,
   freezeUntilDate,
@@ -58,7 +60,7 @@ const FrozenAccountModal = ({
     return (
       <div className={styles.header}>
         <AnimatedIconWithPreview
-          size={160}
+          size={ICON_SIZE}
           tgsUrl={LOCAL_TGS_URLS.BannedDuck}
           noLoop
         />
@@ -76,14 +78,12 @@ const FrozenAccountModal = ({
         <Button
           className={styles.buttonAppeal}
           onClick={handleAppeal}
-          noForcedUpperCase
         >
           {lang('ButtonAppeal')}
         </Button>
         <Button
           isText
           onClick={handleClose}
-          noForcedUpperCase
         >
           {lang('ButtonUnderstood')}
         </Button>
@@ -91,27 +91,31 @@ const FrozenAccountModal = ({
     );
   }, [lang, isOpen]);
 
-  if (!freezeUntilDate || !botFreezeAppealUsername) return undefined;
+  const listItemData = useMemo(() => {
+    if (!freezeUntilDate || !botFreezeAppealUsername) return undefined;
 
-  const date = new Date(freezeUntilDate * 1000);
+    const date = new Date(freezeUntilDate * 1000);
 
-  const botLink = (
-    <Link onClick={handleAppeal} isPrimary>
-      {formatUsername(botFreezeAppealUsername)}
-    </Link>
-  );
+    const botLink = (
+      <Link onClick={handleAppeal} isPrimary>
+        {formatUsername(botFreezeAppealUsername)}
+      </Link>
+    );
 
-  const listItemData = [
-    ['hand-stop', lang('FrozenAccountViolationTitle'), lang('FrozenAccountViolationSubtitle')],
-    ['lock', lang('FrozenAccountReadOnlyTitle'), lang('FrozenAccountReadOnlySubtitle')],
-    ['frozen-time', lang('FrozenAccountAppealTitle'),
-      lang('FrozenAccountAppealSubtitle', {
-        botLink,
-        date: formatDateToString(date, lang.code),
-      }, {
-        withNodes: true,
-      })],
-  ] satisfies TableAboutData;
+    return [
+      ['hand-stop', lang('FrozenAccountViolationTitle'), lang('FrozenAccountViolationSubtitle')],
+      ['lock', lang('FrozenAccountReadOnlyTitle'), lang('FrozenAccountReadOnlySubtitle')],
+      ['frozen-time', lang('FrozenAccountAppealTitle'),
+        lang('FrozenAccountAppealSubtitle', {
+          botLink,
+          date: formatDateToString(date, lang.code),
+        }, {
+          withNodes: true,
+        })],
+    ] satisfies TableAboutData;
+  }, [lang, botFreezeAppealUsername, freezeUntilDate]);
+
+  if (!listItemData) return undefined;
 
   return (
     <TableAboutModal
@@ -119,7 +123,6 @@ const FrozenAccountModal = ({
       header={header}
       listItemData={listItemData}
       footer={footer}
-      hasBackdrop
       onClose={handleClose}
     />
   );

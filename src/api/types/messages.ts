@@ -10,7 +10,7 @@ import type {
   ApiLabeledPrice,
 } from './payments';
 import type { ApiTypePeerColor } from './peers';
-import type { ApiStarGiftUnique, ApiTypeCurrencyAmount } from './stars';
+import type { ApiStarGiftRegular, ApiStarGiftUnique, ApiTypeCurrencyAmount } from './stars';
 import type {
   ApiMessageStoryData, ApiStory, ApiWebPageStickerData, ApiWebPageStoryData,
 } from './stories';
@@ -394,9 +394,15 @@ export interface ApiWebPageFull {
   video?: ApiVideo;
   story?: ApiWebPageStoryData;
   gift?: ApiStarGiftUnique;
+  auction?: ApiWebPageAuctionData;
   stickers?: ApiWebPageStickerData;
   hasLargeMedia?: boolean;
 }
+
+export type ApiWebPageAuctionData = {
+  gift: ApiStarGiftRegular;
+  endDate: number;
+};
 
 export type ApiWebPage = ApiWebPagePending | ApiWebPageEmpty | ApiWebPageFull;
 
@@ -489,7 +495,7 @@ export type ApiMessageEntityDefault = {
   type: Exclude<
   `${ApiMessageEntityTypes}`,
   `${ApiMessageEntityTypes.Pre}` | `${ApiMessageEntityTypes.TextUrl}` | `${ApiMessageEntityTypes.MentionName}` |
-  `${ApiMessageEntityTypes.CustomEmoji}` | `${ApiMessageEntityTypes.Blockquote}` | `${ApiMessageEntityTypes.Timestamp}`
+  `${ApiMessageEntityTypes.Blockquote}` | `${ApiMessageEntityTypes.CustomEmoji}` | `${ApiMessageEntityTypes.Timestamp}`
   >;
   offset: number;
   length: number;
@@ -538,15 +544,8 @@ export type ApiMessageEntityTimestamp = {
   timestamp: number;
 };
 
-export type ApiMessageEntityQuoteFocus = {
-  type: 'quoteFocus';
-  offset: number;
-  length: number;
-};
-
 export type ApiMessageEntity = ApiMessageEntityDefault | ApiMessageEntityPre | ApiMessageEntityTextUrl |
-  ApiMessageEntityMentionName | ApiMessageEntityCustomEmoji | ApiMessageEntityBlockquote | ApiMessageEntityTimestamp |
-  ApiMessageEntityQuoteFocus;
+  ApiMessageEntityMentionName | ApiMessageEntityCustomEmoji | ApiMessageEntityBlockquote | ApiMessageEntityTimestamp;
 
 export enum ApiMessageEntityTypes {
   Bold = 'MessageEntityBold',
@@ -655,6 +654,7 @@ export interface ApiMessage {
   viaBusinessBotId?: string;
   postAuthorTitle?: string;
   isScheduled?: boolean;
+  scheduleRepeatPeriod?: number;
   shouldHideKeyboardButtons?: boolean;
   isHideKeyboardSelective?: boolean;
   isFromScheduled?: boolean;
@@ -683,6 +683,8 @@ export interface ApiMessage {
   reportDeliveryUntilDate?: number;
   paidMessageStars?: number;
   restrictionReasons?: ApiRestrictionReason[];
+
+  isTypingDraft?: boolean; // Local field
 }
 
 export interface ApiReactions {
@@ -922,11 +924,16 @@ interface ApiKeyboardButtonCopy {
   copyText: string;
 }
 
-export interface ApiKeyboardButtonSuggestedMessage {
+export interface KeyboardButtonSuggestedMessage {
   type: 'suggestedMessage';
   text: string;
   buttonType: 'approve' | 'decline' | 'suggestChanges';
   disabled?: boolean;
+}
+
+export interface KeyboardButtonOpenThread {
+  type: 'openThread';
+  text: string;
 }
 
 export type ApiKeyboardButton = (
@@ -941,7 +948,8 @@ export type ApiKeyboardButton = (
   | ApiKeyboardButtonSimpleWebView
   | ApiKeyboardButtonUrlAuth
   | ApiKeyboardButtonCopy
-  | ApiKeyboardButtonSuggestedMessage
+  | KeyboardButtonSuggestedMessage
+  | KeyboardButtonOpenThread
 );
 
 export type ApiKeyboardButtons = ApiKeyboardButton[][];

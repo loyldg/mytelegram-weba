@@ -30,6 +30,7 @@ import {
   isUserRightBanned,
 } from '../../global/helpers';
 import {
+  selectActionMessageBg,
   selectBot,
   selectCanAnimateInterface, selectCanAnimateRightColumn,
   selectChat,
@@ -82,7 +83,6 @@ import usePinnedMessage from './hooks/usePinnedMessage';
 import useFluidBackgroundFilter from './message/hooks/useFluidBackgroundFilter';
 
 import Composer from '../common/Composer';
-import Icon from '../common/icons/Icon';
 import PrivacySettingsNoticeModal from '../common/PrivacySettingsNoticeModal.async';
 import SeenByModal from '../common/SeenByModal.async';
 import UnpinAllMessagesModal from '../common/UnpinAllMessagesModal.async';
@@ -126,6 +126,7 @@ type StateProps = {
   customBackground?: string;
   backgroundColor?: string;
   patternColor?: string;
+  actionMessageBg?: string;
   isLeftColumnShown?: boolean;
   isRightColumnShown?: boolean;
   isBackgroundBlurred?: boolean;
@@ -192,6 +193,7 @@ function MiddleColumn({
   theme,
   backgroundColor,
   patternColor,
+  actionMessageBg,
   isLeftColumnShown,
   isRightColumnShown,
   isBackgroundBlurred,
@@ -487,7 +489,7 @@ function MiddleColumn({
   });
 
   // Prepare filter beforehand to avoid flickering
-  useFluidBackgroundFilter(patternColor);
+  useFluidBackgroundFilter(actionMessageBg);
 
   const isMessagingDisabled = Boolean(
     !isPinnedMessageList && !isSavedDialog && !renderingCanPost && !renderingCanRestartBot && !renderingCanStartBot
@@ -609,8 +611,8 @@ function MiddleColumn({
                       color="secondary"
                       className="composer-button unpin-all-button"
                       onClick={handleOpenUnpinModal}
+                      iconName="unpin"
                     >
-                      <Icon name="unpin" />
                       <span>{oldLang('Chat.Pinned.UnpinAll', pinnedMessagesCount, 'i')}</span>
                     </Button>
                   </div>
@@ -761,6 +763,7 @@ export default memo(withGlobal<OwnProps>(
       customBackground,
       backgroundColor,
       patternColor,
+      actionMessageBg: selectActionMessageBg(global),
       isLeftColumnShown,
       isRightColumnShown: selectIsRightColumnShown(global, isMobile),
       isBackgroundBlurred,

@@ -40,6 +40,7 @@ import {
   getPinnedMediaValue,
   renderMessageLink,
   renderPeerLink,
+  renderTopicLink,
   translateWithYou,
 } from './helpers/messageActions';
 
@@ -81,7 +82,6 @@ const ActionMessageText = ({
   asPreview,
 }: OwnProps & StateProps) => {
   const {
-    openThread,
     openTelegramLink,
     openUrl,
   } = getActions();
@@ -231,18 +231,15 @@ const ActionMessageText = ({
 
         const topicId = selectThreadIdFromMessage(global, message);
 
-        const topicLink = (
-          <Link
-            className={styles.topicLink}
-
-            onClick={() => openThread({ chatId, threadId: topicId })}
-          >
+        const topicLinkContent = (
+          <>
             {iconEmojiId ? <CustomEmoji documentId={iconEmojiId} isSelectable />
               : <TopicDefaultIcon topicId={topicId} title={title} iconColor={iconColor} />}
             {NBSP}
             {renderText(title)}
-          </Link>
+          </>
         );
+        const topicLink = renderTopicLink(chatId, Number(topicId), topicLinkContent, asPreview);
         return lang('ActionTopicCreated', { topic: topicLink }, { withNodes: true });
       }
 
@@ -253,12 +250,8 @@ const ActionMessageText = ({
 
         const topicId = selectThreadIdFromMessage(global, message);
         const currentTopic = selectTopic(global, chatId, topicId);
-        const topicLink = (
-          <Link
-            className={styles.topicLink}
-
-            onClick={() => openThread({ chatId, threadId: topicId })}
-          >
+        const topicLinkContent = (
+          <>
             {iconEmojiId && iconEmojiId !== DEFAULT_TOPIC_ICON_ID
               ? <CustomEmoji documentId={iconEmojiId} isSelectable />
               : (
@@ -270,17 +263,12 @@ const ActionMessageText = ({
               )}
             {topicId !== GENERAL_TOPIC_ID && NBSP}
             {renderText(title || currentTopic?.title || lang('ActionTopicPlaceholder'))}
-          </Link>
+          </>
         );
+        const topicLink = renderTopicLink(chatId, Number(topicId), topicLinkContent, asPreview);
 
-        const topicPlaceholderLink = (
-          <Link
-            className={styles.topicLink}
-
-            onClick={() => openThread({ chatId, threadId: topicId })}
-          >
-            {lang('ActionTopicPlaceholder')}
-          </Link>
+        const topicPlaceholderLink = renderTopicLink(
+          chatId, Number(topicId), lang('ActionTopicPlaceholder'), asPreview,
         );
 
         if (isClosed !== undefined) {
@@ -568,7 +556,7 @@ const ActionMessageText = ({
 
       case 'starGift': {
         const {
-          gift, alreadyPaidUpgradeStars, peerId, savedId, fromId, isPrepaidUpgrade,
+          gift, alreadyPaidUpgradeStars, peerId, savedId, fromId, isPrepaidUpgrade, isAuctionAcquired,
         } = action;
         const isToChannel = Boolean(peerId && savedId);
 
@@ -583,6 +571,10 @@ const ActionMessageText = ({
 
         const starsAmount = gift.stars + (alreadyPaidUpgradeStars || 0);
         const cost = renderStrong(formatStarsAsText(lang, starsAmount));
+
+        if (isAuctionAcquired) {
+          return lang('ActionStarGiftAuctionWon', { cost }, { withNodes: true });
+        }
 
         if (isPrepaidUpgrade && gift.upgradeStars) {
           const upgradeCost = renderStrong(formatStarsAsText(lang, gift.upgradeStars));

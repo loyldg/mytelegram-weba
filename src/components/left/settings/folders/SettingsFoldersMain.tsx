@@ -1,12 +1,14 @@
-import type { FC } from '../../../../lib/teact/teact';
 import {
   memo, useCallback, useEffect, useMemo, useState,
 } from '../../../../lib/teact/teact';
 import { getActions, withGlobal } from '../../../../global';
 
 import type { ApiChatFolder } from '../../../../api/types';
+import type { FoldersPosition } from '../../../../types';
 
-import { ALL_FOLDER_ID, STICKER_SIZE_FOLDER_SETTINGS } from '../../../../config';
+import {
+  ALL_FOLDER_ID, FOLDERS_POSITION_LEFT, FOLDERS_POSITION_TOP, STICKER_SIZE_FOLDER_SETTINGS,
+} from '../../../../config';
 import { getFolderDescriptionText } from '../../../../global/helpers';
 import { selectIsCurrentUserPremium } from '../../../../global/selectors';
 import { selectCurrentLimit } from '../../../../global/selectors/limits';
@@ -20,6 +22,7 @@ import { renderTextWithEntities } from '../../../common/helpers/renderTextWithEn
 import { useFolderManagerForChatsCount } from '../../../../hooks/useFolderManager';
 import useHistoryBack from '../../../../hooks/useHistoryBack';
 import useLang from '../../../../hooks/useLang';
+import useLastCallback from '../../../../hooks/useLastCallback';
 import { getPeerColorClass } from '../../../../hooks/usePeerColor';
 import usePreviousDeprecated from '../../../../hooks/usePreviousDeprecated';
 
@@ -30,9 +33,11 @@ import Checkbox from '../../../ui/Checkbox';
 import Draggable from '../../../ui/Draggable';
 import ListItem from '../../../ui/ListItem';
 import Loading from '../../../ui/Loading';
+import RadioGroup from '../../../ui/RadioGroup';
 
 type OwnProps = {
   isActive?: boolean;
+  isMobile?: boolean;
   onCreateFolder: () => void;
   onEditFolder: (folder: ApiChatFolder) => void;
   onReset: () => void;
@@ -45,6 +50,7 @@ type StateProps = {
   maxFolders: number;
   isPremium?: boolean;
   areTagsEnabled?: boolean;
+  foldersPosition: FoldersPosition;
 };
 
 type SortState = {
@@ -56,18 +62,20 @@ type SortState = {
 const FOLDER_HEIGHT_PX = 56;
 const runThrottledForLoadRecommended = throttle((cb) => cb(), 60000, true);
 
-const SettingsFoldersMain: FC<OwnProps & StateProps> = ({
+const SettingsFoldersMain = ({
   isActive,
-  onCreateFolder,
-  onEditFolder,
-  onReset,
-  folderIds,
   foldersById,
   isPremium,
   recommendedChatFolders,
   maxFolders,
   areTagsEnabled,
-}) => {
+  foldersPosition,
+  isMobile,
+  onCreateFolder,
+  onEditFolder,
+  onReset,
+  folderIds,
+}: OwnProps & StateProps) => {
   const {
     loadRecommendedChatFolders,
     addChatFolder,
@@ -76,6 +84,7 @@ const SettingsFoldersMain: FC<OwnProps & StateProps> = ({
     sortChatFolders,
     toggleDialogFilterTags,
     openPremiumModal,
+    setSharedSettingOption,
   } = getActions();
 
   const [state, setState] = useState<SortState>({
@@ -207,6 +216,10 @@ const SettingsFoldersMain: FC<OwnProps & StateProps> = ({
     });
   }, [sortChatFolders]);
 
+  const handleFoldersPositionChange = useLastCallback((value: string) => {
+    setSharedSettingOption({ foldersPosition: value as FoldersPosition });
+  });
+
   const canCreateNewFolder = useMemo(() => {
     return !isPremium || Object.keys(foldersById).length < maxFolders - 1;
   }, [foldersById, isPremium, maxFolders]);
@@ -226,15 +239,14 @@ const SettingsFoldersMain: FC<OwnProps & StateProps> = ({
 
         {canCreateNewFolder && (
           <Button
-          // TODO: Move icon into button prop
             className="settings-button with-icon"
             color="primary"
             pill
             fluid
             onClick={handleCreateFolder}
             isRtl={lang.isRtl}
+            iconName="add"
           >
-            <Icon name="add" />
             {lang('CreateNewFilter')}
           </Button>
         )}
@@ -411,6 +423,24 @@ const SettingsFoldersMain: FC<OwnProps & StateProps> = ({
           {!isPremium && <Icon name="lock-badge" className="settings-folders-lock-icon" />}
         </div>
       </div>
+      {!isMobile && (
+        <div className="settings-item pt-3">
+          <h4 className="settings-item-header mb-3" dir={lang.isRtl ? 'rtl' : undefined}>{lang('TabsPosition')}</h4>
+
+          <RadioGroup
+            name="tabsPosition"
+            options={[{
+              label: lang('TabsPositionLeft'),
+              value: FOLDERS_POSITION_LEFT,
+            }, {
+              label: lang('TabsPositionTop'),
+              value: FOLDERS_POSITION_TOP,
+            }]}
+            selected={foldersPosition}
+            onChange={handleFoldersPositionChange}
+          />
+        </div>
+      )}
     </div>
   );
 };
@@ -431,6 +461,7 @@ export default memo(withGlobal<OwnProps>(
       recommendedChatFolders,
       maxFolders: selectCurrentLimit(global, 'dialogFilters'),
       areTagsEnabled,
+      foldersPosition: global.sharedState.settings.foldersPosition,
     };
   },
 )(SettingsFoldersMain));

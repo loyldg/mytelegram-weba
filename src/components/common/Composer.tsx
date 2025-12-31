@@ -136,6 +136,7 @@ import useContextMenuHandlers from '../../hooks/useContextMenuHandlers';
 import useDerivedState from '../../hooks/useDerivedState';
 import useEffectWithPrevDeps from '../../hooks/useEffectWithPrevDeps';
 import useFlag from '../../hooks/useFlag';
+import useForceUpdate from '../../hooks/useForceUpdate';
 import useGetSelectionRange from '../../hooks/useGetSelectionRange';
 import useLang from '../../hooks/useLang';
 import useLastCallback from '../../hooks/useLastCallback';
@@ -187,6 +188,7 @@ import ReactionSelector from '../middle/message/reactions/ReactionSelector';
 import Button from '../ui/Button';
 import ResponsiveHoverButton from '../ui/ResponsiveHoverButton';
 import Spinner from '../ui/Spinner';
+import TextTimer from '../ui/TextTimer';
 import Transition from '../ui/Transition';
 import AnimatedCounter from './AnimatedCounter';
 import Avatar from './Avatar';
@@ -484,6 +486,7 @@ const Composer: FC<OwnProps & StateProps> = ({
   const lastMessageSendTimeSeconds = useRef<number>();
   const prevDropAreaState = usePreviousDeprecated(dropAreaState);
   const { width: windowWidth } = windowSize.get();
+  const forceUpdate = useForceUpdate();
 
   const isInMessageList = type === 'messageList';
   const isInStoryViewer = type === 'story';
@@ -1076,6 +1079,7 @@ const Composer: FC<OwnProps & StateProps> = ({
     sendGrouped = attachmentSettings.shouldSendGrouped,
     isSilent,
     scheduledAt,
+    scheduleRepeatPeriod,
     isInvertedMedia,
   }: {
     attachments: ApiAttachment[];
@@ -1083,6 +1087,7 @@ const Composer: FC<OwnProps & StateProps> = ({
     sendGrouped?: boolean;
     isSilent?: boolean;
     scheduledAt?: number;
+    scheduleRepeatPeriod?: number;
     isInvertedMedia?: true;
   }) => {
     if (!currentMessageList && !storyId) {
@@ -1107,6 +1112,7 @@ const Composer: FC<OwnProps & StateProps> = ({
         text,
         entities,
         scheduledAt,
+        scheduleRepeatPeriod,
         isSilent,
         shouldUpdateStickerSetOrder,
         attachments: prepareAttachmentsToSend(attachmentsToSend, sendCompressed),
@@ -1156,6 +1162,7 @@ const Composer: FC<OwnProps & StateProps> = ({
     isSilent?: boolean,
     scheduledAt?: number,
     isInvertedMedia?: true,
+    scheduleRepeatPeriod?: number,
   ) => {
     if (canSendAttachments(attachments)) {
       sendAttachments({
@@ -1164,13 +1171,19 @@ const Composer: FC<OwnProps & StateProps> = ({
         sendGrouped,
         isSilent,
         scheduledAt,
+        scheduleRepeatPeriod,
         isInvertedMedia,
       });
     }
   });
 
   const handleSendCore = useLastCallback(
-    (currentAttachments: ApiAttachment[], isSilent = false, scheduledAt?: number) => {
+    (
+      currentAttachments: ApiAttachment[],
+      isSilent = false,
+      scheduledAt?: number,
+      scheduleRepeatPeriod?: number,
+    ) => {
       const { text, entities } = parseHtmlAsFormattedText(getHtml());
 
       if (currentAttachments.length) {
@@ -1178,6 +1191,7 @@ const Composer: FC<OwnProps & StateProps> = ({
           sendAttachments({
             attachments: currentAttachments,
             scheduledAt,
+            scheduleRepeatPeriod,
             isSilent,
           });
         }
@@ -1206,6 +1220,7 @@ const Composer: FC<OwnProps & StateProps> = ({
           text,
           entities,
           scheduledAt,
+          scheduleRepeatPeriod,
           isSilent,
           shouldUpdateStickerSetOrder,
           isInvertedMedia,
@@ -1232,7 +1247,11 @@ const Composer: FC<OwnProps & StateProps> = ({
     },
   );
 
-  const handleSend = useLastCallback(async (isSilent = false, scheduledAt?: number) => {
+  const handleSend = useLastCallback(async (
+    isSilent = false,
+    scheduledAt?: number,
+    scheduleRepeatPeriod?: number,
+  ) => {
     if (!currentMessageList && !storyId) {
       return;
     }
@@ -1254,11 +1273,15 @@ const Composer: FC<OwnProps & StateProps> = ({
       }
     }
 
-    handleSendCore(currentAttachments, isSilent, scheduledAt);
+    handleSendCore(currentAttachments, isSilent, scheduledAt, scheduleRepeatPeriod);
   });
 
-  const handleSendWithConfirmation = useLastCallback((isSilent = false, scheduledAt?: number) => {
-    handleActionWithPaymentConfirmation(handleSend, isSilent, scheduledAt);
+  const handleSendWithConfirmation = useLastCallback((
+    isSilent = false,
+    scheduledAt?: number,
+    scheduleRepeatPeriod?: number,
+  ) => {
+    handleActionWithPaymentConfirmation(handleSend, isSilent, scheduledAt, scheduleRepeatPeriod);
   });
 
   const handleTodoListCreate = useLastCallback(() => {
@@ -1299,7 +1322,11 @@ const Composer: FC<OwnProps & StateProps> = ({
   });
 
   const handleMessageSchedule = useLastCallback((
-    args: ScheduledMessageArgs, scheduledAt: number, messageList: MessageList, effectId?: string,
+    args: ScheduledMessageArgs,
+    scheduledAt: number,
+    scheduleRepeatPeriod: number | undefined,
+    messageList: MessageList,
+    effectId?: string,
   ) => {
     if (args && 'queryId' in args) {
       const { id, queryId, isSilent } = args;
@@ -1317,15 +1344,17 @@ const Composer: FC<OwnProps & StateProps> = ({
     const { isSilent, ...restArgs } = args || {};
 
     if (!args || Object.keys(restArgs).length === 0) {
-      void handleSend(Boolean(isSilent), scheduledAt);
+      void handleSend(Boolean(isSilent), scheduledAt, scheduleRepeatPeriod);
     } else if (args.sendCompressed !== undefined || args.sendGrouped !== undefined) {
       const { sendCompressed = false, sendGrouped = false, isInvertedMedia } = args;
-      void handleSendAttachments(sendCompressed, sendGrouped, isSilent, scheduledAt, isInvertedMedia);
+      void handleSendAttachments(sendCompressed, sendGrouped, isSilent, scheduledAt, isInvertedMedia,
+        scheduleRepeatPeriod);
     } else {
       sendMessage({
         ...args,
         messageList,
         scheduledAt,
+        scheduleRepeatPeriod,
         effectId,
       });
     }
@@ -1333,8 +1362,8 @@ const Composer: FC<OwnProps & StateProps> = ({
 
   useEffectWithPrevDeps(([prevContentToBeScheduled]) => {
     if (currentMessageList && contentToBeScheduled && contentToBeScheduled !== prevContentToBeScheduled) {
-      requestCalendar((scheduledAt) => {
-        handleMessageSchedule(contentToBeScheduled, scheduledAt, currentMessageList);
+      requestCalendar((scheduledAt, scheduleRepeatPeriod) => {
+        handleMessageSchedule(contentToBeScheduled, scheduledAt, scheduleRepeatPeriod, currentMessageList, undefined);
       });
     }
   }, [contentToBeScheduled, currentMessageList, handleMessageSchedule, requestCalendar]);
@@ -1390,9 +1419,15 @@ const Composer: FC<OwnProps & StateProps> = ({
 
     if (isInScheduledList || isScheduleRequested) {
       forceShowSymbolMenu();
-      requestCalendar((scheduledAt) => {
+      requestCalendar((scheduledAt, scheduleRepeatPeriod) => {
         cancelForceShowSymbolMenu();
-        handleActionWithPaymentConfirmation(handleMessageSchedule, { gif, isSilent }, scheduledAt, currentMessageList!);
+        handleActionWithPaymentConfirmation(
+          handleMessageSchedule,
+          { gif, isSilent },
+          scheduledAt,
+          scheduleRepeatPeriod,
+          currentMessageList!,
+        );
         requestMeasure(() => {
           resetComposer(true);
         });
@@ -1427,10 +1462,14 @@ const Composer: FC<OwnProps & StateProps> = ({
 
     if (isInScheduledList || isScheduleRequested) {
       forceShowSymbolMenu();
-      requestCalendar((scheduledAt) => {
+      requestCalendar((scheduledAt, scheduleRepeatPeriod) => {
         cancelForceShowSymbolMenu();
         handleActionWithPaymentConfirmation(
-          handleMessageSchedule, { sticker, isSilent }, scheduledAt, currentMessageList!,
+          handleMessageSchedule,
+          { sticker, isSilent },
+          scheduledAt,
+          scheduleRepeatPeriod,
+          currentMessageList!,
         );
         requestMeasure(() => {
           resetComposer(shouldPreserveInput);
@@ -1464,7 +1503,7 @@ const Composer: FC<OwnProps & StateProps> = ({
     isSilent = isSilent || isSilentPosting;
 
     if (isInScheduledList || isScheduleRequested) {
-      requestCalendar((scheduledAt) => {
+      requestCalendar((scheduledAt, scheduleRepeatPeriod) => {
         handleActionWithPaymentConfirmation(
           handleMessageSchedule,
           {
@@ -1473,6 +1512,7 @@ const Composer: FC<OwnProps & StateProps> = ({
             isSilent,
           },
           scheduledAt,
+          scheduleRepeatPeriod,
           currentMessageList!,
         );
       });
@@ -1513,11 +1553,12 @@ const Composer: FC<OwnProps & StateProps> = ({
     }
 
     if (isInScheduledList) {
-      requestCalendar((scheduledAt) => {
+      requestCalendar((scheduledAt, scheduleRepeatPeriod) => {
         handleActionWithPaymentConfirmation(
           handleMessageSchedule,
           { poll },
           scheduledAt,
+          scheduleRepeatPeriod,
           currentMessageList,
         );
       });
@@ -1537,11 +1578,12 @@ const Composer: FC<OwnProps & StateProps> = ({
     }
 
     if (isInScheduledList) {
-      requestCalendar((scheduledAt) => {
+      requestCalendar((scheduledAt, scheduleRepeatPeriod) => {
         handleActionWithPaymentConfirmation(
           handleMessageSchedule,
           { todo },
           scheduledAt,
+          scheduleRepeatPeriod,
           currentMessageList,
         );
       });
@@ -1555,8 +1597,13 @@ const Composer: FC<OwnProps & StateProps> = ({
 
   const sendSilent = useLastCallback((additionalArgs?: ScheduledMessageArgs) => {
     if (isInScheduledList) {
-      requestCalendar((scheduledAt) => {
-        handleMessageSchedule({ ...additionalArgs, isSilent: true }, scheduledAt, currentMessageList!);
+      requestCalendar((scheduledAt, scheduleRepeatPeriod) => {
+        handleMessageSchedule(
+          { ...additionalArgs, isSilent: true },
+          scheduledAt,
+          scheduleRepeatPeriod,
+          currentMessageList!,
+        );
       });
     } else if (additionalArgs && ('sendCompressed' in additionalArgs || 'sendGrouped' in additionalArgs)) {
       const { sendCompressed = false, sendGrouped = false, isInvertedMedia } = additionalArgs;
@@ -1662,18 +1709,6 @@ const Composer: FC<OwnProps & StateProps> = ({
     && messageListType === 'thread';
   const isBotMenuButtonOpen = withBotMenuButton && !hasText && !activeVoiceRecording;
 
-  const [timedPlaceholderLangKey, timedPlaceholderDate] = useMemo(() => {
-    if (slowMode?.nextSendDate) {
-      return ['SlowModeWait', slowMode.nextSendDate];
-    }
-
-    if (stealthMode?.activeUntil && isInStoryViewer) {
-      return ['StealthModeActiveHint', stealthMode.activeUntil];
-    }
-
-    return [];
-  }, [isInStoryViewer, slowMode?.nextSendDate, stealthMode?.activeUntil]);
-
   const isComposerHasFocus = isBotKeyboardOpen || isSymbolMenuOpen || isEmojiTooltipOpen || isSendAsMenuOpen
     || isMentionTooltipOpen || isInlineBotTooltipOpen || isBotCommandMenuOpen || isAttachMenuOpen
     || isStickerTooltipOpen || isChatCommandTooltipOpen || isCustomEmojiTooltipOpen || isBotMenuButtonOpen
@@ -1681,12 +1716,21 @@ const Composer: FC<OwnProps & StateProps> = ({
   const isReactionSelectorOpen = isComposerHasFocus && !isReactionPickerOpen && isInStoryViewer && !isAttachMenuOpen
     && !isSymbolMenuOpen;
 
+  const slowModePlaceholder = (() => {
+    if (!slowMode?.nextSendDate || slowMode.nextSendDate < getServerTime()) return undefined;
+
+    return lang('SlowModePlaceholder', {
+      timer: <TextTimer endsAt={slowMode.nextSendDate} onEnd={forceUpdate} />,
+    }, { withNodes: true });
+  })();
+
   const placeholder = useMemo(() => {
     if (activeVoiceRecording && windowWidth <= SCREEN_WIDTH_TO_HIDE_PLACEHOLDER) {
       return '';
     }
 
     if (!isComposerBlocked) {
+      if (slowModePlaceholder) return slowModePlaceholder;
       if (botKeyboardPlaceholder) return botKeyboardPlaceholder;
       if (inputPlaceholder) return inputPlaceholder;
       if (paidMessagesStars) {
@@ -1701,11 +1745,17 @@ const Composer: FC<OwnProps & StateProps> = ({
         return lang('ComposerPlaceholderCaption');
       }
 
+      if (stealthMode?.activeUntil && isInStoryViewer && stealthMode.activeUntil > getServerTime()) {
+        return lang('StealthModeComposerPlaceholder', {
+          timer: <TextTimer endsAt={stealthMode.activeUntil} onEnd={forceUpdate} />,
+        }, { withNodes: true });
+      }
+
       if (chat?.adminRights?.anonymous) {
         return lang('ComposerPlaceholderAnonymous');
       }
 
-      if (chat?.isForum && chat?.isForumAsMessages && threadId === MAIN_THREAD_ID) {
+      if (chat?.isForum && !chat.isBotForum && chat.isForumAsMessages && threadId === MAIN_THREAD_ID) {
         return replyToTopic
           ? lang('ComposerPlaceholderTopic', { topic: replyToTopic.title })
           : lang('ComposerPlaceholderTopicGeneral');
@@ -1722,7 +1772,7 @@ const Composer: FC<OwnProps & StateProps> = ({
   }, [
     activeVoiceRecording, botKeyboardPlaceholder, chat, inputPlaceholder, isChannel, isComposerBlocked,
     isInStoryViewer, isSilentPosting, lang, replyToTopic, isReplying, threadId, windowWidth, paidMessagesStars,
-    hasSuggestedPost,
+    hasSuggestedPost, slowModePlaceholder, stealthMode?.activeUntil,
   ]);
 
   useEffect(() => {
@@ -1773,8 +1823,8 @@ const Composer: FC<OwnProps & StateProps> = ({
         if (!currentMessageList) {
           return;
         }
-        requestCalendar((scheduledAt) => {
-          handleMessageSchedule({}, scheduledAt, currentMessageList, effect?.id);
+        requestCalendar((scheduledAt, scheduleRepeatPeriod) => {
+          handleMessageSchedule({}, scheduledAt, scheduleRepeatPeriod, currentMessageList, effect?.id);
         });
         break;
       default:
@@ -1864,8 +1914,8 @@ const Composer: FC<OwnProps & StateProps> = ({
   });
 
   const handleSendScheduled = useLastCallback(() => {
-    requestCalendar((scheduledAt) => {
-      handleMessageSchedule({}, scheduledAt, currentMessageList!);
+    requestCalendar((scheduledAt, scheduleRepeatPeriod) => {
+      handleMessageSchedule({}, scheduledAt, scheduleRepeatPeriod, currentMessageList!, undefined);
     });
   });
 
@@ -1875,18 +1925,20 @@ const Composer: FC<OwnProps & StateProps> = ({
 
   const handleSendWhenOnline = useLastCallback(() => {
     handleActionWithPaymentConfirmation(
-      handleMessageSchedule, {}, SCHEDULED_WHEN_ONLINE, currentMessageList!, effect?.id,
+      handleMessageSchedule, {}, SCHEDULED_WHEN_ONLINE, undefined, currentMessageList!, effect?.id,
     );
   });
 
   const handleSendScheduledAttachments = useLastCallback(
     (sendCompressed: boolean, sendGrouped: boolean, isInvertedMedia?: true) => {
-      requestCalendar((scheduledAt) => {
+      requestCalendar((scheduledAt, scheduleRepeatPeriod) => {
         handleActionWithPaymentConfirmation(
           handleMessageSchedule,
           { sendCompressed, sendGrouped, isInvertedMedia },
           scheduledAt,
+          scheduleRepeatPeriod,
           currentMessageList!,
+          undefined,
         );
       });
     },
@@ -2172,8 +2224,6 @@ const Composer: FC<OwnProps & StateProps> = ({
             isActive={!hasAttachments}
             getHtml={getHtml}
             placeholder={placeholder}
-            timedPlaceholderDate={timedPlaceholderDate}
-            timedPlaceholderLangKey={timedPlaceholderLangKey}
             forcedPlaceholder={inlineBotHelp}
             canAutoFocus={isReady && isForCurrentMessageList && !hasAttachments && isInMessageList}
             noFocusInterception={hasAttachments}
@@ -2212,9 +2262,8 @@ const Composer: FC<OwnProps & StateProps> = ({
                           ariaLabel={lang(
                             isSilentPosting ? 'AriaComposerSilentPostingDisable' : 'AriaComposerSilentPostingEnable',
                           )}
-                        >
-                          <Icon name={isSilentPosting ? 'mute' : 'unmute'} />
-                        </Button>
+                          iconName={isSilentPosting ? 'mute' : 'unmute'}
+                        />
                       </Transition>
                     )}
                     {withScheduledButton && (
@@ -2225,9 +2274,8 @@ const Composer: FC<OwnProps & StateProps> = ({
                         color="translucent"
                         onClick={handleAllScheduledClick}
                         ariaLabel={lang('AriaComposerOpenScheduled')}
-                      >
-                        <Icon name="scheduled" />
-                      </Button>
+                        iconName="scheduled"
+                      />
                     )}
                     {shouldShowGiftButton && (
                       <Button
@@ -2236,9 +2284,8 @@ const Composer: FC<OwnProps & StateProps> = ({
                         className="composer-action-button"
                         color="translucent"
                         onClick={handleGiftClick}
-                      >
-                        <Icon name="gift" />
-                      </Button>
+                        iconName="gift"
+                      />
                     )}
                     {shouldShowSuggestedPostButton && (
                       <Button
@@ -2247,9 +2294,8 @@ const Composer: FC<OwnProps & StateProps> = ({
                         className="composer-action-button"
                         color="translucent"
                         onClick={handleSuggestPostClick}
-                      >
-                        <Icon name="cash-circle" />
-                      </Button>
+                        iconName="cash-circle"
+                      />
                     )}
                     {Boolean(botKeyboardMessageId) && !activeVoiceRecording && !editingMessage && (
                       <ResponsiveHoverButton
@@ -2363,9 +2409,8 @@ const Composer: FC<OwnProps & StateProps> = ({
           className="cancel"
           onClick={stopRecordingVoice}
           ariaLabel="Cancel voice recording"
-        >
-          <Icon name="delete" />
-        </Button>
+          iconName="delete"
+        />
       )}
       {isInStoryViewer && !activeVoiceRecording && (
         <Button

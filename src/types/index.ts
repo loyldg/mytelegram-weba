@@ -100,6 +100,7 @@ export type ThreadId = string | number;
 
 export type ThemeKey = 'light' | 'dark';
 export type AnimationLevel = 0 | 1 | 2;
+export type FoldersPosition = 'top' | 'left';
 export type PerformanceTypeKey = (
   'pageTransitions' | 'messageSendingAnimations' | 'mediaViewerAnimations'
   | 'messageComposerAnimations' | 'contextMenuAnimations' | 'contextMenuBlur' | 'rightColumnAnimations'
@@ -261,6 +262,7 @@ export enum SettingsScreens {
   CustomEmoji,
   DoNotTranslate,
   FoldersShare,
+  Passkeys,
 }
 
 export type StickerSetOrReactionsSetOrRecent = Pick<ApiStickerSet, (
@@ -588,6 +590,13 @@ export type StarGiftInfo = {
   shouldUpgrade?: boolean;
 };
 
+export type TypingDraft = {
+  senderId: string;
+  id: string;
+  date: number;
+  text: ApiFormattedText;
+};
+
 export interface TabThread {
   scrollOffset?: number;
   replyStack?: number[];
@@ -610,6 +619,7 @@ export interface Thread {
   threadInfo?: ApiThreadInfo;
   firstMessageId?: number;
   typingStatus?: ApiTypingStatus;
+  typingDraftIdByRandomId?: Record<string, number>;
 }
 
 export interface ServiceNotification {
@@ -714,6 +724,7 @@ export type SendMessageParams = {
   contact?: ApiContact;
   isSilent?: boolean;
   scheduledAt?: number;
+  scheduleRepeatPeriod?: number;
   groupedId?: string;
   noWebPage?: boolean;
   sendAs?: ApiPeer;
@@ -749,6 +760,7 @@ export type ForwardMessagesParams = {
   messages: ApiMessage[];
   isSilent?: boolean;
   scheduledAt?: number;
+  scheduleRepeatPeriod?: number;
   sendAs?: ApiPeer;
   withMyScore?: boolean;
   noAuthors?: boolean;
@@ -758,4 +770,5 @@ export type ForwardMessagesParams = {
   lastMessageId?: number;
   forwardedLocalMessagesSlice?: ForwardedLocalMessagesSlice;
   messagePriceInStars?: number;
+  effectId?: string;
 };

@@ -1,6 +1,7 @@
 import type {
   ApiAttachBot,
   ApiAttachment,
+  ApiBirthday,
   ApiChat,
   ApiChatAdminRights,
   ApiChatBannedRights,
@@ -22,7 +23,6 @@ import type {
   ApiInputSavedStarGift,
   ApiInputSuggestedPostInfo,
   ApiKeyboardButton,
-  ApiKeyboardButtonSuggestedMessage,
   ApiLimitTypeWithModal,
   ApiMessage,
   ApiMessageEntity,
@@ -33,6 +33,7 @@ import type {
   ApiPaymentStatus,
   ApiPeer,
   ApiPhoto,
+  ApiPremiumGiftCodeOption,
   ApiPremiumSection,
   ApiPreparedInlineMessage,
   ApiPrivacyKey,
@@ -46,7 +47,9 @@ import type {
   ApiSessionData,
   ApiStarGift,
   ApiStarGiftAttributeOriginalDetails,
+  ApiStarGiftRegular,
   ApiStarGiftUnique,
+  ApiStarGiftUpgradePrice,
   ApiStarsSubscription,
   ApiStarsTransaction,
   ApiSticker,
@@ -60,6 +63,7 @@ import type {
   ApiUser,
   ApiVideo,
   BotsPrivacyType,
+  KeyboardButtonSuggestedMessage,
   LinkContext,
   PrivacyVisibility,
 } from '../../api/types';
@@ -145,6 +149,7 @@ export interface ActionPayloads {
     tabId?: number;
   };
   goToAuthQrCode: undefined;
+  loginWithPasskey: undefined;
 
   // stickers & GIFs
   setStickerSearchQuery: { query?: string } & WithTabId;
@@ -248,7 +253,18 @@ export interface ActionPayloads {
     notificationSoundVolume?: number;
   };
   loadLanguages: undefined;
-  loadPrivacySettings: undefined;
+
+  loadPasskeys: undefined;
+  startPasskeyRegistration: WithTabId | undefined;
+  deletePasskey: {
+    id: string;
+  };
+  openPasskeyModal: WithTabId | undefined;
+  closePasskeyModal: WithTabId | undefined;
+
+  loadPrivacySettings: {
+    skipIfCached?: boolean;
+  };
   setPrivacyVisibility: {
     privacyKey: ApiPrivacyKey;
     visibility: PrivacyVisibility;
@@ -461,6 +477,7 @@ export interface ActionPayloads {
     chatId: string;
     messageId: number;
     scheduledAt: number;
+    scheduleRepeatPeriod?: number;
   };
   deleteScheduledMessages: { messageIds: number[] } & WithTabId;
   // Message
@@ -1638,6 +1655,9 @@ export interface ActionPayloads {
   openUniqueGiftBySlug: {
     slug: string;
   } & WithTabId;
+  openGiftAuctionBySlug: {
+    slug: string;
+  } & WithTabId;
   openPreviousStory: WithTabId | undefined;
   openNextStory: WithTabId | undefined;
   setStoryViewerMuted: {
@@ -1700,9 +1720,10 @@ export interface ActionPayloads {
     reaction?: ApiReaction;
     shouldAddToRecent?: boolean;
   } & WithTabId;
-  toggleStealthModal: {
-    isOpen: boolean;
-  } & WithTabId;
+  openStealthModal: ({
+    targetPeerId: string;
+  } | Record<string, never>) & WithTabId;
+  closeStealthModal: WithTabId | undefined;
   activateStealthMode: {
     isForPast?: boolean;
     isForFuture?: boolean;
@@ -1828,6 +1849,13 @@ export interface ActionPayloads {
     bio?: string;
     username?: string;
   } & WithTabId;
+  updateBirthday: {
+    birthday?: ApiBirthday;
+  };
+  openBirthdaySetupModal: {
+    currentBirthday?: ApiBirthday;
+  } & WithTabId;
+  closeBirthdaySetupModal: WithTabId | undefined;
   updateBotProfile: {
     photo?: File;
     firstName?: string;
@@ -1933,6 +1961,7 @@ export interface ActionPayloads {
   forwardMessages: {
     isSilent?: boolean;
     scheduledAt?: number;
+    scheduleRepeatPeriod?: number;
   } & WithTabId;
   setForwardNoAuthors: {
     noAuthors: boolean;
@@ -2084,7 +2113,7 @@ export interface ActionPayloads {
   clickSuggestedMessageButton: {
     chatId: string;
     messageId: number;
-    button: ApiKeyboardButtonSuggestedMessage;
+    button: KeyboardButtonSuggestedMessage;
   } & WithTabId;
 
   switchBotInline: {
@@ -2448,6 +2477,10 @@ export interface ActionPayloads {
   loadAppConfig: {
     hash: number;
   } | undefined;
+  loadPromoData: undefined;
+  dismissSuggestion: {
+    suggestion: string;
+  } & WithTabId;
   loadPeerColors: undefined;
   loadTimezones: undefined;
   openLeftColumnContent: {
@@ -2492,7 +2525,7 @@ export interface ActionPayloads {
     toUserId?: string;
     isSuccess?: boolean;
     isGift?: boolean;
-    monthsAmount?: number;
+    daysAmount?: number;
     gift?: ApiStarGift;
   } & WithTabId) | undefined;
   closePremiumModal: WithTabId | undefined;
@@ -2572,9 +2605,13 @@ export interface ActionPayloads {
 
   openGiftModal: {
     forUserId: string;
+    selectedGift?: ApiStarGift;
     selectedResaleGift?: ApiStarGift;
   } & WithTabId;
   closeGiftModal: WithTabId | undefined;
+  setGiftModalSelectedGift: {
+    gift: ApiPremiumGiftCodeOption | ApiStarGift | undefined;
+  } & WithTabId;
   sendStarGift: StarGiftInfo & WithTabId;
   buyStarGift: {
     peerId: string;
@@ -2625,6 +2662,15 @@ export interface ActionPayloads {
     gift?: ApiSavedStarGift;
   } & WithTabId;
   closeGiftUpgradeModal: WithTabId | undefined;
+  shiftGiftUpgradeNextPrice: WithTabId | undefined;
+
+  openStarGiftPriceDecreaseInfoModal: {
+    prices: ApiStarGiftUpgradePrice[];
+    currentPrice: number;
+    minPrice: number;
+    maxPrice: number;
+  } & WithTabId;
+  closeStarGiftPriceDecreaseInfoModal: WithTabId | undefined;
   upgradeGift: {
     gift: ApiInputSavedStarGift;
     shouldKeepOriginalDetails?: boolean;
@@ -2649,6 +2695,45 @@ export interface ActionPayloads {
     gift: ApiStarGiftUnique;
   } & WithTabId;
   closeGiftInfoValueModal: WithTabId | undefined;
+  openGiftAuctionModal: {
+    gift: ApiStarGiftRegular;
+  } & WithTabId;
+  closeGiftAuctionModal: {
+    shouldKeepActiveAuction?: boolean;
+  } & WithTabId | undefined;
+  openGiftAuctionBidModal: {
+    peerId?: string;
+    message?: string;
+    shouldHideName?: boolean;
+  } & WithTabId | undefined;
+  closeGiftAuctionBidModal: WithTabId | undefined;
+  openGiftAuctionInfoModal: WithTabId | undefined;
+  closeGiftAuctionInfoModal: WithTabId | undefined;
+  openGiftAuctionChangeRecipientModal: {
+    oldPeerId: string;
+    newPeerId: string;
+    message?: string;
+    shouldHideName?: boolean;
+  } & WithTabId;
+  closeGiftAuctionChangeRecipientModal: WithTabId | undefined;
+  openGiftAuctionAcquiredModal: {
+    giftId: string;
+    giftTitle?: string;
+    giftSticker?: ApiSticker;
+  } & WithTabId;
+  closeGiftAuctionAcquiredModal: WithTabId | undefined;
+  sendStarGiftAuctionBid: {
+    giftId: string;
+    bidAmount: number;
+    peerId?: string;
+    message?: ApiFormattedText;
+    shouldHideName?: boolean;
+    isUpdateBid?: boolean;
+  } & WithTabId;
+  loadActiveGiftAuction: {
+    giftId: string;
+  } & WithTabId;
+  clearActiveGiftAuction: WithTabId | undefined;
   processStarGiftWithdrawal: {
     gift: ApiInputSavedStarGift;
     password: string;
