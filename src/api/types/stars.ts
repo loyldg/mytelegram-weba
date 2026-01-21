@@ -28,6 +28,7 @@ export interface ApiStarGiftRegular {
   perUserRemains?: number;
   lockedUntilDate?: number;
   isAuction?: true;
+  auctionSlug?: string;
   giftsPerRound?: number;
   background?: ApiStarGiftBackground;
 }
@@ -58,6 +59,8 @@ export interface ApiStarGiftUnique {
   resaleTonOnly?: true;
   valueCurrency?: string;
   valueAmount?: number;
+  valueUsdAmount?: number;
+  offerMinStars?: number;
 }
 
 export type ApiStarGift = ApiStarGiftRegular | ApiStarGiftUnique;

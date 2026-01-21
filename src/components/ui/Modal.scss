@@ -3,7 +3,8 @@
   z-index: var(--z-modal);
   color: var(--color-text);
 
-  &.confirm {
+  &.confirm,
+  &.pin {
     z-index: var(--z-modal-confirm);
   }
 
@@ -246,5 +247,12 @@
     z-index: 3;
     top: 0.875rem;
     left: 0.875rem;
+  }
+
+  .modal-more-button {
+    position: absolute;
+    z-index: 3;
+    top: 0.875rem;
+    right: 0.875rem;
   }
 }

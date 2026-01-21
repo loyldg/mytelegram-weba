@@ -1,9 +1,7 @@
-import type { TeactNode } from '../../lib/teact/teact';
-
 import type { CallbackAction } from '../../global/types';
 import type { IconName } from '../../types/icons';
-import type { RegularLangFnParameters } from '../../util/localization';
-import type { ApiDocument, ApiFormattedText, ApiPhoto, ApiReaction } from './messages';
+import type { LangFnParameters, RegularLangFnParameters } from '../../util/localization';
+import type { ApiDocument, ApiFormattedText, ApiMessageEntity, ApiPhoto, ApiReaction } from './messages';
 import type { ApiPremiumSection } from './payments';
 import type { ApiBotVerification } from './peers';
 import type { ApiStarsSubscriptionPricing } from './stars';
@@ -123,8 +121,7 @@ export type ApiNotification = {
   localId: string;
   containerSelector?: string;
   type?: 'paidMessage' | undefined;
-  title?: string | RegularLangFnParameters;
-  message: TeactNode | RegularLangFnParameters;
+  title?: string | LangFnParameters;
   cacheBreaker?: string;
   actionText?: string | RegularLangFnParameters;
   action?: CallbackAction | CallbackAction[];
@@ -136,10 +133,17 @@ export type ApiNotification = {
   customEmojiIconId?: string;
   shouldUseCustomIcon?: boolean;
   dismissAction?: CallbackAction;
-};
+} & ({
+  message: string;
+  messageEntities?: ApiMessageEntity[];
+} | {
+  message: LangFnParameters;
+  messageEntities?: undefined;
+});
 
 export type ApiError = {
   message: string;
+  entities?: ApiMessageEntity[];
   hasErrorKey?: boolean;
   isSlowMode?: boolean;
   textParams?: Record<string, string>;
@@ -240,6 +244,7 @@ export interface ApiAppConfig {
   starsPaidMessageCommissionPermille?: number;
   starsPaidMessageAmountMax?: number;
   starsUsdWithdrawRateX1000: number;
+  starsUsdSellRateX1000?: number;
   bandwidthPremiumNotifyPeriod?: number;
   bandwidthPremiumUploadSpeedup?: number;
   bandwidthPremiumDownloadSpeedup?: number;
@@ -288,6 +293,11 @@ export interface ApiAppConfig {
   whitelistedBotIds?: string[];
   arePasskeysAvailable: boolean;
   passkeysMaxCount: number;
+  diceEmojies: string[];
+  diceEmojiesSuccess: Record<string, {
+    value: number;
+    frameStart: number;
+  }>;
 }
 
 export interface ApiConfig {

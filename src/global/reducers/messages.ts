@@ -26,7 +26,10 @@ import {
   areSortedArraysEqual, excludeSortedArray, omit, omitUndefined, pick, pickTruthy, unique,
 } from '../../util/iteratees';
 import { isLocalMessageId, type MessageKey } from '../../util/keys/messageKey';
+import { unload } from '../../util/mediaLoader';
 import {
+  getAllMessageMediaHashes,
+  getMessageStatefulContent,
   hasMessageTtl, isMediaLoadableInViewer, mergeIdRanges, orderHistoryIds, orderPinnedIds,
 } from '../helpers';
 import { getEmojiOnlyCountForMessage } from '../helpers/getEmojiOnlyCountForMessage';
@@ -53,7 +56,7 @@ import {
 } from '../selectors';
 import { removeIdFromSearchResults } from './middleSearch';
 import { updateTabState } from './tabs';
-import { clearMessageTranslation } from './translations';
+import { clearMessageSummary, clearMessageTranslation } from './translations';
 
 type MessageStoreSections = GlobalState['messages']['byChatId'][string];
 
@@ -96,7 +99,9 @@ export function updateCurrentMessageList<T extends GlobalState>(
   }, tabId);
 }
 
-function replaceChatMessages<T extends GlobalState>(global: T, chatId: string, newById: Record<number, ApiMessage>): T {
+export function replaceChatMessages<T extends GlobalState>(
+  global: T, chatId: string, newById: Record<number, ApiMessage>,
+): T {
   return updateMessageStore(global, chatId, {
     byId: newById,
   });
@@ -148,7 +153,8 @@ export function updateThread<T extends GlobalState>(
 export function updateMessageStore<T extends GlobalState>(
   global: T, chatId: string, update: Partial<MessageStoreSections>,
 ): T {
-  const current = global.messages.byChatId[chatId] || { byId: {}, threadsById: {} };
+  const current = global.messages.byChatId[chatId]
+    || { byId: {}, threadsById: {}, summaryById: {} };
 
   return {
     ...global,
@@ -378,6 +384,11 @@ export function deleteChatMessages<T extends GlobalState>(
   messageIds.forEach((messageId) => {
     const message = byId[messageId];
     if (!message) return;
+    const statefulContent = getMessageStatefulContent(global, message);
+    const hashes = getAllMessageMediaHashes(message, statefulContent);
+    hashes.forEach((hash) => {
+      unload(hash);
+    });
     if (isMediaLoadableInViewer(message)) {
       mediaIdsToRemove.push(messageId);
     }
@@ -389,6 +400,7 @@ export function deleteChatMessages<T extends GlobalState>(
     threadMessages.push(messageId);
     updatedThreads.set(threadId, threadMessages);
     global = clearMessageTranslation(global, chatId, messageId);
+    global = clearMessageSummary(global, chatId, messageId);
   });
 
   const deletedForwardedPosts = Object.values(pickTruthy(byId, messageIds)).filter(

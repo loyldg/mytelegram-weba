@@ -416,6 +416,7 @@ function reduceGlobal<T extends GlobalState>(global: T) {
   const reducedGlobal: GlobalState = {
     ...INITIAL_GLOBAL_STATE,
     ...pick(global, [
+      'cacheVersion',
       'appConfig',
       'config',
       'auth',
@@ -443,6 +444,7 @@ function reduceGlobal<T extends GlobalState>(global: T) {
       'availableEffectById',
     ]),
     lastIsChatInfoShown: !getIsMobile() ? global.lastIsChatInfoShown : undefined,
+    stickers: reduceStickers(global),
     customEmojis: reduceCustomEmojis(global),
     users: reduceUsers(global),
     chats: reduceChats(global),
@@ -484,6 +486,15 @@ function reduceSharedState(sharedState: SharedState): SharedState {
 
 export function serializeGlobal<T extends GlobalState>(global: T) {
   return JSON.stringify(reduceGlobal(global));
+}
+
+function reduceStickers<T extends GlobalState>(global: T): GlobalState['stickers'] {
+  const { diceSetIdByEmoji, setsById } = global.stickers;
+  return {
+    ...INITIAL_GLOBAL_STATE.stickers,
+    diceSetIdByEmoji,
+    setsById: pickTruthy(setsById, Object.values(diceSetIdByEmoji || {})),
+  };
 }
 
 function reduceCustomEmojis<T extends GlobalState>(global: T): GlobalState['customEmojis'] {
@@ -712,6 +723,7 @@ function reduceMessages<T extends GlobalState>(global: T): GlobalState['messages
     byChatId[chatId] = {
       byId: cleanedById,
       threadsById,
+      summaryById: {},
     };
   });
 

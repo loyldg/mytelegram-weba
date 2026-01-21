@@ -99,6 +99,12 @@ type ApiStickerSetInfoMissing = {
 
 export type ApiStickerSetInfo = ApiStickerSetInfoShortName | ApiStickerSetInfoId | ApiStickerSetInfoMissing;
 
+export interface StoryboardInfo {
+  storyboardFile: ApiDocument;
+  storyboardMapFile: ApiDocument;
+  frameSize: ApiDimensions;
+}
+
 export interface ApiVideo {
   mediaType: 'video';
   id: string;
@@ -120,6 +126,8 @@ export interface ApiVideo {
   noSound?: boolean;
   waveform?: number[];
   timestamp?: number;
+  altVideos?: ApiVideo[];
+  storyboardInfo?: StoryboardInfo;
 }
 
 export interface ApiAudio {
@@ -294,6 +302,12 @@ export type ApiGame = {
   id: string;
   accessHash: string;
   document?: ApiDocument;
+};
+
+export type ApiDice = {
+  mediaType: 'dice';
+  value: number;
+  emoticon: string;
 };
 
 export type ApiGiveaway = {
@@ -584,7 +598,6 @@ export type MediaContent = {
   text?: ApiFormattedTextWithEmojiOnlyCount;
   photo?: ApiPhoto;
   video?: ApiVideo;
-  altVideos?: ApiVideo[];
   document?: ApiDocument;
   sticker?: ApiSticker;
   contact?: ApiContact;
@@ -601,6 +614,7 @@ export type MediaContent = {
   giveaway?: ApiGiveaway;
   giveawayResults?: ApiGiveawayResults;
   paidMedia?: ApiPaidMedia;
+  dice?: ApiDice;
   ttlSeconds?: number;
 };
 export type MediaContainer = {
@@ -683,6 +697,7 @@ export interface ApiMessage {
   reportDeliveryUntilDate?: number;
   paidMessageStars?: number;
   restrictionReasons?: ApiRestrictionReason[];
+  summaryLanguageCode?: string;
 
   isTypingDraft?: boolean; // Local field
 }
@@ -936,6 +951,12 @@ export interface KeyboardButtonOpenThread {
   text: string;
 }
 
+export interface KeyboardButtonGiftOffer {
+  type: 'giftOffer';
+  text: string;
+  buttonType: 'accept' | 'reject';
+}
+
 export type ApiKeyboardButton = (
   ApiKeyboardButtonSimple
   | ApiKeyboardButtonReceipt
@@ -950,6 +971,7 @@ export type ApiKeyboardButton = (
   | ApiKeyboardButtonCopy
   | KeyboardButtonSuggestedMessage
   | KeyboardButtonOpenThread
+  | KeyboardButtonGiftOffer
 );
 
 export type ApiKeyboardButtons = ApiKeyboardButton[][];

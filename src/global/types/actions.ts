@@ -312,7 +312,9 @@ export interface ActionPayloads {
   };
 
   // Message search
-  openMiddleSearch: WithTabId | undefined;
+  openMiddleSearch: {
+    fromPeerId?: string;
+  } & WithTabId | undefined;
   closeMiddleSearch: WithTabId | undefined;
   updateMiddleSearch: {
     chatId: string;
@@ -495,6 +497,9 @@ export interface ActionPayloads {
   sendMessages: {
     sendParams: SendMessageParams[];
   };
+  sendDiceInCurrentChat: {
+    emoji: string;
+  } & WithTabId;
   sendInviteMessages: {
     chatId: string;
     userIds: string[];
@@ -1512,6 +1517,11 @@ export interface ActionPayloads {
     messageIds: number[];
     toLanguageCode?: string;
   };
+  summarizeMessage: {
+    chatId: string;
+    id: number;
+    toLanguageCode?: string;
+  };
 
   // Reactions
   loadTopReactions: undefined;
@@ -2006,6 +2016,7 @@ export interface ActionPayloads {
   loadRecentStickers: undefined;
   loadFavoriteStickers: undefined;
   loadFeaturedStickers: undefined;
+  loadDiceStickers: undefined;
 
   reorderStickerSets: {
     isCustomEmoji?: boolean;
@@ -2699,17 +2710,23 @@ export interface ActionPayloads {
     gift: ApiStarGiftRegular;
   } & WithTabId;
   closeGiftAuctionModal: {
-    shouldKeepActiveAuction?: boolean;
+    shouldKeepAuction?: boolean;
   } & WithTabId | undefined;
   openGiftAuctionBidModal: {
+    auctionGiftId: string;
     peerId?: string;
     message?: string;
     shouldHideName?: boolean;
-  } & WithTabId | undefined;
+  } & WithTabId;
   closeGiftAuctionBidModal: WithTabId | undefined;
-  openGiftAuctionInfoModal: WithTabId | undefined;
+  openGiftAuctionInfoModal: {
+    auctionGiftId: string;
+  } & WithTabId;
   closeGiftAuctionInfoModal: WithTabId | undefined;
+  openAboutStarGiftModal: WithTabId | undefined;
+  closeAboutStarGiftModal: WithTabId | undefined;
   openGiftAuctionChangeRecipientModal: {
+    auctionGiftId: string;
     oldPeerId: string;
     newPeerId: string;
     message?: string;
@@ -2730,10 +2747,9 @@ export interface ActionPayloads {
     shouldHideName?: boolean;
     isUpdateBid?: boolean;
   } & WithTabId;
-  loadActiveGiftAuction: {
+  loadGiftAuction: {
     giftId: string;
-  } & WithTabId;
-  clearActiveGiftAuction: WithTabId | undefined;
+  };
   processStarGiftWithdrawal: {
     gift: ApiInputSavedStarGift;
     password: string;
@@ -2763,6 +2779,13 @@ export interface ActionPayloads {
     details: ApiStarGiftAttributeOriginalDetails;
   } & WithTabId;
   closeGiftDescriptionRemoveModal: WithTabId | undefined;
+  openGiftOfferAcceptModal: {
+    peerId: string;
+    messageId: number;
+    gift: ApiStarGiftUnique;
+    price: ApiTypeCurrencyAmount;
+  } & WithTabId;
+  closeGiftOfferAcceptModal: WithTabId | undefined;
   updateSelectedGiftCollection: {
     peerId: string;
     collectionId: number;
@@ -2798,6 +2821,13 @@ export interface ActionPayloads {
   loadStarGiftCollections: {
     peerId: string;
     hash?: string;
+  } & WithTabId;
+
+  acceptStarGiftOffer: {
+    messageId: number;
+  } & WithTabId;
+  declineStarGiftOffer: {
+    messageId: number;
   } & WithTabId;
 
   openStarsGiftModal: ({

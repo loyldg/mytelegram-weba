@@ -1,3 +1,4 @@
+/* eslint-disable react-x/no-unnecessary-use-prefix */
 import type { ReactElement } from 'react';
 
 import { DEBUG, DEBUG_MORE } from '../../config';
@@ -80,6 +81,7 @@ interface ComponentInstance {
   name: string;
   props: Props;
   renderedValue?: any;
+  lastMountNamespace?: string;
   mountState: MountState;
   context?: Record<string, Signal<unknown>>;
   hooks?: {
