@@ -64,7 +64,7 @@ type StateProps = {
   myUniqueGiftIds?: string[];
   starBalance?: ApiStarsAmount;
   peer?: ApiPeer;
-  isSelf?: boolean;
+  currentUserId?: string;
   disallowedGifts?: ApiDisallowedGifts;
   resaleGiftsCount?: number;
   areResaleGiftsLoading?: boolean;
@@ -88,7 +88,7 @@ const GiftModal: FC<OwnProps & StateProps> = ({
   myUniqueGiftIds,
   starBalance,
   peer,
-  isSelf,
+  currentUserId,
   disallowedGifts,
   resaleGiftsCount,
   areResaleGiftsLoading,
@@ -105,7 +105,6 @@ const GiftModal: FC<OwnProps & StateProps> = ({
     loadMyUniqueGifts,
     openGiftTransferConfirmModal,
     setGiftModalSelectedGift,
-    clearActiveGiftAuction,
   } = getActions();
   const dialogRef = useRef<HTMLDivElement>();
   const transitionRef = useRef<HTMLDivElement>();
@@ -116,9 +115,11 @@ const GiftModal: FC<OwnProps & StateProps> = ({
 
   const isOpen = Boolean(modal);
   const renderingModal = useCurrentOrPrev(modal);
+  const renderingPeer = useCurrentOrPrev(peer);
 
-  const user = peer && isApiPeerUser(peer) ? peer : undefined;
-  const chat = peer && isApiPeerChat(peer) ? peer : undefined;
+  const user = renderingPeer && isApiPeerUser(renderingPeer) ? renderingPeer : undefined;
+  const chat = renderingPeer && isApiPeerChat(renderingPeer) ? renderingPeer : undefined;
+  const isSelf = Boolean(currentUserId && renderingModal?.forPeerId === currentUserId);
 
   const selectedGift = renderingModal?.selectedGift;
   const [shouldShowMainScreenHeader, setShouldShowMainScreenHeader] = useState(false);
@@ -440,7 +441,6 @@ const GiftModal: FC<OwnProps & StateProps> = ({
     }
     if (isGiftScreen) {
       setGiftModalSelectedGift({ gift: undefined });
-      clearActiveGiftAuction();
       return;
     }
     handleCloseModal();
@@ -461,7 +461,7 @@ const GiftModal: FC<OwnProps & StateProps> = ({
           <Avatar
             className={styles.avatar}
             size={AVATAR_SIZE}
-            peer={peer}
+            peer={renderingPeer}
             onMouseMove={handleAvatarMouseMove}
           />
           <InteractiveSparkles
@@ -614,7 +614,6 @@ export default memo(withGlobal<OwnProps>((global, { modal }): Complete<StateProp
   } = global;
 
   const peer = modal?.forPeerId ? selectPeer(global, modal.forPeerId) : undefined;
-  const isSelf = Boolean(currentUserId && modal?.forPeerId === currentUserId);
   const userFullInfo = peer ? selectUserFullInfo(global, peer?.id) : undefined;
 
   const { resaleGifts } = selectTabState(global);
@@ -630,7 +629,7 @@ export default memo(withGlobal<OwnProps>((global, { modal }): Complete<StateProp
     myUniqueGiftIds: global.myUniqueGifts?.ids,
     starBalance: stars?.balance,
     peer,
-    isSelf,
+    currentUserId,
     disallowedGifts: userFullInfo?.disallowedGifts,
     resaleGiftsCount,
     areResaleGiftsLoading,

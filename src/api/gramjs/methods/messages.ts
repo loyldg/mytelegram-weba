@@ -301,7 +301,7 @@ export function sendMessageLocal(
   const {
     chat, lastMessageId, text, entities, replyInfo, suggestedPostInfo, attachment, sticker, story, gif, poll, todo,
     contact, scheduledAt, scheduleRepeatPeriod, groupedId, sendAs, wasDrafted, isInvertedMedia, effectId, isPending,
-    messagePriceInStars,
+    messagePriceInStars, dice,
   } = params;
 
   if (!chat) return undefined;
@@ -309,7 +309,7 @@ export function sendMessageLocal(
   const {
     message: localMessage,
     poll: localPoll,
-  } = buildLocalMessage(
+  } = buildLocalMessage({
     chat,
     lastMessageId,
     text,
@@ -331,7 +331,8 @@ export function sendMessageLocal(
     effectId,
     isPending,
     messagePriceInStars,
-  );
+    dice,
+  });
 
   sendApiUpdate({
     '@type': localMessage.isScheduled ? 'newScheduledMessage' : 'newMessage',
@@ -352,7 +353,7 @@ export function sendApiMessage(
 ) {
   const {
     chat, text, entities, replyInfo, suggestedPostInfo, suggestedMedia,
-    attachment, sticker, story, gif, poll, todo, contact,
+    attachment, sticker, story, gif, poll, todo, contact, dice,
 
     isSilent, scheduledAt, scheduleRepeatPeriod, groupedId, noWebPage, sendAs, shouldUpdateStickerSetOrder,
     isInvertedMedia, effectId, webPageMediaSize, webPageUrl, messagePriceInStars,
@@ -464,6 +465,10 @@ export function sendApiMessage(
         firstName: contact.firstName,
         lastName: contact.lastName,
         vcard: DEFAULT_PRIMITIVES.STRING,
+      });
+    } else if (dice) {
+      media = new GramJs.InputMediaDice({
+        emoticon: dice,
       });
     }
 
@@ -1471,6 +1476,7 @@ export async function searchMessagesInChat({
   offsetId,
   addOffset,
   limit,
+  fromPeer,
 }: {
   peer: ApiPeer;
   isSavedDialog?: boolean;
@@ -1483,6 +1489,7 @@ export async function searchMessagesInChat({
   limit: number;
   minDate?: number;
   maxDate?: number;
+  fromPeer?: ApiPeer;
 }): Promise<SearchResults | undefined> {
   let filter;
   switch (type) {
@@ -1514,6 +1521,7 @@ export async function searchMessagesInChat({
   }
 
   const inputPeer = buildInputPeer(peer.id, peer.accessHash);
+  const inputFromPeer = fromPeer ? buildInputPeer(fromPeer.id, fromPeer.accessHash) : undefined;
 
   const result = await invokeRequest(new GramJs.messages.Search({
     peer: isSavedDialog ? new GramJs.InputPeerSelf() : inputPeer,
@@ -1522,6 +1530,7 @@ export async function searchMessagesInChat({
     topMsgId: threadId !== MAIN_THREAD_ID && !isSavedDialog ? Number(threadId) : undefined,
     filter,
     q: query,
+    fromId: inputFromPeer,
     minDate: minDate ?? DEFAULT_PRIMITIVES.INT,
     maxDate: maxDate ?? DEFAULT_PRIMITIVES.INT,
     maxId: DEFAULT_PRIMITIVES.INT,
@@ -2346,6 +2355,22 @@ export async function translateText(params: TranslateTextParams) {
   }
 
   return formattedText;
+}
+
+export async function fetchMessageSummary({
+  chat, id, toLanguageCode,
+}: {
+  chat: ApiChat; id: number; toLanguageCode?: string;
+}) {
+  const result = await invokeRequest(new GramJs.messages.SummarizeText({
+    peer: buildInputPeer(chat.id, chat.accessHash),
+    id,
+    toLang: toLanguageCode,
+  }));
+
+  if (!result) return undefined;
+
+  return buildApiFormattedText(result);
 }
 
 function handleMultipleLocalMessagesUpdate(

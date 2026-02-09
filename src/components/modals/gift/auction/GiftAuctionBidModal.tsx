@@ -60,9 +60,9 @@ const GiftAuctionBidModal = ({
   currentUserPeer,
   topBidderIds,
 }: OwnProps & StateProps) => {
-  const { closeGiftAuctionBidModal, sendStarGiftAuctionBid, loadActiveGiftAuction } = getActions();
+  const { closeGiftAuctionBidModal, sendStarGiftAuctionBid, loadGiftAuction } = getActions();
 
-  const isOpen = Boolean(modal?.isOpen);
+  const isOpen = Boolean(modal);
 
   const renderingAuctionState = useCurrentOrPrev(auctionState);
   const renderingTopBidderIds = useCurrentOrPrev(topBidderIds);
@@ -100,14 +100,6 @@ const GiftAuctionBidModal = ({
 
   const sliderMaxValue = Math.ceil(currentMinBid / BID_ROUNDING_STEP) * BID_ROUNDING_STEP + MAX_BID_AMOUNT_STEP;
 
-  const currentProgress = (currentMinBid - baseMinBid) / (sliderMaxValue - baseMinBid);
-  const adjustedMinBid = Math.floor(
-    (currentMinBid - MIN_SLIDER_PROGRESS * sliderMaxValue) / (1 - MIN_SLIDER_PROGRESS),
-  );
-  const giftMinBid = currentProgress > MIN_SLIDER_PROGRESS
-    ? Math.max(1, adjustedMinBid)
-    : baseMinBid;
-
   useEffect(() => {
     setSelectedBidAmount(currentMinBid);
   }, [currentMinBid]);
@@ -133,13 +125,17 @@ const GiftAuctionBidModal = ({
   });
 
   const handleTimerEnd = useLastCallback(() => {
-    if (!renderingAuctionState?.gift.id) return;
-    loadActiveGiftAuction({ giftId: renderingAuctionState.gift.id });
+    if (!modal?.auctionGiftId || !isOpen) return;
+    loadGiftAuction({ giftId: modal.auctionGiftId });
+  });
+
+  const handleRequestCustomValue = useLastCallback(() => {
+    openCustomBidModal();
   });
 
   const handleBadgeClick = useLastCallback(() => {
     if (isAtMaxValue) {
-      openCustomBidModal();
+      handleRequestCustomValue();
     }
   });
 
@@ -354,12 +350,14 @@ const GiftAuctionBidModal = ({
       <StarSlider
         className={styles.slider}
         defaultValue={currentMinBid}
-        minValue={giftMinBid}
+        minValue={baseMinBid}
         minAllowedValue={currentMinBid}
+        minAllowedProgress={MIN_SLIDER_PROGRESS}
         maxValue={sliderMaxValue}
         floatingBadgeDescription={sliderSecondaryText}
         onChange={handleAmountChange}
         onBadgeClick={handleBadgeClick}
+        onCustomValueClick={handleRequestCustomValue}
         shouldUseDynamicColor
         shouldAllowCustomValue
       />
@@ -403,17 +401,20 @@ const GiftAuctionBidModal = ({
 
 export default memo(withGlobal<OwnProps>(
   (global): Complete<StateProps> => {
-    const { activeGiftAuction } = selectTabState(global);
     const { stars, currentUserId } = global;
+    const { giftAuctionBidModal } = selectTabState(global);
+    const auctionGiftId = giftAuctionBidModal?.auctionGiftId;
+    const giftAuction = auctionGiftId
+      ? global.giftAuctionByGiftId?.[auctionGiftId] : undefined;
 
     const currentUserPeer = currentUserId ? selectPeer(global, currentUserId) : undefined;
 
-    const topBidderIds = activeGiftAuction?.state.type === 'active'
-      ? activeGiftAuction.state.topBidders
+    const topBidderIds = giftAuction?.state.type === 'active'
+      ? giftAuction.state.topBidders
       : undefined;
 
     return {
-      auctionState: activeGiftAuction,
+      auctionState: giftAuction,
       starBalance: stars?.balance,
       currentUserPeer,
       topBidderIds,

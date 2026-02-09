@@ -29,6 +29,7 @@ import { IS_MULTIACCOUNT_SUPPORTED } from '../../../util/browser/globalEnvironme
 import { IS_TAURI } from '../../../util/browser/globalEnvironment';
 import { getPromptInstall } from '../../../util/installPrompt';
 import { switchPermanentWebVersion } from '../../../util/permanentWebVersion';
+import { getSystemTheme } from '../../../util/systemTheme';
 
 import { useFolderManagerForUnreadCounters } from '../../../hooks/useFolderManager';
 import useLang from '../../../hooks/useLang';
@@ -37,6 +38,7 @@ import useLastCallback from '../../../hooks/useLastCallback';
 import AttachBotItem from '../../middle/composer/AttachBotItem';
 import MenuItem from '../../ui/MenuItem';
 import MenuSeparator from '../../ui/MenuSeparator';
+import NestedMenuItem from '../../ui/NestedMenuItem';
 import Switcher from '../../ui/Switcher';
 import Toggle from '../../ui/Toggle';
 import AccountMenuItems from './AccountMenuItems';
@@ -47,6 +49,7 @@ type OwnProps = {
   onSelectArchived: NoneToVoidFunction;
   onBotMenuOpened: NoneToVoidFunction;
   onBotMenuClosed: NoneToVoidFunction;
+  footer?: string;
 };
 
 type StateProps = {
@@ -72,6 +75,7 @@ const LeftSideMenuItems = ({
   onSelectSettings,
   onBotMenuOpened,
   onBotMenuClosed,
+  footer,
 }: OwnProps & StateProps) => {
   const {
     openChat,
@@ -103,9 +107,10 @@ const LeftSideMenuItems = ({
   const handleDarkModeToggle = useLastCallback((e: React.SyntheticEvent<HTMLElement>) => {
     e.stopPropagation();
     const newTheme = theme === 'light' ? 'dark' : 'light';
+    const shouldUseSystemTheme = newTheme === getSystemTheme();
 
     setSharedSettingOption({ theme: newTheme });
-    setSharedSettingOption({ shouldUseSystemTheme: false });
+    setSharedSettingOption({ shouldUseSystemTheme });
   });
 
   const handleAnimationLevelChange = useLastCallback((e: React.SyntheticEvent<HTMLElement>) => {
@@ -196,63 +201,74 @@ const LeftSideMenuItems = ({
       >
         {lang('MenuSettings')}
       </MenuItem>
-      <MenuItem
-        icon="darkmode"
-        onClick={handleDarkModeToggle}
+      <NestedMenuItem
+        icon="more"
+        footer={footer}
+        submenu={(
+          <>
+            <MenuItem
+              icon="darkmode"
+              onClick={handleDarkModeToggle}
+            >
+              <span className="menu-item-name">{lang('MenuNightMode')}</span>
+              <Switcher
+                id="darkmode"
+                label={lang(theme === 'dark' ? 'AriaMenuDisableNightMode' : 'AriaMenuEnableNightMode')}
+                checked={theme === 'dark'}
+                noAnimation
+              />
+            </MenuItem>
+            <MenuItem
+              icon="animations"
+              onClick={handleAnimationLevelChange}
+            >
+              <span className="menu-item-name capitalize">{lang('MenuAnimationsSwitch')}</span>
+              <Toggle value={animationLevelValue} />
+            </MenuItem>
+            <MenuSeparator />
+            <MenuItem
+              icon="help"
+              onClick={handleOpenTipsChat}
+            >
+              {lang('MenuTelegramFeatures')}
+            </MenuItem>
+            <MenuItem
+              icon="bug"
+              onClick={handleBugReportClick}
+            >
+              {lang('MenuReportBug')}
+            </MenuItem>
+            {IS_BETA && (
+              <MenuItem
+                icon="permissions"
+                onClick={handleChangelogClick}
+              >
+                {lang('MenuBetaChangelog')}
+              </MenuItem>
+            )}
+            {withOtherVersions && (
+              <MenuItem
+                icon="K"
+                isCharIcon
+                href={`${WEB_VERSION_BASE}k`}
+                onClick={handleSwitchToWebK}
+              >
+                {lang('MenuSwitchToK')}
+              </MenuItem>
+            )}
+            {canInstall && (
+              <MenuItem
+                icon="install"
+                onClick={getPromptInstall()}
+              >
+                {lang('MenuInstallApp')}
+              </MenuItem>
+            )}
+          </>
+        )}
       >
-        <span className="menu-item-name">{lang('MenuNightMode')}</span>
-        <Switcher
-          id="darkmode"
-          label={lang(theme === 'dark' ? 'AriaMenuDisableNightMode' : 'AriaMenuEnableNightMode')}
-          checked={theme === 'dark'}
-          noAnimation
-        />
-      </MenuItem>
-      <MenuItem
-        icon="animations"
-        onClick={handleAnimationLevelChange}
-      >
-        <span className="menu-item-name capitalize">{lang('MenuAnimationsSwitch')}</span>
-        <Toggle value={animationLevelValue} />
-      </MenuItem>
-      <MenuItem
-        icon="help"
-        onClick={handleOpenTipsChat}
-      >
-        {lang('MenuTelegramFeatures')}
-      </MenuItem>
-      <MenuItem
-        icon="bug"
-        onClick={handleBugReportClick}
-      >
-        {lang('MenuReportBug')}
-      </MenuItem>
-      {IS_BETA && (
-        <MenuItem
-          icon="permissions"
-          onClick={handleChangelogClick}
-        >
-          {lang('MenuBetaChangelog')}
-        </MenuItem>
-      )}
-      {withOtherVersions && (
-        <MenuItem
-          icon="K"
-          isCharIcon
-          href={`${WEB_VERSION_BASE}k`}
-          onClick={handleSwitchToWebK}
-        >
-          {lang('MenuSwitchToK')}
-        </MenuItem>
-      )}
-      {canInstall && (
-        <MenuItem
-          icon="install"
-          onClick={getPromptInstall()}
-        >
-          {lang('MenuInstallApp')}
-        </MenuItem>
-      )}
+        {lang('MenuMore')}
+      </NestedMenuItem>
     </>
   );
 };

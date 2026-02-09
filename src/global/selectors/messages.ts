@@ -13,6 +13,7 @@ import type {
   ChatTranslatedMessages,
   MessageListType,
   TabThread,
+  TextSummary,
   Thread,
   ThreadId,
 } from '../../types';
@@ -726,7 +727,7 @@ export function selectAllowedMessageActionsSlow<T extends GlobalState>(
     ) && !(
       content.sticker || content.contact || content.pollId || content.action
       || (content.video?.isRound) || content.location || content.invoice || content.giveaway || content.giveawayResults
-      || isDocumentSticker
+      || isDocumentSticker || content.dice
     )
     && !isForwarded
     && !message.viaBotId
@@ -763,7 +764,7 @@ export function selectAllowedMessageActionsSlow<T extends GlobalState>(
   const canReport = !isPrivate && !isOwn;
 
   const canDeleteForAll = canDelete && !chat.isForbidden && (
-    (isPrivate && !isChatWithSelf && !isBotChat)
+    (isPrivate && !isChatWithSelf && !isBotChat && !content.dice)
     || (isBasicGroup && (
       isOwn || getHasAdminRight(chat, 'deleteMessages') || chat.isCreator
     ))
@@ -1462,6 +1463,20 @@ export function selectForwardsContainVoiceMessages<T extends GlobalState>(
     const message = chatMessages[messageId];
     return Boolean(message.content.voice) || Boolean(message.content.video?.isRound);
   });
+}
+
+export function selectMessageSummary<T extends GlobalState>(
+  global: T, chatId: string, messageId: number, toLanguageCode?: string,
+): TextSummary | undefined {
+  const message = selectChatMessage(global, chatId, messageId);
+  if (!message?.summaryLanguageCode) return undefined;
+
+  if (toLanguageCode && toLanguageCode !== message.summaryLanguageCode) {
+    const messageTranslations = selectMessageTranslations(global, chatId, toLanguageCode);
+    return messageTranslations[messageId]?.summary;
+  }
+
+  return global.messages.byChatId[chatId].summaryById[messageId];
 }
 
 export function selectChatTranslations<T extends GlobalState>(

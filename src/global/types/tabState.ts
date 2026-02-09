@@ -45,7 +45,6 @@ import type {
   ApiStarGiftAttributeCounter,
   ApiStarGiftAttributeOriginalDetails,
   ApiStarGiftAuctionAcquiredGift,
-  ApiStarGiftAuctionState,
   ApiStarGiftUnique,
   ApiStarGiftUpgradePrice,
   ApiStarGiveawayOption,
@@ -53,6 +52,7 @@ import type {
   ApiStarsTransaction,
   ApiStarTopupOption,
   ApiSticker,
+  ApiThumbnail,
   ApiTypeCurrencyAmount,
   ApiTypePrepaidGiveaway,
   ApiTypeStoryView,
@@ -707,7 +707,6 @@ export type TabState = {
     selectedResaleGift?: ApiStarGift;
     selectedGift?: ApiPremiumGiftCodeOption | ApiStarGift;
   };
-  activeGiftAuction?: ApiStarGiftAuctionState;
   chatRefundModal?: {
     userId: string;
     starsToRefund: number;
@@ -872,6 +871,13 @@ export type TabState = {
     details: ApiStarGiftAttributeOriginalDetails;
   };
 
+  giftOfferAcceptModal?: {
+    peerId: string;
+    messageId: number;
+    gift: ApiStarGiftUnique;
+    price: ApiTypeCurrencyAmount;
+  };
+
   giftUpgradeModal?: {
     sampleAttributes: ApiStarGiftAttribute[];
     recipientId?: string;
@@ -894,22 +900,28 @@ export type TabState = {
   };
 
   giftAuctionModal?: {
-    isOpen?: boolean;
+    auctionGiftId: string;
+    sampleAttributes?: ApiStarGiftAttribute[];
   };
 
   giftAuctionBidModal?: {
-    isOpen?: boolean;
+    auctionGiftId: string;
     peerId?: string;
     message?: string;
     shouldHideName?: boolean;
   };
 
   giftAuctionInfoModal?: {
-    isOpen?: boolean;
+    auctionGiftId: string;
+  };
+
+  aboutStarGiftModal?: {
+    videoId?: string;
+    videoThumbnail?: ApiThumbnail;
   };
 
   giftAuctionChangeRecipientModal?: {
-    isOpen?: boolean;
+    auctionGiftId: string;
     oldPeerId?: string;
     newPeerId?: string;
     message?: string;

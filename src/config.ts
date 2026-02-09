@@ -61,7 +61,7 @@ export const MEDIA_PROGRESSIVE_CACHE_DISABLED = false;
 export const MEDIA_PROGRESSIVE_CACHE_NAME = 'tt-media-progressive';
 export const MEDIA_CACHE_MAX_BYTES = 512 * 1024; // 512 KB
 export const CUSTOM_BG_CACHE_NAME = 'tt-custom-bg';
-export const LANG_CACHE_NAME = 'tt-lang-packs-v50';
+export const LANG_CACHE_NAME = 'tt-lang-packs-v51';
 export const ASSET_CACHE_NAME = 'tt-assets';
 export const AUTODOWNLOAD_FILESIZE_MB_LIMITS = [1, 5, 10, 50, 100, 500];
 export const DATA_BROADCAST_CHANNEL_PREFIX = 'tt-global';
@@ -289,6 +289,9 @@ export const CONTENT_TYPES_WITH_PREVIEW = new Set([
   ...SUPPORTED_VIDEO_CONTENT_TYPES,
 ]);
 
+export const STORYBOARD_MIME = 'application/x-tgstoryboard';
+export const STORYBOARD_MAP_MIME = 'application/x-tgstoryboardmap';
+
 // Taken from https://github.com/telegramdesktop/tdesktop/blob/41d9a9fcbd0c809c60ddbd9350791b1436aff7d9/Telegram/SourceFiles/ui/boxes/choose_language_box.cpp#L28
 export const SUPPORTED_TRANSLATION_LANGUAGES = [
   // Official
@@ -370,7 +373,7 @@ export const FRAGMENT_PHONE_LENGTH = 11;
 export const BOT_VERIFICATION_PEERS_LIMIT = 20;
 
 export const LIGHT_THEME_BG_COLOR = '#99BA92';
-export const DARK_THEME_BG_COLOR = '#0F0F0F';
+export const DARK_THEME_BG_COLOR = '#000000';
 export const DEFAULT_PATTERN_COLOR = '#4A8E3A8C';
 export const DARK_THEME_PATTERN_COLOR = '#48576166';
 export const PEER_COLOR_BG_OPACITY = '1a';
@@ -456,3 +459,5 @@ export const DEFAULT_RESALE_GIFTS_FILTER_OPTIONS: ResaleGiftsFilterOptions = {
 };
 
 export const ACCOUNT_TTL_OPTIONS = [1, 3, 6, 12, 18, 24];
+
+export const SLOT_MACHINE_EMOJI = '🎰';

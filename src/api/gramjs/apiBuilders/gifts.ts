@@ -35,6 +35,7 @@ export function buildApiStarGift(starGift: GramJs.TypeStarGift): ApiStarGift {
     const {
       id, num, ownerId, ownerName, title, attributes, availabilityIssued, availabilityTotal, slug, ownerAddress,
       giftAddress, resellAmount, releasedBy, resaleTonOnly, requirePremium, valueCurrency, valueAmount, giftId,
+      valueUsdAmount,
     } = starGift;
 
     return {
@@ -56,14 +57,17 @@ export function buildApiStarGift(starGift: GramJs.TypeStarGift): ApiStarGift {
       resaleTonOnly,
       valueCurrency,
       valueAmount: toJSNumber(valueAmount),
+      valueUsdAmount: toJSNumber(valueUsdAmount),
       regularGiftId: giftId.toString(),
+      offerMinStars: starGift.offerMinStars,
     };
   }
 
   const {
     id, limited, stars, availabilityRemains, availabilityTotal, convertStars, firstSaleDate, lastSaleDate, soldOut,
     birthday, upgradeStars, resellMinStars, title, availabilityResale, releasedBy,
-    requirePremium, limitedPerUser, perUserTotal, perUserRemains, lockedUntilDate, auction, giftsPerRound, background,
+    requirePremium, limitedPerUser, perUserTotal, perUserRemains, lockedUntilDate, auction, auctionSlug, giftsPerRound,
+    background,
   } = starGift;
 
   addDocumentToLocalDb(starGift.sticker);
@@ -94,6 +98,7 @@ export function buildApiStarGift(starGift: GramJs.TypeStarGift): ApiStarGift {
     perUserRemains,
     lockedUntilDate,
     isAuction: auction,
+    auctionSlug,
     giftsPerRound,
     background: background ? {
       centerColor: int2hex(background.centerColor),

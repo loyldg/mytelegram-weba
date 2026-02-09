@@ -19,6 +19,7 @@ import CollectibleInfoModal from './collectible/CollectibleInfoModal.async';
 import DeleteAccountModal from './deleteAccount/DeleteAccountModal.async';
 import EmojiStatusAccessModal from './emojiStatusAccess/EmojiStatusAccessModal.async';
 import FrozenAccountModal from './frozenAccount/FrozenAccountModal.async';
+import AboutStarGiftModal from './gift/AboutStarGiftModal.async';
 import GiftAuctionAcquiredModal from './gift/auction/GiftAuctionAcquiredModal.async';
 import GiftAuctionBidModal from './gift/auction/GiftAuctionBidModal.async';
 import GiftAuctionChangeRecipientModal from './gift/auction/GiftAuctionChangeRecipientModal.async';
@@ -28,6 +29,7 @@ import PremiumGiftModal from './gift/GiftModal.async';
 import GiftInfoModal from './gift/info/GiftInfoModal.async';
 import GiftLockedModal from './gift/locked/GiftLockedModal.async';
 import GiftDescriptionRemoveModal from './gift/message/GiftDescriptionRemoveModal.async';
+import GiftOfferAcceptModal from './gift/offer/GiftOfferAcceptModal.async';
 import GiftRecipientPicker from './gift/recipient/GiftRecipientPicker.async';
 import GiftResalePriceComposerModal from './gift/resale/GiftResalePriceComposerModal.async';
 import StarGiftPriceDecreaseInfoModal from './gift/StarGiftPriceDecreaseInfoModal.async';
@@ -105,6 +107,7 @@ type ModalKey = keyof Pick<TabState,
   'giftAuctionChangeRecipientModal' |
   'giftAuctionAcquiredModal' |
   'starGiftPriceDecreaseInfoModal' |
+  'aboutStarGiftModal' |
   'monetizationVerificationModal' |
   'giftWithdrawModal' |
   'preparedMessageModal' |
@@ -113,6 +116,7 @@ type ModalKey = keyof Pick<TabState,
   'giftTransferModal' |
   'giftTransferConfirmModal' |
   'giftDescriptionRemoveModal' |
+  'giftOfferAcceptModal' |
   'chatRefundModal' |
   'priceConfirmModal' |
   'isFrozenAccountModalOpen' |
@@ -177,6 +181,7 @@ const MODALS: ModalRegistry = {
   giftAuctionChangeRecipientModal: GiftAuctionChangeRecipientModal,
   giftAuctionAcquiredModal: GiftAuctionAcquiredModal,
   starGiftPriceDecreaseInfoModal: StarGiftPriceDecreaseInfoModal,
+  aboutStarGiftModal: AboutStarGiftModal,
   monetizationVerificationModal: VerificationMonetizationModal,
   giftWithdrawModal: GiftWithdrawModal,
   giftStatusInfoModal: GiftStatusInfoModal,
@@ -185,6 +190,7 @@ const MODALS: ModalRegistry = {
   giftTransferModal: GiftTransferModal,
   giftTransferConfirmModal: GiftTransferConfirmModal,
   giftDescriptionRemoveModal: GiftDescriptionRemoveModal,
+  giftOfferAcceptModal: GiftOfferAcceptModal,
   chatRefundModal: ChatRefundModal,
   priceConfirmModal: PriceConfirmModal,
   isFrozenAccountModalOpen: FrozenAccountModal,

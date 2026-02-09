@@ -29,6 +29,7 @@ import {
 } from '../apiBuilders/chats';
 import {
   buildApiFormattedText,
+  buildApiMessageEntity,
   buildApiPhoto, buildApiUsernames, buildPrivacyRules,
 } from '../apiBuilders/common';
 import { buildApiStarGiftAuctionUserState, buildApiTypeStarGiftAuctionState } from '../apiBuilders/gifts';
@@ -242,6 +243,16 @@ export function updater(update: Update) {
             },
           });
         }
+      } else if (action instanceof GramJs.MessageActionChatJoinedByLink) {
+        const { fromId } = update.message;
+        if (fromId instanceof GramJs.PeerUser && update._entities?.some((e): e is GramJs.User => (
+          e instanceof GramJs.User && Boolean(e.self) && e.id === fromId.userId
+        ))) {
+          sendApiUpdate({
+            '@type': 'updateChatJoin',
+            id: message.chatId,
+          });
+        }
       } else if (action instanceof GramJs.MessageActionChatAddUser) {
         if (update._entities && update._entities.some((e): e is GramJs.User => (
           e instanceof GramJs.User && Boolean(e.self) && action.users.includes(e.id)
@@ -421,6 +432,7 @@ export function updater(update: Update) {
         '@type': 'error',
         error: {
           message: update.message,
+          entities: update.entities.map(buildApiMessageEntity),
         },
       });
     } else {
