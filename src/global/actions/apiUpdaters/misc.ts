@@ -21,9 +21,9 @@ import {
   updatePeersWithStories,
   updatePoll,
   updateStealthMode,
-  updateThreadInfos,
 } from '../../reducers';
 import { updateTabState } from '../../reducers/tabs';
+import { updateThreadInfo } from '../../reducers/threads';
 import {
   selectPeer,
   selectPeerStories,
@@ -39,7 +39,11 @@ addActionHandler('apiUpdate', (global, actions, update): ActionReturnType => {
       } = update;
       if (users) global = addUsers(global, users);
       if (chats) global = addChats(global, chats);
-      if (threadInfos) global = updateThreadInfos(global, threadInfos);
+      if (threadInfos) {
+        threadInfos.forEach((threadInfo) => {
+          global = updateThreadInfo(global, threadInfo);
+        });
+      }
       if (polls) {
         polls.forEach((poll) => {
           global = updatePoll(global, poll.id, poll);
@@ -305,7 +309,7 @@ addActionHandler('apiUpdate', (global, actions, update): ActionReturnType => {
           if (receiver) {
             actions.focusMessage({
               chatId: receiver.id,
-              messageId: update.message.id!,
+              messageId: update.message.id,
               tabId,
             });
 

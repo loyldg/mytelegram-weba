@@ -8,6 +8,7 @@ import type { TabState } from '../../../../global/types';
 
 import { getPeerTitle } from '../../../../global/helpers/peers';
 import { selectPeer } from '../../../../global/selectors';
+import { getNextArrowReplacement } from '../../../../util/localization/format';
 import {
   getRandomGiftPreviewAttributes, type GiftPreviewAttributes,
   preloadGiftAttributeStickers } from '../../../common/helpers/gifts';
@@ -212,7 +213,8 @@ const GiftUpgradeModal = ({ modal, recipient }: OwnProps & StateProps) => {
                 isPrimary
                 onClick={handleOpenPriceInfo}
               >
-                {lang('StarGiftPriceDecreaseInfoLink')}
+                {lang('StarGiftPriceDecreaseInfoLink', undefined,
+                  { withNodes: true, specialReplacement: getNextArrowReplacement() })}
               </Link>
             )}
           </>

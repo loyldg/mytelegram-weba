@@ -556,6 +556,22 @@ export function buildApiMessageAction(action: GramJs.TypeMessageAction): ApiMess
       price: buildApiCurrencyAmount(price),
     };
   }
+  if (action instanceof GramJs.MessageActionNewCreatorPending) {
+    const { newCreatorId } = action;
+    return {
+      mediaType: 'action',
+      type: 'newCreatorPending',
+      newCreatorId: buildApiPeerId(newCreatorId, 'user'),
+    };
+  }
+  if (action instanceof GramJs.MessageActionChangeCreator) {
+    const { newCreatorId } = action;
+    return {
+      mediaType: 'action',
+      type: 'changeCreator',
+      newCreatorId: buildApiPeerId(newCreatorId, 'user'),
+    };
+  }
 
   return UNSUPPORTED_ACTION;
 }

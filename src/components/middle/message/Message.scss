@@ -1,4 +1,5 @@
 @use "message-content";
+@use "../../../styles/mixins";
 
 // General styles
 .Message {
@@ -331,7 +332,6 @@
         mask:
           linear-gradient(to bottom, #fff 0%, #fff 100%) content-box,
           linear-gradient(to bottom, #fff 0%, #fff 100%);
-
         mask-composite: exclude;
       }
 
@@ -753,7 +753,8 @@
     border-radius: 1.125rem;
 
     opacity: 0;
-    background-color: var(--action-message-bg);
+
+    @include mixins.action-message-bg;
 
     transition: opacity 150ms;
 

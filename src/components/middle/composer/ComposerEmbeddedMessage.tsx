@@ -13,10 +13,7 @@ import {
   selectCanAnimateInterface,
   selectChat,
   selectChatMessage,
-  selectDraft,
-  selectEditingId,
   selectEditingMessage,
-  selectEditingScheduledId,
   selectForwardedSender,
   selectIsChatWithSelf,
   selectIsCurrentUserPremium,
@@ -25,6 +22,7 @@ import {
   selectTheme,
 } from '../../../global/selectors';
 import { selectIsMediaNsfw } from '../../../global/selectors/media';
+import { selectDraft, selectEditingId, selectEditingScheduledId } from '../../../global/selectors/threads';
 import buildClassName from '../../../util/buildClassName';
 import captureEscKeyListener from '../../../util/captureEscKeyListener';
 import { unique } from '../../../util/iteratees';

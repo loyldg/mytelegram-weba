@@ -260,6 +260,11 @@ addActionHandler('apiUpdate', (global, actions, update): ActionReturnType => {
     case 'updateStarGiftAuctionUserState': {
       const { giftId, userState } = update;
 
+      if (!global.giftAuctionByGiftId?.[giftId]) {
+        actions.loadActiveGiftAuctions();
+        return;
+      }
+
       global = updateGiftAuctionUserState(global, giftId, userState);
 
       setGlobal(global);

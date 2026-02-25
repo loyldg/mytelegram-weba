@@ -81,7 +81,7 @@
     height: var(--base-height);
     margin-left: 0.5rem;
 
-    &:not(.danger) {
+    &:not(.danger):not(:hover) {
       color: var(--color-composer-button);
     }
 

@@ -157,6 +157,7 @@ export type FontIconName =
   | 'muted'
   | 'my-notes'
   | 'new-chat-filled'
+  | 'next-link'
   | 'next'
   | 'nochannel'
   | 'noise-suppression'

@@ -245,8 +245,8 @@
     mix-blend-mode: unset;
 
     mask-image: url($path);
-    mask-position: center;
     mask-repeat: repeat;
+    mask-position: center;
     mask-size: 430px auto;
   }
 }
@@ -254,5 +254,23 @@
 @mixin chat-pattern-background($path) {
   &::before {
     @include chat-pattern-styles($path);
+  }
+}
+
+@mixin action-message-bg($isModule: false, $noBackground: false) {
+  @if not $noBackground {
+    background-color: var(--action-message-bg);
+  }
+
+  @if $isModule {
+    :global(body.with-message-blur) & {
+      backdrop-filter: blur(4px);
+    }
+  }
+
+  @else {
+    body.with-message-blur & {
+      backdrop-filter: blur(4px);
+    }
   }
 }

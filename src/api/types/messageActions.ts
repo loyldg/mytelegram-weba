@@ -346,6 +346,16 @@ export interface ApiMessageActionStarGiftPurchaseOfferDeclined extends ActionMed
   price: ApiTypeCurrencyAmount;
 }
 
+export interface ApiMessageActionNewCreatorPending extends ActionMediaType {
+  type: 'newCreatorPending';
+  newCreatorId: string;
+}
+
+export interface ApiMessageActionChangeCreator extends ActionMediaType {
+  type: 'changeCreator';
+  newCreatorId: string;
+}
+
 export interface ApiMessageActionUnsupported extends ActionMediaType {
   type: 'unsupported';
 }
@@ -366,4 +376,5 @@ export type ApiMessageAction = ApiMessageActionUnsupported | ApiMessageActionCha
   | ApiMessageActionPaidMessagesRefunded | ApiMessageActionPaidMessagesPrice | ApiMessageActionSuggestedPostApproval
   | ApiMessageActionSuggestedPostSuccess | ApiMessageActionSuggestedPostRefund | ApiMessageActionTodoCompletions
   | ApiMessageActionTodoAppendTasks | ApiMessageActionStarGiftPurchaseOffer
-  | ApiMessageActionStarGiftPurchaseOfferDeclined;
+  | ApiMessageActionStarGiftPurchaseOfferDeclined | ApiMessageActionNewCreatorPending
+  | ApiMessageActionChangeCreator;

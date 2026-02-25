@@ -56,7 +56,7 @@ You are an expert in TypeScript, JavaScript, HTML, SCSS and Teact with deep expe
     ```scss
     // ✅ CORRECT
     font-weight: var(--font-weight-medium);
-    font-weight: var(--font-weight-bold);
+    font-weight: var(--font-weight-semibold);
 
     // ❌ WRONG
     font-weight: 600;
@@ -116,6 +116,7 @@ Convesion from and to Api* objects is done by `apiBuilders` (function name start
   const result = await callApi('methodName', { /* params */ });
   ```
 * Always check for `undefined` before proceeding.
+* **IMPORTANT: Do not pass `accessHash` directly to API methods.** Methods that accept separate `id` and `accessHash` parameters are outdated. Instead, pass the full `ApiPeer`, `ApiChat`, or `ApiUser` object. The `buildInput*` functions in `gramjsBuilders` will extract the necessary fields.
 
 ## 4. Example
 
@@ -304,7 +305,7 @@ Global State is our single, app-wide store, similar to Redux or Zustand. All its
 ### 1. Accessing Global in Components
 
 * **Use** `withGlobal` (a `mapStateToProps` helper) to pull in state.
-* **Avoid** the experimental `useSelector` API.
+* There is an experimental `useSelector` API available.
 * **Use** `getGlobal` **only** inside hooks for one-off reads (it's non-reactive).
 
 ### 2. Performance

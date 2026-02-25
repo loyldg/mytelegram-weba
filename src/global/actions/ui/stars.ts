@@ -676,3 +676,13 @@ addActionHandler('resetSelectedGiftCollection', (global, actions, payload): Acti
     peerId, shouldRefresh: true, tabId: tabState.id,
   });
 });
+
+addActionHandler('openActiveGiftAuctionsModal', (global, actions, payload): ActionReturnType => {
+  const { tabId = getCurrentTabId() } = payload || {};
+
+  return updateTabState(global, {
+    activeGiftAuctionsModal: true,
+  }, tabId);
+});
+
+addTabStateResetterAction('closeActiveGiftAuctionsModal', 'activeGiftAuctionsModal');

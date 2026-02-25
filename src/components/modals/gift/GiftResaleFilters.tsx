@@ -126,6 +126,27 @@ const GiftResaleFilters: FC<StateProps & OwnProps> = ({
     };
   }, [filteredAttributes, searchModelQuery, searchBackdropQuery, searchPatternQuery]);
 
+  const countersMap = useMemo(() => {
+    const map = {
+      model: new Map<string, number>(),
+      pattern: new Map<string, number>(),
+      backdrop: new Map<number, number>(),
+    };
+
+    for (const counter of counters ?? []) {
+      const { attribute, count } = counter;
+      if (attribute.type === 'model') {
+        map.model.set(attribute.documentId, count);
+      } else if (attribute.type === 'pattern') {
+        map.pattern.set(attribute.documentId, count);
+      } else if (attribute.type === 'backdrop') {
+        map.backdrop.set(attribute.backdropId, count);
+      }
+    }
+
+    return map;
+  }, [counters]);
+
   // Sort Menu
   const sortMenuRef = useRef<HTMLDivElement>();
   const {
@@ -175,18 +196,21 @@ const GiftResaleFilters: FC<StateProps & OwnProps> = ({
   const SortMenuButton: FC<{ onTrigger: (e: ReactMouseEvent<HTMLDivElement, MouseEvent>) => void; isOpen?: boolean }>
     = useMemo(() => {
       const sortType = filter.sortType;
+      const iconName = sortType === 'byDate' ? 'sort-by-date'
+        : sortType === 'byNumber' ? 'sort-by-number'
+          : 'sort-by-price';
       return ({ onTrigger, isOpen: isMenuOpen }) => (
         <div
           className={styles.item}
           onClick={onTrigger}
         >
+          <Icon
+            name={iconName}
+            className={styles.itemIcon}
+          />
           {sortType === 'byDate' && lang('ValueGiftSortByDate')}
           {sortType === 'byNumber' && lang('ValueGiftSortByNumber')}
           {sortType === 'byPrice' && lang('ValueGiftSortByPrice')}
-          <Icon
-            name="dropdown-arrows"
-            className={styles.itemIcon}
-          />
         </div>
       );
     }, [lang, filter]);
@@ -203,10 +227,7 @@ const GiftResaleFilters: FC<StateProps & OwnProps> = ({
           {attributesCount === 0 && lang('GiftAttributeModel')}
           {attributesCount > 0
             && lang('GiftAttributeModelPlural', { count: attributesCount }, { pluralValue: attributesCount })}
-          <Icon
-            name="dropdown-arrows"
-            className={styles.itemIcon}
-          />
+          {renderDropdownArrows(isMenuOpen)}
         </div>
       );
     }, [lang, filter]);
@@ -222,10 +243,7 @@ const GiftResaleFilters: FC<StateProps & OwnProps> = ({
           {attributesCount === 0 && lang('GiftAttributeBackdrop')}
           {attributesCount > 0
             && lang('GiftAttributeBackdropPlural', { count: attributesCount }, { pluralValue: attributesCount })}
-          <Icon
-            name="dropdown-arrows"
-            className={styles.itemIcon}
-          />
+          {renderDropdownArrows(isMenuOpen)}
         </div>
       );
     }, [lang, filter]);
@@ -240,10 +258,7 @@ const GiftResaleFilters: FC<StateProps & OwnProps> = ({
           {attributesCount === 0 && lang('GiftAttributeSymbol')}
           {attributesCount > 0
             && lang('GiftAttributeSymbolPlural', { count: attributesCount }, { pluralValue: attributesCount })}
-          <Icon
-            name="dropdown-arrows"
-            className={styles.itemIcon}
-          />
+          {renderDropdownArrows(isMenuOpen)}
         </div>
       );
     }, [lang, filter]);
@@ -333,6 +348,17 @@ const GiftResaleFilters: FC<StateProps & OwnProps> = ({
       backdropAttributes: updatedAttributes,
     } });
   });
+
+  function renderDropdownArrows(isOpen?: boolean) {
+    return (
+      <div className={styles.dropdownArrows}>
+        <div className={buildClassName(styles.arrowLine, styles.topLeft, isOpen && styles.open)} />
+        <div className={buildClassName(styles.arrowLine, styles.topRight, isOpen && styles.open)} />
+        <div className={buildClassName(styles.arrowLine, styles.bottomLeft, isOpen && styles.open)} />
+        <div className={buildClassName(styles.arrowLine, styles.bottomRight, isOpen && styles.open)} />
+      </div>
+    );
+  }
 
   function renderSortMenuItems() {
     return (
@@ -425,7 +451,7 @@ const GiftResaleFilters: FC<StateProps & OwnProps> = ({
           onReset={handleSearchModelInputReset}
           placeholder={lang('Search')}
         />
-        <MenuItem icon="select" onClick={handleSelectedAllModelsClick} disabled={isSelectedAll}>
+        <MenuItem icon="select" onClick={handleSelectedAllModelsClick}>
           {lang('ContextMenuItemSelectAll')}
         </MenuItem>
         {models.map((model) => {
@@ -447,6 +473,9 @@ const GiftResaleFilters: FC<StateProps & OwnProps> = ({
               />
               <div className={styles.menuItemStickerText}>
                 {model.name}
+                <span className={styles.menuItemCount}>
+                  {lang.number(countersMap.model.get(model.sticker.id) || 0)}
+                </span>
               </div>
               <Icon
                 className={styles.menuItemIcon}
@@ -495,7 +524,7 @@ const GiftResaleFilters: FC<StateProps & OwnProps> = ({
           onReset={handleSearchBackdropInputReset}
           placeholder={lang('Search')}
         />
-        <MenuItem icon="select" onClick={handleSelectedAllBackdropsClick} disabled={isSelectedAll}>
+        <MenuItem icon="select" onClick={handleSelectedAllBackdropsClick}>
           {lang('ContextMenuItemSelectAll')}
         </MenuItem>
         {backdrops.map((backdrop) => {
@@ -515,6 +544,9 @@ const GiftResaleFilters: FC<StateProps & OwnProps> = ({
               />
               <div className={styles.backdropAttributeMenuItemText}>
                 {backdrop.name}
+                <span className={styles.menuItemCount}>
+                  {lang.number(countersMap.backdrop.get(backdrop.backdropId) || 0)}
+                </span>
               </div>
               <Icon
                 className={styles.menuItemIcon}
@@ -560,7 +592,7 @@ const GiftResaleFilters: FC<StateProps & OwnProps> = ({
           onReset={handleSearchPatternInputReset}
           placeholder={lang('Search')}
         />
-        <MenuItem icon="select" onClick={handleSelectedAllPatternsClick} disabled={isSelectedAll}>
+        <MenuItem icon="select" onClick={handleSelectedAllPatternsClick}>
           {lang('ContextMenuItemSelectAll')}
         </MenuItem>
         {patterns.map((pattern) => {
@@ -583,6 +615,9 @@ const GiftResaleFilters: FC<StateProps & OwnProps> = ({
 
               <div className={styles.menuItemStickerText}>
                 {pattern.name}
+                <span className={styles.menuItemCount}>
+                  {lang.number(countersMap.pattern.get(pattern.sticker.id) || 0)}
+                </span>
               </div>
               <Icon
                 className={styles.menuItemIcon}

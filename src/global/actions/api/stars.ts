@@ -612,6 +612,7 @@ addActionHandler('loadGiftAuction', async (global, _actions, payload): Promise<v
 
   global = getGlobal();
   global = replaceGiftAuction(global, auctionState);
+
   setGlobal(global);
 });
 
@@ -734,4 +735,20 @@ addActionHandler('declineStarGiftOffer', async (global, actions, payload): Promi
     offerMsgId: messageId,
     shouldDecline: true,
   });
+});
+
+addActionHandler('loadActiveGiftAuctions', async (global, actions, payload): Promise<void> => {
+  const result = await callApi('fetchStarGiftActiveAuctions');
+
+  if (!result) return;
+
+  global = getGlobal();
+  result.auctions.forEach((auction) => {
+    global = replaceGiftAuction(global, auction);
+  });
+  global = {
+    ...global,
+    activeGiftAuctionIds: result.auctions.map((auction) => auction.gift.id),
+  };
+  setGlobal(global);
 });

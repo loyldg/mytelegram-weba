@@ -353,7 +353,7 @@ type ApiUrlAuthResultRequest = {
 
 type ApiUrlAuthResultAccepted = {
   type: 'accepted';
-  url: string;
+  url?: string;
 };
 
 type ApiUrlAuthResultDefault = {

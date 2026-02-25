@@ -19,12 +19,12 @@ import { formatDateTimeToString } from '../../../../util/dates/dateFormat';
 import { formatCurrencyAsString } from '../../../../util/formatCurrency';
 import {
   formatStarsAsIcon, formatStarsAsText, formatTonAsIcon, formatTonAsText,
+  getNextArrowReplacement,
 } from '../../../../util/localization/format';
 import { CUSTOM_PEER_HIDDEN } from '../../../../util/objects/customPeer';
 import { getServerTime } from '../../../../util/serverTime';
-import { formatPercent } from '../../../../util/textFormat';
 import { renderGiftOriginalInfo } from '../../../common/helpers/giftOriginalInfo';
-import { getGiftAttributes, getStickerFromGift } from '../../../common/helpers/gifts';
+import { getGiftAttributes, getGiftRarityTitle, getStickerFromGift } from '../../../common/helpers/gifts';
 import { renderTextWithEntities } from '../../../common/helpers/renderTextWithEntities';
 
 import useCurrentOrPrev from '../../../../hooks/useCurrentOrPrev';
@@ -38,6 +38,7 @@ import Avatar from '../../../common/Avatar';
 import BadgeButton from '../../../common/BadgeButton';
 import GiftMenuItems from '../../../common/gift/GiftMenuItems';
 import GiftTransferPreview from '../../../common/gift/GiftTransferPreview';
+import GiftRarityBadge from '../../../common/GiftRarityBadge';
 import Icon from '../../../common/icons/Icon';
 import SafeLink from '../../../common/SafeLink';
 import Button from '../../../ui/Button';
@@ -182,26 +183,6 @@ const GiftInfoModal = ({
   const isGiftUnique = gift && gift.type === 'starGiftUnique';
   const uniqueGift = isGiftUnique ? gift : undefined;
 
-  const giftSubtitle = useMemo(() => {
-    if (!gift || gift.type !== 'starGiftUnique') return undefined;
-
-    if (releasedByPeer) {
-      const releasedByUsername = `@${getMainUsername(releasedByPeer)}`;
-      const ownerTitle = releasedByUsername || getPeerTitle(lang, releasedByPeer);
-      const fallbackText = isApiPeerUser(releasedByPeer)
-        ? lang('ActionFallbackUser')
-        : lang('ActionFallbackChannel');
-
-      return lang('GiftInfoCollectibleBy', {
-        number: gift.number, owner: ownerTitle || fallbackText }, {
-        withNodes: true,
-        withMarkdown: true,
-      });
-    }
-
-    return lang('GiftInfoCollectible', { number: gift.number });
-  }, [gift, releasedByPeer, lang]);
-
   const starGiftUniqueSlug = gift?.type === 'starGiftUnique' ? gift.slug : undefined;
 
   const selfCollectibleStatus = useMemo(() => {
@@ -321,6 +302,42 @@ const GiftInfoModal = ({
   const giftAttributes = useMemo(() => {
     return gift && getGiftAttributes(gift);
   }, [gift]);
+
+  const uniqueGiftTitle = useMemo(() => {
+    if (!gift || gift.type !== 'starGiftUnique' || !giftAttributes?.backdrop) return undefined;
+
+    const numberColor = giftAttributes.backdrop.textColor;
+    const digitCount = String(gift.number).length;
+    const numberSizeClass = digitCount >= 6 ? styles.small : styles.regular;
+    const styledNumber = (
+      <span className={buildClassName(styles.uniqueTitleNumber, numberSizeClass)} style={`color: ${numberColor}`}>
+        {lang('GiftSavedNumber', { number: gift.number })}
+      </span>
+    );
+
+    return lang('GiftInfoUniqueTitle', {
+      name: gift.title,
+      number: styledNumber,
+    }, { withNodes: true });
+  }, [gift, giftAttributes, lang]);
+
+  const uniqueGiftSubtitle = useMemo(() => {
+    if (!gift || gift.type !== 'starGiftUnique') return undefined;
+
+    if (releasedByPeer) {
+      const releasedByUsername = `@${getMainUsername(releasedByPeer)}`;
+      const ownerTitle = releasedByUsername || getPeerTitle(lang, releasedByPeer);
+      const fallbackText = isApiPeerUser(releasedByPeer)
+        ? lang('ActionFallbackUser')
+        : lang('ActionFallbackChannel');
+
+      return ownerTitle || fallbackText;
+    }
+
+    const modelName = giftAttributes?.model?.name;
+
+    return modelName;
+  }, [gift, giftAttributes, releasedByPeer, lang]);
 
   const renderFooterButton = useLastCallback(() => {
     if (canBuyGift) {
@@ -551,8 +568,8 @@ const GiftInfoModal = ({
           backdropAttribute={giftAttributes!.backdrop!}
           patternAttribute={giftAttributes!.pattern!}
           modelAttribute={giftAttributes!.model!}
-          title={gift.title}
-          subtitle={giftSubtitle}
+          title={uniqueGiftTitle}
+          subtitle={uniqueGiftSubtitle}
           subtitlePeer={releasedByPeer}
           showManageButtons={canManage}
           savedGift={savedGift}
@@ -699,7 +716,7 @@ const GiftInfoModal = ({
             >
               {model.name}
             </span>
-            <BadgeButton>{formatPercent(model.rarityPercent)}</BadgeButton>
+            <GiftRarityBadge rarity={model.rarity} />
           </span>,
         ]);
       }
@@ -714,7 +731,7 @@ const GiftInfoModal = ({
             >
               {backdrop.name}
             </span>
-            <BadgeButton>{formatPercent(backdrop.rarityPercent)}</BadgeButton>
+            <BadgeButton>{getGiftRarityTitle(lang, backdrop.rarity)}</BadgeButton>
           </span>,
         ]);
       }
@@ -729,7 +746,7 @@ const GiftInfoModal = ({
             >
               {pattern.name}
             </span>
-            <BadgeButton>{formatPercent(pattern.rarityPercent)}</BadgeButton>
+            <BadgeButton>{getGiftRarityTitle(lang, pattern.rarity)}</BadgeButton>
           </span>,
         ]);
       }
@@ -804,7 +821,12 @@ const GiftInfoModal = ({
             {tonLink && (
               <div>
                 {lang('GiftInfoTonText', {
-                  link: <SafeLink url={tonLink} shouldSkipModal text={lang('GiftInfoTonLinkText')} />,
+                  link: (
+                    <SafeLink url={tonLink} shouldSkipModal text={lang('GiftInfoTonLinkText')}>
+                      {lang('GiftInfoTonLinkText', undefined,
+                        { withNodes: true, specialReplacement: getNextArrowReplacement() })}
+                    </SafeLink>
+                  ),
                 }, { withNodes: true })}
               </div>
             )}
@@ -813,7 +835,8 @@ const GiftInfoModal = ({
                 {lang(`GiftInfo${isTargetChat ? 'Channel' : ''}${isUnsaved ? 'Hidden' : 'Saved'}`, {
                   link: (
                     <Link isPrimary onClick={handleTriggerVisibility}>
-                      {lang(`GiftInfoSaved${isUnsaved ? 'Show' : 'Hide'}`)}
+                      {lang(`GiftInfoSaved${isUnsaved ? 'Show' : 'Hide'}`, undefined,
+                        { withNodes: true, specialReplacement: getNextArrowReplacement() })}
                     </Link>
                   ),
                 }, {
@@ -850,8 +873,8 @@ const GiftInfoModal = ({
     canManage, hasConvertOption, isSender, oldLang, tonExplorerUrl,
     gift, giftAttributes, renderFooterButton, isTargetChat,
     isGiftUnique, saleDateInfo,
-    canBuyGift, giftOwnerTitle, resellPrice, giftSubtitle,
-    releasedByPeer, handleSymbolClick, handleBackdropClick, handleModelClick,
+    canBuyGift, giftOwnerTitle, resellPrice, uniqueGiftTitle, uniqueGiftSubtitle, releasedByPeer,
+    handleSymbolClick, handleBackdropClick, handleModelClick,
   ]);
 
   const moreMenuItems = typeGift && (

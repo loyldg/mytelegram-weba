@@ -1,4 +1,4 @@
-import type { ElementRef, FC, TeactNode } from '../../lib/teact/teact';
+import type { ElementRef, TeactNode } from '../../lib/teact/teact';
 import type React from '../../lib/teact/teact';
 import { beginHeavyAnimation, useEffect, useRef } from '../../lib/teact/teact';
 
@@ -10,6 +10,7 @@ import { disableDirectTextInput, enableDirectTextInput } from '../../util/direct
 import trapFocus from '../../util/trapFocus';
 
 import useContextMenuHandlers from '../../hooks/useContextMenuHandlers';
+import useFrozenProps from '../../hooks/useFrozenProps';
 import useHistoryBack from '../../hooks/useHistoryBack';
 import useLastCallback from '../../hooks/useLastCallback';
 import useLayoutEffectWithPrevDeps from '../../hooks/useLayoutEffectWithPrevDeps';
@@ -45,7 +46,6 @@ export type OwnProps = {
   dialogRef?: ElementRef<HTMLDivElement>;
   isLowStackPriority?: boolean;
   dialogContent?: React.ReactNode;
-  ignoreFreeze?: boolean;
   moreMenuItems?: TeactNode;
   onClose: () => void;
   onCloseAnimationEnd?: () => void;
@@ -53,36 +53,20 @@ export type OwnProps = {
   withBalanceBar?: boolean;
   currencyInBalanceBar?: 'TON' | 'XTR';
   isCondensedHeader?: boolean;
+  noFreezeOnClose?: boolean;
 };
 
-const Modal: FC<OwnProps> = ({
-  dialogRef,
-  title,
-  className,
-  contentClassName,
-  headerClassName,
-  isOpen,
-  isSlim,
-  header,
-  hasCloseButton,
-  hasAbsoluteCloseButton,
-  absoluteCloseButtonColor = 'translucent',
-  noBackdrop,
-  noBackdropClose,
-  children,
-  style,
-  dialogStyle,
-  isLowStackPriority,
-  dialogContent,
-  dialogClassName,
-  moreMenuItems,
-  onClose,
-  onCloseAnimationEnd,
-  onEnter,
-  withBalanceBar,
-  isCondensedHeader,
-  currencyInBalanceBar = 'XTR',
-}) => {
+const Modal = (props: OwnProps) => {
+  const {
+    dialogRef,
+    isOpen,
+    noBackdropClose,
+    onClose,
+    onCloseAnimationEnd,
+    onEnter,
+    noFreezeOnClose,
+  } = props;
+
   const {
     ref: modalRef,
     shouldRender,
@@ -91,6 +75,30 @@ const Modal: FC<OwnProps> = ({
     onCloseAnimationEnd,
     withShouldRender: true,
   });
+
+  const shouldFreeze = !noFreezeOnClose && !isOpen;
+  const {
+    title,
+    isLowStackPriority,
+    header,
+    children,
+    className,
+    contentClassName,
+    headerClassName,
+    dialogClassName,
+    isSlim,
+    hasCloseButton,
+    hasAbsoluteCloseButton,
+    absoluteCloseButtonColor = 'translucent',
+    noBackdrop,
+    style,
+    dialogStyle,
+    dialogContent,
+    moreMenuItems,
+    withBalanceBar,
+    isCondensedHeader,
+    currencyInBalanceBar = 'XTR',
+  } = useFrozenProps(props, shouldFreeze);
 
   const localDialogRef = useRef<HTMLDivElement>();
   const moreButtonRef = useRef<HTMLButtonElement>();
@@ -208,14 +216,14 @@ const Modal: FC<OwnProps> = ({
         tabIndex={-1}
         role="dialog"
       >
-        {withBalanceBar && (
-          <ModalStarBalanceBar
-            isModalOpen={isOpen}
-            currency={currencyInBalanceBar}
-          />
-        )}
         <div className="modal-container">
           <div className="modal-backdrop" onClick={!noBackdropClose ? onClose : undefined} />
+          {withBalanceBar && (
+            <ModalStarBalanceBar
+              isModalOpen={isOpen}
+              currency={currencyInBalanceBar}
+            />
+          )}
           <div className={modalDialogClassName} ref={actualDialogRef} style={dialogStyle}>
             {renderHeader()}
             {Boolean(moreMenuItems) && (

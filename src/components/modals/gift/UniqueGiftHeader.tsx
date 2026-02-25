@@ -34,7 +34,7 @@ type OwnProps = {
   modelAttribute: ApiStarGiftAttributeModel;
   backdropAttribute: ApiStarGiftAttributeBackdrop;
   patternAttribute: ApiStarGiftAttributePattern;
-  title?: string;
+  title?: TeactNode;
   badge?: TeactNode;
   subtitle?: TeactNode;
   subtitlePeer?: ApiPeer;
@@ -114,7 +114,7 @@ const UniqueGiftHeader = ({
       {Boolean(badge) && (
         <div className={styles.badge}>{badge}</div>
       )}
-      {title && <h1 className={styles.title}>{title}</h1>}
+      {Boolean(title) && <h1 className={styles.title}>{title}</h1>}
       {Boolean(subtitle) && (
         <div
           className={buildClassName(styles.subtitle, subtitlePeer && styles.subtitleBadge)}

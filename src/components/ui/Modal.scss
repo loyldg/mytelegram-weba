@@ -58,10 +58,10 @@
 
   &.with-balance-bar {
     .modal-container {
-      top: 5.5rem;
+      flex-direction: column;
     }
+
     .modal-dialog {
-      max-height: calc(100vh - 7.5rem);
       margin-top: 0;
     }
   }

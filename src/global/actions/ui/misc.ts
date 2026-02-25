@@ -350,7 +350,7 @@ addActionHandler('showAllowedMessageTypesNotification', (global, actions, payloa
   if (!chat) return;
   const chatFullInfo = selectChatFullInfo(global, chatId);
   const isSavedMessages = chatId ? selectIsChatWithSelf(global, chatId) : undefined;
-  const isChatWithBot = chatId ? selectIsChatWithBot(global, chat) : undefined;
+  const isChatWithBot = chatId ? selectIsChatWithBot(global, chatId) : undefined;
 
   const {
     canSendPlainText, canSendPhotos, canSendVideos, canSendDocuments, canSendAudios,
@@ -951,3 +951,45 @@ addCallback((global: GlobalState) => {
   prevIsScreenLocked = global.passcode.isScreenLocked;
   prevBlurredTabsCount = blurredTabsCount;
 });
+
+addActionHandler('openLeaveGroupModal', (global, actions, payload): ActionReturnType => {
+  const { chatId, nextOwnerId, tabId = getCurrentTabId() } = payload;
+
+  return updateTabState(global, {
+    leaveGroupModal: {
+      chatId,
+      nextOwnerId,
+    },
+  }, tabId);
+});
+
+addTabStateResetterAction('closeLeaveGroupModal', 'leaveGroupModal');
+
+addActionHandler('openTwoFaCheckModal', (global, actions, payload): ActionReturnType => {
+  const { tabId = getCurrentTabId() } = payload || {};
+
+  return updateTabState(global, {
+    isTwoFaCheckModalOpen: true,
+  }, tabId);
+});
+
+addTabStateResetterAction('closeTwoFaCheckModal', 'isTwoFaCheckModalOpen');
+
+addActionHandler('openQuickChatPicker', (global, actions, payload): ActionReturnType => {
+  const { tabId = getCurrentTabId() } = payload || {};
+
+  return updateTabState(global, {
+    isQuickChatPickerOpen: true,
+  }, tabId);
+});
+
+addTabStateResetterAction('closeQuickChatPicker', 'isQuickChatPickerOpen');
+
+addActionHandler('openCocoonModal', (global, actions, payload): ActionReturnType => {
+  const { tabId = getCurrentTabId() } = payload || {};
+  return updateTabState(global, {
+    isCocoonModalOpen: true,
+  }, tabId);
+});
+
+addTabStateResetterAction('closeCocoonModal', 'isCocoonModalOpen');

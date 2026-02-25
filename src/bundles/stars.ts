@@ -1,5 +1,4 @@
 /* eslint-disable @stylistic/max-len */
-
 export { default as StarsGiftModal } from '../components/modals/stars/gift/StarsGiftModal';
 export { default as StarsGiftingPickerModal } from '../components/main/premium/StarsGiftingPickerModal';
 export { default as StarsBalanceModal } from '../components/modals/stars/StarsBalanceModal';
@@ -29,3 +28,4 @@ export { default as GiftDescriptionRemoveModal } from '../components/modals/gift
 export { default as GiftOfferAcceptModal } from '../components/modals/gift/offer/GiftOfferAcceptModal';
 export { default as ChatRefundModal } from '../components/modals/stars/chatRefund/ChatRefundModal';
 export { default as PriceConfirmModal } from '../components/modals/priceConfirm/PriceConfirmModal';
+export { default as ActiveGiftAuctionsModal } from '../components/modals/gift/auction/ActiveGiftAuctionsModal';

@@ -17,7 +17,7 @@ import {
 } from '../../../../util/localization/format';
 import { round } from '../../../../util/math';
 import { formatPercent } from '../../../../util/textFormat';
-import { getGiftAttributes } from '../../../common/helpers/gifts';
+import { getGiftAttributes, getGiftRarityTitle } from '../../../common/helpers/gifts';
 
 import useCurrentOrPrev from '../../../../hooks/useCurrentOrPrev';
 import useLang from '../../../../hooks/useLang';
@@ -85,7 +85,7 @@ const GiftOfferAcceptModal = ({
         lang('GiftAttributeModel'),
         <span className={styles.attributeValue}>
           <span>{model.name}</span>
-          <BadgeButton>{formatPercent(model.rarityPercent)}</BadgeButton>
+          <BadgeButton>{getGiftRarityTitle(lang, model.rarity)}</BadgeButton>
         </span>,
       ]);
     }
@@ -95,7 +95,7 @@ const GiftOfferAcceptModal = ({
         lang('GiftAttributeBackdrop'),
         <span className={styles.attributeValue}>
           <span>{backdrop.name}</span>
-          <BadgeButton>{formatPercent(backdrop.rarityPercent)}</BadgeButton>
+          <BadgeButton>{getGiftRarityTitle(lang, backdrop.rarity)}</BadgeButton>
         </span>,
       ]);
     }
@@ -105,7 +105,7 @@ const GiftOfferAcceptModal = ({
         lang('GiftAttributeSymbol'),
         <span className={styles.attributeValue}>
           <span>{pattern.name}</span>
-          <BadgeButton>{formatPercent(pattern.rarityPercent)}</BadgeButton>
+          <BadgeButton>{getGiftRarityTitle(lang, pattern.rarity)}</BadgeButton>
         </span>,
       ]);
     }

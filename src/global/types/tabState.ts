@@ -681,6 +681,8 @@ export type TabState = {
 
   isGiftRecipientPickerOpen?: boolean;
 
+  isQuickChatPickerOpen?: boolean;
+
   isFrozenAccountModalOpen?: boolean;
 
   starsGiftingPickerModal?: {
@@ -935,6 +937,8 @@ export type TabState = {
     acquiredGifts?: ApiStarGiftAuctionAcquiredGift[];
   };
 
+  activeGiftAuctionsModal?: true;
+
   starGiftPriceDecreaseInfoModal?: {
     prices: ApiStarGiftUpgradePrice[];
     currentPrice: number;
@@ -967,8 +971,17 @@ export type TabState = {
 
   isPasskeyModalOpen?: boolean;
 
+  leaveGroupModal?: {
+    chatId: string;
+    nextOwnerId?: string;
+  };
+
+  isTwoFaCheckModalOpen?: true;
+
   isWaitingForStarGiftUpgrade?: true;
   isWaitingForStarGiftTransfer?: true;
   insertingPeerIdMention?: string;
   shouldSaveAttachmentsCompression?: boolean;
+
+  isCocoonModalOpen?: boolean;
 };

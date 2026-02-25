@@ -1,0 +1,21 @@
+.root {
+  &.uncommon {
+    color: var(--color-gift-uncommon);
+    background-color: var(--color-gift-uncommon-bg);
+  }
+
+  &.rare {
+    color: var(--color-gift-rare);
+    background-color: var(--color-gift-rare-bg);
+  }
+
+  &.epic {
+    color: var(--color-gift-epic);
+    background-color: var(--color-gift-epic-bg);
+  }
+
+  &.legendary {
+    color: var(--color-gift-legendary);
+    background-color: var(--color-gift-legendary-bg);
+  }
+}

@@ -10,6 +10,7 @@ import type { TabState } from '../../../../global/types';
 
 import { selectPeer, selectTabState } from '../../../../global/selectors';
 import { formatStarsAsIcon } from '../../../../util/localization/format';
+import { getBidAuctionPosition } from '../../../common/helpers/gifts';
 import renderText from '../../../common/helpers/renderText';
 
 import { useTransitionActiveKey } from '../../../../hooks/animations/useTransitionActiveKey';
@@ -191,14 +192,7 @@ const GiftAuctionBidModal = ({
     const { bidLevels } = activeState;
     const userBidDate = userState?.bidDate || Number.MAX_SAFE_INTEGER;
 
-    for (const level of bidLevels) {
-      if (level.amount < selectedBidAmount
-        || (level.amount === selectedBidAmount && level.date >= userBidDate)) {
-        return level.pos;
-      }
-    }
-
-    return bidLevels[bidLevels.length - 1].pos + 1;
+    return getBidAuctionPosition(selectedBidAmount, userBidDate, bidLevels);
   }, [selectedBidAmount, activeState, userState?.bidDate]);
 
   function renderInfoCards() {

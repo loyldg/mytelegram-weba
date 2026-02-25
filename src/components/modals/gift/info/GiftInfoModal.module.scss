@@ -2,6 +2,16 @@
   overflow: hidden;
 }
 
+.uniqueTitleNumber {
+  &.small {
+    font-size: 0.75em;
+  }
+
+  &.regular {
+    font-size: 0.875em;
+  }
+}
+
 .checkBox {
   margin-inline: -1rem;
 }
