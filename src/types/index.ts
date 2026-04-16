@@ -96,7 +96,19 @@ export interface IAlbum {
   commentsMessage?: ApiMessage;
 }
 
+export interface IDocumentGroup {
+  documentGroupId: string;
+  messages: ApiMessage[];
+  firstMessageId: number;
+  commentsMessage?: ApiMessage;
+}
+
 export type ThreadId = string | number;
+
+export type ForwardTarget = {
+  chatId: string;
+  topicId?: number;
+};
 
 export type ThemeKey = 'light' | 'dark';
 export type AnimationLevel = 0 | 1 | 2;
@@ -105,7 +117,7 @@ export type PerformanceTypeKey = (
   'pageTransitions' | 'messageSendingAnimations' | 'mediaViewerAnimations'
   | 'messageComposerAnimations' | 'contextMenuAnimations' | 'contextMenuBlur' | 'messageBlur'
   | 'rightColumnAnimations' | 'animatedEmoji' | 'loopAnimatedStickers' | 'reactionEffects' | 'stickerEffects'
-  | 'autoplayGifs' | 'autoplayVideos' | 'storyRibbonAnimations' | 'snapEffect'
+  | 'autoplayGifs' | 'autoplayVideos' | 'storyRibbonAnimations' | 'snapEffect' | 'textStreaming'
 );
 export type PerformanceType = Record<PerformanceTypeKey, boolean>;
 
@@ -330,6 +342,7 @@ export enum MediaViewerOrigin {
   StarsTransaction,
   PreviewMedia,
   SponsoredMessage,
+  PollPreview,
 }
 
 export enum StoryViewerOrigin {
@@ -739,6 +752,7 @@ export type ResaleGiftsFilterOptions = {
   modelAttributes?: StarGiftAttributeIdModel[];
   patternAttributes?: ApiStarGiftAttributeIdPattern[];
   backdropAttributes?: ApiStarGiftAttributeIdBackdrop[];
+  starsOnly?: boolean;
 };
 
 export type SendMessageParams = {
@@ -777,7 +791,6 @@ export type SendMessageParams = {
   messagePriceInStars?: number;
   localMessage?: ApiMessage;
   forwardedLocalMessagesSlice?: ForwardedLocalMessagesSlice;
-  isForwarding?: boolean;
   forwardParams?: ForwardMessagesParams;
   isStoryReply?: boolean;
   suggestedMedia?: MediaContent;

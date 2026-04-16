@@ -1,11 +1,9 @@
-import type React from '../../../lib/teact/teact';
 import {
-  memo, useEffect,
-  useState } from '../../../lib/teact/teact';
+  memo, useEffect, useState,
+} from '../../../lib/teact/teact';
 import { getActions, withGlobal } from '../../../global';
 
-import type { ApiDraft, ApiStarsAmount, ApiTypeCurrencyAmount } from '../../../api/types';
-import type { ApiPeer } from '../../../api/types';
+import type { ApiDraft, ApiPeer, ApiStarsAmount, ApiTypeCurrencyAmount } from '../../../api/types';
 import type { TabState } from '../../../global/types';
 import { MAIN_THREAD_ID } from '../../../api/types';
 
@@ -16,7 +14,7 @@ import {
 import { selectIsMonoforumAdmin, selectPeer } from '../../../global/selectors';
 import { selectDraft } from '../../../global/selectors/threads';
 import buildClassName from '../../../util/buildClassName';
-import { formatScheduledDateTime, formatShortDuration } from '../../../util/dates/dateFormat';
+import { formatScheduledDateTime, formatShortDuration } from '../../../util/dates/oldDateFormat';
 import { convertTonFromNanos, convertTonToNanos } from '../../../util/formatCurrency';
 import {
   formatStarsAsIcon,
@@ -108,7 +106,7 @@ const SuggestMessageModal = ({
   const oldLang = useOldLang();
 
   const isCurrencyStars = selectedCurrency === STARS_CURRENCY_CODE;
-  const now = Math.floor(Date.now() / 1000);
+  const now = getServerTime();
   const minAt = (now + futureMin) * 1000;
   const maxAt = (now + futureMax) * 1000;
   const defaultSelectedTime = (now + futureMin * 2) * 1000;

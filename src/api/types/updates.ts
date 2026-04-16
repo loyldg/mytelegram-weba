@@ -24,9 +24,9 @@ import type {
   ApiFormattedText,
   ApiMediaExtendedPreview,
   ApiMessage,
+  ApiMessagePoll,
   ApiPaidReactionPrivacyType,
   ApiPhoto,
-  ApiPoll,
   ApiQuickReply,
   ApiReaction,
   ApiReactions,
@@ -179,6 +179,13 @@ export type ApiUpdateChatMembers = {
   deletedMemberId?: string;
 };
 
+export type ApiUpdateChatParticipantRank = {
+  '@type': 'updateChatParticipantRank';
+  id: string;
+  userId: string;
+  rank: string;
+};
+
 export type ApiUpdatePinnedChatIds = {
   '@type': 'updatePinnedChatIds';
   ids?: string[];
@@ -230,7 +237,7 @@ export type ApiUpdateNewScheduledMessage = {
   id: number;
   message: ApiMessage;
   wasDrafted?: boolean;
-  poll?: ApiPoll;
+  poll?: ApiMessagePoll;
   webPage?: ApiWebPage;
 };
 
@@ -241,7 +248,7 @@ export type ApiUpdateNewMessage = {
   message: ApiMessage;
   shouldForceReply?: boolean;
   wasDrafted?: boolean;
-  poll?: ApiPoll;
+  poll?: ApiMessagePoll;
   webPage?: ApiWebPage;
 };
 
@@ -249,7 +256,7 @@ export type ApiUpdateMessage = {
   '@type': 'updateMessage';
   chatId: string;
   id: number;
-  poll?: ApiPoll;
+  poll?: ApiMessagePoll;
   webPage?: ApiWebPage;
   shouldForceReply?: boolean;
   isFromNew?: true;
@@ -267,7 +274,7 @@ export type ApiUpdateScheduledMessage = {
   '@type': 'updateScheduledMessage';
   chatId: string;
   id: number;
-  poll?: ApiPoll;
+  poll?: ApiMessagePoll;
   webPage?: ApiWebPage;
   isFromNew?: true;
 } & (
@@ -284,7 +291,7 @@ export type ApiUpdateQuickReplyMessage = {
   '@type': 'updateQuickReplyMessage';
   id: number;
   message: Partial<ApiMessage>;
-  poll?: ApiPoll;
+  poll?: ApiMessagePoll;
   webPage?: ApiWebPage;
 };
 
@@ -328,7 +335,7 @@ export type ApiUpdateScheduledMessageSendSucceeded = {
   chatId: string;
   localId: number;
   message: ApiMessage;
-  poll?: ApiPoll;
+  poll?: ApiMessagePoll;
   webPage?: ApiWebPage;
 };
 
@@ -337,7 +344,7 @@ export type ApiUpdateMessageSendSucceeded = {
   chatId: string;
   localId: number;
   message: ApiMessage;
-  poll?: ApiPoll;
+  poll?: ApiMessagePoll;
   webPage?: ApiWebPage;
 };
 
@@ -378,7 +385,7 @@ export type ApiUpdateChannelMessages = {
 export type ApiUpdateMessagePoll = {
   '@type': 'updateMessagePoll';
   pollId: string;
-  pollUpdate: Partial<ApiPoll>;
+  pollUpdate: Partial<ApiMessagePoll>;
 };
 
 export type ApiUpdateMessagePollVote = {
@@ -753,6 +760,12 @@ export type ApiUpdateTopics = {
   chatId: string;
 };
 
+export type ApiUpdateDiscussion = {
+  '@type': 'updateDiscussion';
+  chatId: string;
+  threadId: number;
+};
+
 export type ApiUpdateViewForumAsMessages = {
   '@type': 'updateViewForumAsMessages';
   chatId: string;
@@ -882,7 +895,7 @@ export type ApiUpdateEntities = {
   users?: Record<string, ApiUser>;
   chats?: Record<string, ApiChat>;
   threadInfos?: ApiThreadInfo[];
-  polls?: ApiPoll[];
+  polls?: ApiMessagePoll[];
   webPages?: ApiWebPage[];
 };
 
@@ -918,7 +931,8 @@ export type ApiUpdate = (
   ApiUpdateReady | ApiUpdateSession | ApiUpdateWebAuthTokenFailed | ApiUpdateRequestUserUpdate |
   ApiUpdateAuthorizationState | ApiUpdateAuthorizationError | ApiUpdateConnectionState | ApiUpdateCurrentUser |
   ApiUpdateChat | ApiUpdateChatTypingStatus | ApiUpdateChatFullInfo | ApiUpdatePinnedChatIds |
-  ApiUpdateChatMembers | ApiUpdateChatJoin | ApiUpdateChatLeave | ApiUpdateChatPinned | ApiUpdatePinnedMessageIds |
+  ApiUpdateChatMembers | ApiUpdateChatParticipantRank | ApiUpdateChatJoin | ApiUpdateChatLeave
+  | ApiUpdateChatPinned | ApiUpdatePinnedMessageIds |
   ApiUpdateChatListType | ApiUpdateChatFolder | ApiUpdateChatFoldersOrder | ApiUpdateRecommendedChatFolders |
   ApiUpdateNewMessage | ApiUpdateMessage | ApiUpdateThreadInfo | ApiUpdateCommonBoxMessages | ApiUpdatePasskeyOption |
   ApiUpdateDeleteMessages | ApiUpdateMessagePoll | ApiUpdateMessagePollVote | ApiUpdateDeleteHistory |
@@ -931,7 +945,7 @@ export type ApiUpdate = (
   ApiUpdateRecentStickers | ApiUpdateSavedGifs | ApiUpdateNewScheduledMessage | ApiUpdateMoveStickerSetToTop |
   ApiUpdateScheduledMessageSendSucceeded | ApiUpdateScheduledMessage | ApiUpdateStarPaymentStateCompleted |
   ApiUpdateDeleteScheduledMessages | ApiUpdateResetMessages | ApiUpdateMessageTranslations |
-  ApiUpdateFailedMessageTranslations | ApiUpdateWebPage | ApiUpdateChatTypingDraft |
+  ApiUpdateFailedMessageTranslations | ApiUpdateWebPage | ApiUpdateChatTypingDraft | ApiUpdateDiscussion |
   ApiUpdateTwoFaError | ApiUpdateTwoFaStateWaitCode | ApiUpdateWebViewResultSent |
   ApiUpdateDefaultNotifySettings | ApiUpdatePeerNotifySettings | ApiUpdatePeerBlocked | ApiUpdatePrivacy |
   ApiUpdateServerTimeOffset | ApiUpdateMessageReactions | ApiUpdateSavedReactionTags |

@@ -1,5 +1,3 @@
-import { getActions } from '../../../global';
-
 import type {
   ApiChat, ApiGlobalMessageSearchType, ApiMessage, ApiMessageSearchContext, ApiPeer, ApiSearchPostsFlood,
   ApiTopicWithState,
@@ -8,7 +6,7 @@ import type {
 import type { ActionReturnType, GlobalState, TabArgs } from '../../types';
 
 import { GLOBAL_SEARCH_SLICE, GLOBAL_TOPIC_SEARCH_SLICE } from '../../../config';
-import { timestampPlusDay } from '../../../util/dates/dateFormat';
+import { timestampPlusDay } from '../../../util/dates/oldDateFormat';
 import { isDeepLink, tryParseDeepLink } from '../../../util/deepLinkParser';
 import { toChannelId } from '../../../util/entities/ids';
 import { getCurrentTabId } from '../../../util/establishMultitabRole';
@@ -16,9 +14,9 @@ import { getTranslationFn } from '../../../util/localization';
 import { formatStarsAsText } from '../../../util/localization/format';
 import { throttle } from '../../../util/schedulers';
 import { callApi } from '../../../api/gramjs';
+import { addActionHandler, getActions, getGlobal, setGlobal } from '../..';
 import { isChatChannel, isChatGroup } from '../../helpers/chats';
 import { isApiPeerChat } from '../../helpers/peers';
-import { addActionHandler, getGlobal, setGlobal } from '../../index';
 import {
   addMessages,
   addUserStatuses,

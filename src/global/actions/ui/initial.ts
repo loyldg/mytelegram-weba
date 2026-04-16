@@ -12,6 +12,7 @@ import {
 } from '../../../util/browser/windowEnvironment';
 import { getCurrentTabId } from '../../../util/establishMultitabRole';
 import generateUniqueId from '../../../util/generateUniqueId';
+import { setTimeFormat as setLocalizedTimeFormat } from '../../../util/localization';
 import { subscribe, unsubscribe } from '../../../util/notifications';
 import { oldSetLanguage } from '../../../util/oldLangProvider';
 import { decryptSessionByCurrentHash } from '../../../util/passcode';
@@ -129,7 +130,6 @@ addActionHandler('initMain', (global): ActionReturnType => {
 });
 
 addCallback((global: GlobalState) => {
-  let isUpdated = false;
   const tabState = selectTabState(global, getCurrentTabId());
   if (!tabState?.shouldInit) return;
 
@@ -139,7 +139,9 @@ addCallback((global: GlobalState) => {
     shouldInit: false,
   }, tabState.id);
 
-  const { messageTextSize, language, shouldUseSystemTheme } = selectSharedSettings(global);
+  const {
+    messageTextSize, language, shouldUseSystemTheme, timeFormat,
+  } = selectSharedSettings(global);
 
   const globalTheme = selectTheme(global);
   const systemTheme = getSystemTheme();
@@ -148,6 +150,7 @@ addCallback((global: GlobalState) => {
   const performanceType = selectPerformanceSettings(global);
 
   void oldSetLanguage(language as LangCode, undefined);
+  setLocalizedTimeFormat(timeFormat);
 
   requestMutation(() => {
     document.documentElement.style.setProperty(
@@ -190,9 +193,7 @@ addCallback((global: GlobalState) => {
 
   startWebsync();
 
-  isUpdated = true;
-
-  if (isUpdated) setGlobal(global);
+  setGlobal(global);
 });
 
 addActionHandler('setInstallPrompt', (global, actions, payload): ActionReturnType => {

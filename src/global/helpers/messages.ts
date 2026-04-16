@@ -2,6 +2,7 @@ import type { TeactNode } from '../../lib/teact/teact';
 
 import type {
   ApiAttachment,
+  ApiInputMessageReplyInfo,
   ApiMessage,
   ApiMessageEntityTextUrl,
   ApiPeer,
@@ -9,8 +10,7 @@ import type {
   ApiTypeStory,
 } from '../../api/types';
 import type {
-  ApiFormattedText,
-  ApiPoll, ApiReplyInfo, ApiWebPage, MediaContainer, StatefulMediaContent,
+  ApiFormattedText, ApiMessagePoll, ApiReplyInfo, ApiWebPage, MediaContainer, StatefulMediaContent,
 } from '../../api/types/messages';
 import type { ThreadId } from '../../types';
 import type { LangFn } from '../../util/localization';
@@ -73,6 +73,8 @@ export function hasMessageText(message: MediaContainer) {
     webPage, contact, invoice, location, game, storyData, giveaway, giveawayResults, paidMedia,
   } = message.content;
 
+  if (pollId) return false;
+
   return Boolean(text) || !(
     sticker || photo || video || audio || voice || document || contact || pollId || todo || webPage
     || invoice || location || game || storyData || giveaway || giveawayResults || dice
@@ -95,7 +97,7 @@ export function groupStatefulContent({
   story,
   webPage,
 }: {
-  poll?: ApiPoll;
+  poll?: ApiMessagePoll;
   story?: ApiTypeStory;
   webPage?: ApiWebPage;
 }) {
@@ -572,4 +574,18 @@ export function groupMessageIdsByThreadId(
   }
 
   return grouped;
+}
+
+export function prepareMessageReplyInfo(
+  threadId: ThreadId, additionalReplyInfo?: ApiInputMessageReplyInfo,
+): ApiInputMessageReplyInfo | undefined {
+  const isMainThread = threadId === MAIN_THREAD_ID;
+  if (!additionalReplyInfo && isMainThread) return undefined;
+
+  return {
+    type: 'message',
+    ...additionalReplyInfo,
+    replyToMsgId: additionalReplyInfo?.replyToMsgId || Number(threadId),
+    replyToTopId: additionalReplyInfo?.replyToTopId || (!isMainThread ? Number(threadId) : undefined),
+  };
 }

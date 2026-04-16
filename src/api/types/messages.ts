@@ -5,7 +5,7 @@ import type {
   ApiWebDocument,
 } from './bots';
 import type { ApiMessageAction } from './messageActions';
-import type { ApiPeerNotifySettings, ApiRestrictionReason } from './misc';
+import type { ApiAttachment, ApiPeerNotifySettings, ApiRestrictionReason } from './misc';
 import type {
   ApiLabeledPrice,
 } from './payments';
@@ -186,6 +186,9 @@ export type ApiPaidMedia = {
 export interface ApiPollAnswer {
   text: ApiFormattedText;
   option: string;
+  media?: MediaContent;
+  addedByPeerId?: string;
+  date?: number;
 }
 
 export interface ApiPollResult {
@@ -193,29 +196,42 @@ export interface ApiPollResult {
   isCorrect?: true;
   option: string;
   votersCount: number;
+  recentVoterIds?: string[];
 }
 
 export interface ApiPoll {
-  mediaType: 'poll';
   id: string;
-  summary: {
-    closed?: true;
-    isPublic?: true;
-    multipleChoice?: true;
-    quiz?: true;
-    question: ApiFormattedText;
-    answers: ApiPollAnswer[];
-    closePeriod?: number;
-    closeDate?: number;
-  };
-  results: {
-    isMin?: true;
-    results?: ApiPollResult[];
-    totalVoters?: number;
-    recentVoterIds?: string[];
-    solution?: string;
-    solutionEntities?: ApiMessageEntity[];
-  };
+  hash: string;
+  isClosed?: true;
+  isPublic?: true;
+  isMultipleChoice?: true;
+  isQuiz?: true;
+  canAddAnswers?: true;
+  isRevoteDisabled?: true;
+  shouldShuffleAnswers?: true;
+  shouldHideResultsUntilClose?: true;
+  isCreator?: true;
+  question: ApiFormattedText;
+  answers: ApiPollAnswer[];
+  closePeriod?: number;
+  closeDate?: number;
+}
+
+export interface ApiPollResults {
+  isMin?: true;
+  resultByOption?: Record<string, ApiPollResult>;
+  totalVoters?: number;
+  recentVoterIds?: string[];
+  solution?: string;
+  solutionEntities?: ApiMessageEntity[];
+  solutionMedia?: MediaContent;
+}
+
+export interface ApiMessagePoll {
+  mediaType: 'poll';
+  summary: ApiPoll;
+  results: ApiPollResults;
+  attachedMedia?: MediaContent;
 }
 
 export interface ApiInvoice {
@@ -339,12 +355,12 @@ export type ApiGiveawayResults = {
 };
 
 export type ApiNewPoll = {
-  summary: ApiPoll['summary'];
-  quiz?: {
-    correctAnswers: string[];
-    solution?: string;
-    solutionEntities?: ApiMessageEntity[];
-  };
+  summary: ApiPoll;
+  correctAnswers?: number[];
+  solution?: string;
+  solutionEntities?: ApiMessageEntity[];
+  attachedMedia?: ApiAttachment;
+  solutionMedia?: ApiAttachment;
 };
 
 export interface ApiTodoItem {
@@ -509,7 +525,9 @@ export type ApiMessageEntityDefault = {
   type: Exclude<
   `${ApiMessageEntityTypes}`,
   `${ApiMessageEntityTypes.Pre}` | `${ApiMessageEntityTypes.TextUrl}` | `${ApiMessageEntityTypes.MentionName}` |
-  `${ApiMessageEntityTypes.Blockquote}` | `${ApiMessageEntityTypes.CustomEmoji}` | `${ApiMessageEntityTypes.Timestamp}`
+  `${ApiMessageEntityTypes.Blockquote}` | `${ApiMessageEntityTypes.CustomEmoji}` |
+  `${ApiMessageEntityTypes.Timestamp}` | `${ApiMessageEntityTypes.FormattedDate}` |
+  `${ApiMessageEntityTypes.DiffInsert}` | `${ApiMessageEntityTypes.DiffReplace}` | `${ApiMessageEntityTypes.DiffDelete}`
   >;
   offset: number;
   length: number;
@@ -550,6 +568,19 @@ export type ApiMessageEntityCustomEmoji = {
   documentId: string;
 };
 
+export type ApiMessageEntityFormattedDate = {
+  type: ApiMessageEntityTypes.FormattedDate;
+  offset: number;
+  length: number;
+  date: number;
+  relative?: true;
+  shortTime?: true;
+  longTime?: true;
+  shortDate?: true;
+  longDate?: true;
+  dayOfWeek?: true;
+};
+
 // Local entities
 export type ApiMessageEntityTimestamp = {
   type: ApiMessageEntityTypes.Timestamp;
@@ -558,8 +589,28 @@ export type ApiMessageEntityTimestamp = {
   timestamp: number;
 };
 
+export type ApiMessageEntityDiffInsert = {
+  type: ApiMessageEntityTypes.DiffInsert;
+  offset: number;
+  length: number;
+};
+
+export type ApiMessageEntityDiffReplace = {
+  type: ApiMessageEntityTypes.DiffReplace;
+  offset: number;
+  length: number;
+  oldText: string;
+};
+
+export type ApiMessageEntityDiffDelete = {
+  type: ApiMessageEntityTypes.DiffDelete;
+  offset: number;
+  length: number;
+};
+
 export type ApiMessageEntity = ApiMessageEntityDefault | ApiMessageEntityPre | ApiMessageEntityTextUrl |
-  ApiMessageEntityMentionName | ApiMessageEntityCustomEmoji | ApiMessageEntityBlockquote | ApiMessageEntityTimestamp;
+  ApiMessageEntityMentionName | ApiMessageEntityCustomEmoji | ApiMessageEntityBlockquote | ApiMessageEntityTimestamp |
+  ApiMessageEntityFormattedDate | ApiMessageEntityDiffInsert | ApiMessageEntityDiffReplace | ApiMessageEntityDiffDelete;
 
 export enum ApiMessageEntityTypes {
   Bold = 'MessageEntityBold',
@@ -582,7 +633,11 @@ export enum ApiMessageEntityTypes {
   CustomEmoji = 'MessageEntityCustomEmoji',
   Timestamp = 'MessageEntityTimestamp',
   QuoteFocus = 'MessageEntityQuoteFocus',
+  FormattedDate = 'MessageEntityFormattedDate',
   Unknown = 'MessageEntityUnknown',
+  DiffInsert = 'MessageEntityDiffInsert',
+  DiffReplace = 'MessageEntityDiffReplace',
+  DiffDelete = 'MessageEntityDiffDelete',
 }
 
 export interface ApiFormattedText {
@@ -592,6 +647,11 @@ export interface ApiFormattedText {
 
 export interface ApiFormattedTextWithEmojiOnlyCount extends ApiFormattedText {
   emojiOnlyCount?: number;
+}
+
+export interface ApiComposedMessageWithAI {
+  resultText: ApiFormattedText;
+  diffText?: ApiFormattedText;
 }
 
 export type MediaContent = {
@@ -622,7 +682,7 @@ export type MediaContainer = {
 };
 
 export type StatefulMediaContent = {
-  poll?: ApiPoll;
+  poll?: ApiMessagePoll;
   story?: ApiStory;
   webPage?: ApiWebPage;
 };
@@ -698,6 +758,7 @@ export interface ApiMessage {
   paidMessageStars?: number;
   restrictionReasons?: ApiRestrictionReason[];
   summaryLanguageCode?: string;
+  fromRank?: string;
 
   isTypingDraft?: boolean; // Local field
 }
@@ -967,6 +1028,12 @@ export interface KeyboardButtonGiftOffer extends ApiKeyboardButtonBase {
   buttonType: 'accept' | 'reject';
 }
 
+export interface KeyboardButtonNoForwardsRequest extends ApiKeyboardButtonBase {
+  type: 'noForwardsRequest';
+  text: string;
+  buttonType: 'accept' | 'reject';
+}
+
 export type ApiKeyboardButton = (
   ApiKeyboardButtonSimple
   | ApiKeyboardButtonReceipt
@@ -982,6 +1049,7 @@ export type ApiKeyboardButton = (
   | KeyboardButtonSuggestedMessage
   | KeyboardButtonOpenThread
   | KeyboardButtonGiftOffer
+  | KeyboardButtonNoForwardsRequest
 );
 
 export type ApiKeyboardButtons = ApiKeyboardButton[][];
@@ -1082,12 +1150,18 @@ export type ApiSearchPostsFlood = {
   starsAmount: number;
 };
 
-export type LinkContext = {
+export type LinkContextMessage = {
   type: 'message';
   threadId?: ThreadId;
   chatId: string;
   messageId: number;
 };
+
+export type LinkContextInner = {
+  type: 'inner';
+};
+
+export type LinkContext = LinkContextMessage | LinkContextInner;
 
 export interface ApiTopic {
   id: number;

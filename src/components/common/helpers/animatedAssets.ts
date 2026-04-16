@@ -20,6 +20,7 @@ import PartyPopper from '../../../assets/tgs/general/PartyPopper.tgs';
 import Invite from '../../../assets/tgs/invites/Invite.tgs';
 import JoinRequest from '../../../assets/tgs/invites/Requests.tgs';
 import LastSeen from '../../../assets/tgs/LastSeen.tgs';
+import Typing from '../../../assets/tgs/message/Typing.tgs';
 import MonkeyClose from '../../../assets/tgs/monkeys/TwoFactorSetupMonkeyClose.tgs';
 import MonkeyIdle from '../../../assets/tgs/monkeys/TwoFactorSetupMonkeyIdle.tgs';
 import MonkeyPeek from '../../../assets/tgs/monkeys/TwoFactorSetupMonkeyPeek.tgs';
@@ -35,6 +36,7 @@ import Experimental from '../../../assets/tgs/settings/Experimental.tgs';
 import FoldersAll from '../../../assets/tgs/settings/FoldersAll.tgs';
 import FoldersNew from '../../../assets/tgs/settings/FoldersNew.tgs';
 import FoldersShare from '../../../assets/tgs/settings/FoldersShare.tgs';
+import HandStop from '../../../assets/tgs/settings/HandStop.tgs';
 import Lock from '../../../assets/tgs/settings/Lock.tgs';
 import Passkeys from '../../../assets/tgs/settings/Passkeys.tgs';
 import StarReaction from '../../../assets/tgs/stars/StarReaction.tgs';
@@ -42,9 +44,11 @@ import StarReactionEffect from '../../../assets/tgs/stars/StarReactionEffect.tgs
 import Unlock from '../../../assets/tgs/Unlock.tgs';
 import DuckNothingFoundPreview from '../../../assets/tgs-previews/DuckNothingFound.svg';
 import SearchPreview from '../../../assets/tgs-previews/Search.svg';
+import HandStopPreview from '../../../assets/tgs-previews/settings/HandStopPreview.png';
 import PasskeysPreview from '../../../assets/tgs-previews/settings/Passkeys.svg';
 
 export const LOCAL_TGS_PREVIEW_URLS = {
+  HandStop: HandStopPreview,
   BrokenGift: BrokenGiftPreview,
   DuckNothingFound: DuckNothingFoundPreview,
   Search: SearchPreview,
@@ -93,4 +97,6 @@ export const LOCAL_TGS_URLS = {
   DuckNothingFound,
   Passkeys,
   DuckCake,
+  HandStop,
+  Typing,
 };

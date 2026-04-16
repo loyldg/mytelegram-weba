@@ -7,7 +7,7 @@ import type { ApiUser } from '../../../api/types';
 import { getUserFullName } from '../../../global/helpers';
 import { selectUser } from '../../../global/selectors';
 import { createClassNameBuilder } from '../../../util/buildClassName';
-import { formatHumanDate, formatTime, isToday } from '../../../util/dates/dateFormat';
+import { formatHumanDate, formatTime, isToday } from '../../../util/dates/oldDateFormat';
 import { getServerTime } from '../../../util/serverTime';
 
 import useOldLang from '../../../hooks/useOldLang';
@@ -43,8 +43,10 @@ const JoinRequest: FC<OwnProps & StateProps> = ({
   const lang = useOldLang();
 
   const fullName = getUserFullName(user);
+  // eslint-disable-next-line @eslint-react/purity
   const fixedDate = (date - getServerTime()) * 1000 + Date.now();
 
+  // eslint-disable-next-line @eslint-react/purity
   const dateString = isToday(new Date(fixedDate))
     ? formatTime(lang, fixedDate) : formatHumanDate(lang, fixedDate, true, false, true);
 

@@ -9,7 +9,7 @@ import type {
   ApiChat,
   ApiChatReactions,
   ApiMessage,
-  ApiPoll,
+  ApiMessagePoll,
   ApiReaction,
   ApiStickerSet,
   ApiStickerSetInfo,
@@ -26,7 +26,7 @@ import type {
 } from '../../../types';
 import { MAIN_THREAD_ID } from '../../../api/types';
 
-import { PREVIEW_AVATAR_COUNT, SERVICE_NOTIFICATIONS_USER_ID } from '../../../config';
+import { PREVIEW_AVATAR_COUNT } from '../../../config';
 import {
   areReactionsEmpty,
   getCanPostInChat,
@@ -68,6 +68,7 @@ import {
   selectStickerSet,
   selectTopic,
   selectUser,
+  selectUserFullInfo,
   selectUserStatus,
   selectWebPageFromMessage,
 } from '../../../global/selectors';
@@ -107,7 +108,7 @@ export type OwnProps = {
 
 type StateProps = {
   threadId?: ThreadId;
-  poll?: ApiPoll;
+  poll?: ApiMessagePoll;
   webPage?: ApiWebPage;
   story?: ApiTypeStory;
   chat?: ApiChat;
@@ -162,6 +163,8 @@ type StateProps = {
   userFullName?: string;
   canGift?: boolean;
   savedDialogId?: string;
+  noForwardsMyEnabled?: boolean;
+  noForwardsPeerEnabled?: boolean;
 };
 
 const selection = window.getSelection();
@@ -232,6 +235,8 @@ const ContextMenuContainer: FC<OwnProps & StateProps> = ({
   canGift,
   className,
   savedDialogId,
+  noForwardsMyEnabled,
+  noForwardsPeerEnabled,
   onClose,
   onCloseAnimationEnd,
 }) => {
@@ -277,6 +282,11 @@ const ContextMenuContainer: FC<OwnProps & StateProps> = ({
 
   const oldLang = useOldLang();
   const lang = useLang();
+
+  const noForwardsNotice = noForwardsPeerEnabled
+    ? lang('ContextMenuNoForwardsPeer', { name: userFullName })
+    : (noForwardsMyEnabled ? lang('ContextMenuNoForwardsYou') : undefined);
+
   const { ref: containerRef } = useShowTransition({
     isOpen,
     onCloseAnimationEnd,
@@ -682,9 +692,6 @@ const ContextMenuContainer: FC<OwnProps & StateProps> = ({
     return undefined;
   }
 
-  const scheduledMaxDate = new Date();
-  scheduledMaxDate.setFullYear(scheduledMaxDate.getFullYear() + 1);
-
   return (
     <div ref={containerRef} className={buildClassName('ContextMenuContainer', className)}>
       <MessageContextMenu
@@ -774,6 +781,7 @@ const ContextMenuContainer: FC<OwnProps & StateProps> = ({
         onSelectLanguage={handleSelectLanguage}
         userFullName={userFullName}
         canGift={canGift}
+        noForwardsNotice={noForwardsNotice}
       />
       <PinMessageModal
         isOpen={isPinModalOpen}
@@ -805,6 +813,7 @@ export default memo(withGlobal<OwnProps>(
     const chatFullInfo = !isPrivate ? selectChatFullInfo(global, message.chatId) : undefined;
     const user = selectUser(global, message.chatId);
     const userFullName = user && getUserFullName(user);
+    const userFullInfo = isPrivate ? selectUserFullInfo(global, message.chatId) : undefined;
 
     const {
       seenByExpiresAt, seenByMaxChatMembers, maxUniqueReactions, readDateExpiresAt,
@@ -948,8 +957,7 @@ export default memo(withGlobal<OwnProps>(
       isCurrentUserPremium,
       hasFullInfo: Boolean(chatFullInfo),
       canShowReactionsCount,
-      canShowReactionList: !isLocal && !isAction
-        && !isScheduled && chat?.id !== SERVICE_NOTIFICATIONS_USER_ID && !hasTtl,
+      canShowReactionList: !isLocal && !isAction && !isScheduled && !hasTtl,
       canBuyPremium: !isCurrentUserPremium && !selectIsPremiumPurchaseBlocked(global),
       customEmojiSetsInfo,
       customEmojiSets,
@@ -970,6 +978,8 @@ export default memo(withGlobal<OwnProps>(
       canGift,
       savedDialogId,
       webPage,
+      noForwardsMyEnabled: userFullInfo?.noForwardsMyEnabled,
+      noForwardsPeerEnabled: userFullInfo?.noForwardsPeerEnabled,
     };
   },
 )(ContextMenuContainer));

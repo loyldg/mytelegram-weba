@@ -1,4 +1,3 @@
-import type { FC } from '../../../lib/teact/teact';
 import {
   memo, useEffect, useLayoutEffect,
   useMemo,
@@ -34,7 +33,7 @@ import {
 import { IS_IOS } from '../../../util/browser/windowEnvironment';
 import buildClassName from '../../../util/buildClassName';
 import captureEscKeyListener from '../../../util/captureEscKeyListener';
-import { getDayStartAt } from '../../../util/dates/dateFormat';
+import { getDayStartAt } from '../../../util/dates/oldDateFormat';
 import focusEditableElement from '../../../util/focusEditableElement';
 import focusNoScroll from '../../../util/focusNoScroll';
 import { getSearchResultKey, parseSearchResultKey, type SearchResultKey } from '../../../util/keys/searchResultKey';
@@ -102,7 +101,7 @@ const INLINE_MEMBER_COUNT = 5;
 
 const runDebouncedForSearch = debounce((cb) => cb(), 200, false);
 
-const MiddleSearch: FC<OwnProps & StateProps> = ({
+const MiddleSearch = ({
   isActive,
   chat,
   monoforumChat,
@@ -122,7 +121,7 @@ const MiddleSearch: FC<OwnProps & StateProps> = ({
   currentUserId,
   fromPeerId,
   isGroupChat,
-}) => {
+}: OwnProps & StateProps) => {
   const {
     updateMiddleSearch,
     resetMiddleSearch,
@@ -414,7 +413,9 @@ const MiddleSearch: FC<OwnProps & StateProps> = ({
       });
     }
 
+    // eslint-disable-next-line @eslint-react/web-api/no-leaked-event-listener
     window.addEventListener('touchend', focus);
+    // eslint-disable-next-line @eslint-react/web-api/no-leaked-event-listener
     window.addEventListener('mouseup', focus);
 
     window.addEventListener('touchstart', removeListeners);

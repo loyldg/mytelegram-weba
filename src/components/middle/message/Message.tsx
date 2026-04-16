@@ -17,8 +17,8 @@ import type {
   ApiKeyboardButton,
   ApiMessage,
   ApiMessageOutgoingStatus,
+  ApiMessagePoll,
   ApiPeer,
-  ApiPoll,
   ApiReaction,
   ApiReactionKey,
   ApiSavedReactionTag,
@@ -34,6 +34,7 @@ import type {
   ChatTranslatedMessages,
   FocusDirection,
   IAlbum,
+  IDocumentGroup,
   MessageListType,
   ScrollTargetPosition,
   TextSummary,
@@ -97,7 +98,6 @@ import {
   selectIsMessageFocused,
   selectIsMessageProtected,
   selectIsMessageSelected,
-  selectMessageIdsByGroupId,
   selectMessageSummary,
   selectOutgoingStatus,
   selectPeer,
@@ -174,6 +174,7 @@ import Icon from '../../common/icons/Icon';
 import StarIcon from '../../common/icons/StarIcon';
 import MessageText from '../../common/MessageText';
 import PeerColorWrapper from '../../common/PeerColorWrapper';
+import RankBadge from '../../common/RankBadge';
 import ReactionStaticEmoji from '../../common/reactions/ReactionStaticEmoji';
 import Sparkles from '../../common/Sparkles';
 import TopicChip from '../../common/TopicChip';
@@ -201,7 +202,7 @@ import MessageMeta from './MessageMeta';
 import MessagePhoneCall from './MessagePhoneCall';
 import PaidMediaOverlay from './PaidMediaOverlay';
 import Photo from './Photo';
-import Poll from './Poll';
+import Poll from './poll/Poll';
 import Reactions from './reactions/Reactions';
 import RoundVideo from './RoundVideo';
 import Sticker from './Sticker';
@@ -224,6 +225,7 @@ type MessagePositionProperties = {
 type OwnProps = {
   message: ApiMessage;
   album?: IAlbum;
+  documentGroup?: IDocumentGroup;
   noAvatars?: boolean;
   withAvatar?: boolean;
   withSenderName?: boolean;
@@ -233,6 +235,7 @@ type OwnProps = {
   noReplies: boolean;
   appearanceOrder: number;
   isJustAdded: boolean;
+  isThreadTop?: boolean;
   memoFirstUnreadIdRef?: { current: number | undefined };
   getIsMessageListReady?: Signal<boolean>;
   observeIntersectionForBottom?: ObserveFn;
@@ -248,7 +251,6 @@ type StateProps = {
   canShowSender: boolean;
   originSender?: ApiPeer;
   botSender?: ApiUser;
-  isThreadTop?: boolean;
   shouldHideReply?: boolean;
   replyMessage?: ApiMessage;
   replyMessageSender?: ApiPeer;
@@ -302,7 +304,7 @@ type StateProps = {
   isTranscribing?: boolean;
   transcribedText?: string;
   isPremium: boolean;
-  senderAdminMember?: ApiChatMember;
+  senderChatMember?: ApiChatMember;
   messageTopic?: ApiTopic;
   hasTopicChip?: boolean;
   chatTranslations?: ChatTranslatedMessages;
@@ -311,6 +313,7 @@ type StateProps = {
   requestedTranslationLanguage?: string;
   requestedChatTranslationLanguage?: string;
   withAnimatedEffects?: boolean;
+  canAnimateTextStreaming?: boolean;
   webPageStory?: ApiTypeStory;
   isConnected: boolean;
   isLoadingComments?: boolean;
@@ -320,7 +323,7 @@ type StateProps = {
   canTranscribeVoice?: boolean;
   viaBusinessBot?: ApiUser;
   effect?: ApiAvailableEffect;
-  poll?: ApiPoll;
+  poll?: ApiMessagePoll;
   webPage?: ApiWebPage;
   maxTimestamp?: number;
   lastPlaybackTimestamp?: number;
@@ -429,7 +432,7 @@ const Message = ({
   repliesThreadInfo,
   hasUnreadReaction,
   memoFirstUnreadIdRef,
-  senderAdminMember,
+  senderChatMember,
   messageTopic,
   hasTopicChip,
   chatTranslations,
@@ -438,6 +441,7 @@ const Message = ({
   requestedTranslationLanguage,
   requestedChatTranslationLanguage,
   withAnimatedEffects,
+  canAnimateTextStreaming,
   webPageStory,
   isConnected,
   getIsMessageListReady,
@@ -485,7 +489,7 @@ const Message = ({
   const oldLang = useOldLang();
   const lang = useLang();
 
-  const [isTranscriptionHidden, setTranscriptionHidden] = useState(false);
+  const [isTranscriptionHidden, setIsTranscriptionHidden] = useState(false);
   const [isPlayingSnapAnimation, setIsPlayingSnapAnimation] = useState(false);
   const [isPlayingDeleteAnimation, setIsPlayingDeleteAnimation] = useState(false);
   const [shouldPlayEffect, requestEffect, hideEffect] = useFlag();
@@ -526,8 +530,9 @@ const Message = ({
       return;
     }
 
+    // Message appearance animation works only if this timeout is not cleared. Migrate to `sibling-index()` when baseline widely available.
     setTimeout(markShown, appearanceOrder * MESSAGE_APPEARANCE_DELAY);
-  }, [appearanceOrder, markShown, noAppearanceAnimation]);
+  }, [appearanceOrder, noAppearanceAnimation]);
 
   useShowTransition({
     ref,
@@ -542,7 +547,7 @@ const Message = ({
 
   const {
     id: messageId, chatId, forwardInfo, viaBotId, isTranscriptionError, factCheck,
-    isTypingDraft,
+    isTypingDraft, fromRank,
   } = message;
   const hasSummary = Boolean(message.summaryLanguageCode);
 
@@ -675,7 +680,6 @@ const Message = ({
     handleOpenThread,
     handleReadMedia,
     handleCancelUpload,
-    handleVoteSend,
     handleGroupForward,
     handleForward,
     handleFocus,
@@ -1071,6 +1075,7 @@ const Message = ({
         maxTimestamp={maxTimestamp}
         threadId={threadId}
         shouldAnimateTyping={isTypingDraft}
+        canAnimateTextStreaming={canAnimateTextStreaming}
       />
     );
   }
@@ -1215,6 +1220,7 @@ const Message = ({
                 noUserColors={noUserColors}
                 isProtected={isProtected}
                 observeIntersectionForLoading={observeIntersectionForLoading}
+                observeIntersectionForPlaying={observeIntersectionForPlaying}
                 onClick={handleStoryClick}
               />
             )}
@@ -1295,7 +1301,7 @@ const Message = ({
             canAutoLoad={canAutoLoadMedia}
             isDownloading={isDownloading}
             onReadMedia={shouldReadMedia ? handleReadMedia : undefined}
-            onHideTranscription={setTranscriptionHidden}
+            onHideTranscription={setIsTranscriptionHidden}
             isTranscriptionError={isTranscriptionError}
             isTranscribed={Boolean(transcribedText)}
             canTranscribe={canTranscribeVoice && !hasTtl}
@@ -1321,7 +1327,7 @@ const Message = ({
             isTranscribed={Boolean(transcribedText)}
             isTranscriptionError={isTranscriptionError}
             canDownload={!isProtected}
-            onHideTranscription={setTranscriptionHidden}
+            onHideTranscription={setIsTranscriptionHidden}
             canTranscribe={canTranscribeVoice && !hasTtl}
           />
         )}
@@ -1352,7 +1358,17 @@ const Message = ({
           <Contact contact={contact} noUserColors={isOwn} />
         )}
         {poll && (
-          <Poll message={message} poll={poll} onSendVote={handleVoteSend} />
+          <Poll
+            key={poll.summary.id}
+            chatId={chatId}
+            messageId={messageId}
+            poll={poll}
+            messageText={text}
+            theme={theme}
+            isInScheduled={isScheduled}
+            observeIntersectionForLoading={observeIntersectionForLoading}
+            observeIntersectionForPlaying={observeIntersectionForPlaying}
+          />
         )}
         {todo && (
           <TodoList message={message} todoList={todo} />
@@ -1665,7 +1681,6 @@ const Message = ({
     shouldSkipRenderForwardTitle: boolean = false, shouldSkipRenderAdminTitle: boolean = false,
   ) {
     let senderTitle;
-    let senderColor;
     if (senderPeer && !(isCustomShape && viaBotId)) {
       senderTitle = getPeerFullTitle(oldLang, senderPeer);
     } else if (forwardInfo?.hiddenUserName) {
@@ -1677,7 +1692,6 @@ const Message = ({
     const senderIsPremium = senderPeer && 'isPremium' in senderPeer && senderPeer.isPremium;
 
     const shouldRenderForwardAvatar = asForwarded && senderPeer;
-    const hasBotSenderUsername = botSender?.hasUsername;
     return (
       <div className="message-title" dir="ltr">
         {(senderTitle || asForwarded) ? (
@@ -1685,7 +1699,6 @@ const Message = ({
             className={buildClassName(
               'message-title-name-container',
               forwardInfo?.hiddenUserName ? 'sender-hidden' : 'interactive',
-              senderColor,
             )}
             dir="ltr"
           >
@@ -1733,21 +1746,29 @@ const Message = ({
           </span>
         )}
         <div className="title-spacer" />
-        {!shouldSkipRenderAdminTitle && !hasBotSenderUsername ? (forwardInfo?.isLinkedChannelPost ? (
-          <span className="admin-title" dir="auto">{oldLang('DiscussChannel')}</span>
-        ) : message.postAuthorTitle && isGroup && !asForwarded ? (
-          <span className="admin-title" dir="auto">{message.postAuthorTitle}</span>
-        ) : senderAdminMember && !asForwarded && !viaBotId ? (
-          <span className="admin-title" dir="auto">
-            {senderAdminMember.customTitle || oldLang(
-              senderAdminMember.isOwner ? 'GroupInfo.LabelOwner' : 'GroupInfo.LabelAdmin',
+        {((!shouldSkipRenderAdminTitle && !signature) || canShowSenderBoosts) && (
+          <span className="message-title-meta">
+            {(!shouldSkipRenderAdminTitle && !signature) ? (forwardInfo?.isLinkedChannelPost ? (
+              <span className="admin-title" dir="auto">{oldLang('DiscussChannel')}</span>
+            ) : message.postAuthorTitle && isGroup && !asForwarded ? (
+              <span className="admin-title" dir="auto">{message.postAuthorTitle}</span>
+            ) : (senderChatMember || fromRank) && !asForwarded ? (
+              <RankBadge
+                chatId={chatId}
+                userId={(senderChatMember?.userId || sender?.id)!}
+                isAdmin={senderChatMember?.isAdmin}
+                isOwner={senderChatMember?.isOwner}
+                rank={senderChatMember?.rank || fromRank}
+                className="admin-title-badge"
+                isClickable
+              />
+            ) : undefined) : undefined}
+            {canShowSenderBoosts && (
+              <span className="sender-boosts" aria-hidden>
+                <Icon name={senderBoosts > 1 ? 'boosts' : 'boost'} />
+                {senderBoosts > 1 ? senderBoosts : undefined}
+              </span>
             )}
-          </span>
-        ) : undefined) : undefined}
-        {canShowSenderBoosts && (
-          <span className="sender-boosts" aria-hidden>
-            <Icon name={senderBoosts > 1 ? 'boosts' : 'boost'} />
-            {senderBoosts > 1 ? senderBoosts : undefined}
           </span>
         )}
       </div>
@@ -2000,7 +2021,8 @@ export default memo(withGlobal<OwnProps>(
       loadingThread,
     } = selectTabState(global);
     const {
-      message, album, withSenderName, withAvatar, threadId, messageListType, isLastInDocumentGroup, isFirstInGroup,
+      message, album, documentGroup, withSenderName, withAvatar, threadId, messageListType,
+      isLastInDocumentGroup, isFirstInGroup,
     } = ownProps;
     const {
       id, chatId, viaBotId, isOutgoing, forwardInfo, transcriptionId, isPinned, viaBusinessBotId, effectId,
@@ -2020,6 +2042,7 @@ export default memo(withGlobal<OwnProps>(
     const isChannel = chat && isChatChannel(chat);
     const isGroup = chat && isChatGroup(chat);
     const chatFullInfo = !isChatWithUser ? selectChatFullInfo(global, chatId) : undefined;
+    const { adminMembersById, members, boostsApplied } = chatFullInfo || {};
     const webPageStoryData = webPage?.story;
     const webPageStory = webPageStoryData
       ? selectPeerStory(global, webPageStoryData.peerId, webPageStoryData.id)
@@ -2031,11 +2054,9 @@ export default memo(withGlobal<OwnProps>(
     const sender = selectSender(global, message);
     const originSender = selectForwardedSender(global, message);
     const botSender = viaBotId ? selectUser(global, viaBotId) : undefined;
-    const senderAdminMember = sender?.id && isGroup
-      ? chatFullInfo?.adminMembersById?.[sender?.id]
+    const senderChatMember = sender?.id
+      ? (adminMembersById?.[sender?.id] || members?.find((member) => member.userId === sender?.id))
       : undefined;
-
-    const isThreadTop = message.id === threadId;
 
     const { replyToMsgId, replyToPeerId, replyFrom } = getMessageReplyInfo(message) || {};
     const { peerId: storyReplyPeerId, storyId: storyReplyId } = getStoryReplyInfo(message) || {};
@@ -2089,14 +2110,15 @@ export default memo(withGlobal<OwnProps>(
     const downloadableMedia = selectMessageDownloadableMedia(global, message);
     const isDownloading = downloadableMedia && getIsDownloading(activeDownloads, downloadableMedia);
 
-    const repliesThreadInfo = selectThreadInfo(global, chatId, album?.commentsMessage?.id || id);
-
     const isInDocumentGroup = Boolean(message.groupedId) && !message.isInAlbum;
-    const documentGroupFirstMessageId = isInDocumentGroup
-      ? selectMessageIdsByGroupId(global, chatId, message.groupedId!)![0]
-      : undefined;
+
+    const repliesThreadInfo = selectThreadInfo(
+      global, chatId, album?.commentsMessage?.id || documentGroup?.commentsMessage?.id || id,
+    );
     const reactionMessage = isInDocumentGroup ? (
-      isLastInDocumentGroup ? selectChatMessage(global, chatId, documentGroupFirstMessageId!) : undefined
+      isLastInDocumentGroup && documentGroup?.firstMessageId
+        ? selectChatMessage(global, chatId, documentGroup.firstMessageId)
+        : undefined
     ) : message;
 
     const readState = selectThreadReadState(global, chatId, threadId);
@@ -2119,7 +2141,7 @@ export default memo(withGlobal<OwnProps>(
 
     const isPremium = selectIsCurrentUserPremium(global);
     const senderBoosts = sender && selectIsChatWithSelf(global, sender.id)
-      ? (chatFullInfo?.boostsApplied ?? message.senderBoosts) : message.senderBoosts;
+      ? (boostsApplied ?? message.senderBoosts) : message.senderBoosts;
 
     const chatLevel = chat?.boostLevel || 0;
     const transcribeMinLevel = global.appConfig.groupTranscribeLevelMin;
@@ -2153,7 +2175,6 @@ export default memo(withGlobal<OwnProps>(
       originSender,
       botSender,
       shouldHideReply: shouldHideReply || isReplyToTopicStart,
-      isThreadTop,
       replyMessage,
       replyMessageSender,
       replyMessageForwardSender,
@@ -2202,7 +2223,7 @@ export default memo(withGlobal<OwnProps>(
       isTranscribing: transcriptionId !== undefined && global.transcriptions[transcriptionId]?.isPending,
       transcribedText: transcriptionId !== undefined ? global.transcriptions[transcriptionId]?.text : undefined,
       isPremium,
-      senderAdminMember,
+      senderChatMember,
       messageTopic,
       hasTopicChip,
       chatTranslations,
@@ -2212,6 +2233,7 @@ export default memo(withGlobal<OwnProps>(
       requestedChatTranslationLanguage,
       hasLinkedChat: Boolean(chatFullInfo?.linkedChatId),
       withAnimatedEffects: selectPerformanceSettingsValue(global, 'stickerEffects'),
+      canAnimateTextStreaming: selectPerformanceSettingsValue(global, 'textStreaming'),
       webPageStory,
       isConnected,
       isLoadingComments: repliesThreadInfo?.isCommentsInfo

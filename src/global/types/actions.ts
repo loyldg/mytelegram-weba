@@ -78,6 +78,7 @@ import type {
   CallSound,
   ChatListType,
   ConfettiParams,
+  ForwardTarget,
   GiftProfileFilterOptions,
   GlobalSearchContent,
   IAnchorPosition,
@@ -182,8 +183,13 @@ export interface ActionPayloads {
     chatId: string;
     userId: string;
     adminRights: ApiChatAdminRights;
-    customTitle?: string;
+    rank?: string;
   } & WithTabId;
+  editChatParticipantRank: {
+    chatId: string;
+    userId: string;
+    rank: string;
+  };
 
   checkChatInvite: {
     hash: string;
@@ -310,6 +316,11 @@ export interface ActionPayloads {
   markBotVerificationInfoShown: {
     peerId: string;
   };
+  toggleNoForwards: {
+    userId: string;
+    isEnabled: boolean;
+    requestMsgId?: number;
+  };
 
   // Message search
   openMiddleSearch: {
@@ -402,6 +413,10 @@ export interface ActionPayloads {
     chatId: string;
   } & WithTabId;
   leaveChannel: {
+    chatId: string;
+    shouldSkipOwnershipCheck?: boolean;
+  } & WithTabId;
+  leaveBasicGroup: {
     chatId: string;
     shouldSkipOwnershipCheck?: boolean;
   } & WithTabId;
@@ -1929,11 +1944,31 @@ export interface ActionPayloads {
     userId: string;
   } & WithTabId;
   closeChatRefundModal: WithTabId | undefined;
+  openDisableSharingAboutModal: {
+    userId: string;
+  } & WithTabId;
+  closeDisableSharingAboutModal: WithTabId | undefined;
   openProfileRatingModal: {
     userId: string;
     level: number;
   } & WithTabId;
   closeProfileRatingModal: WithTabId | undefined;
+  openRankModal: {
+    chatId: string;
+    userId: string;
+    isAdmin?: boolean;
+    isOwner?: boolean;
+    rank?: string;
+  } & WithTabId;
+  closeRankModal: WithTabId | undefined;
+  openEditRankModal: {
+    chatId: string;
+    userId: string;
+    isAdmin?: boolean;
+    isOwner?: boolean;
+    rank?: string;
+  } & WithTabId;
+  closeEditRankModal: WithTabId | undefined;
   loadMoreProfilePhotos: {
     peerId: string;
     isPreload?: boolean;
@@ -1989,7 +2024,13 @@ export interface ActionPayloads {
   } & WithTabId;
   exitForwardMode: WithTabId | undefined;
   changeRecipient: WithTabId | undefined;
-  forwardToSavedMessages: WithTabId | undefined;
+  forwardToMultipleChats: {
+    targets: ForwardTarget[];
+    comment?: string;
+  } & WithTabId;
+  forwardToSavedMessages: {
+    scheduledAt?: number;
+  } & WithTabId;
   forwardStory: {
     toChatId: string;
   } & WithTabId;
@@ -2268,6 +2309,8 @@ export interface ActionPayloads {
 
   acceptBotUrlAuth: {
     isWriteAllowed?: boolean;
+    wasPhoneShared?: boolean;
+    matchCode?: string;
   } & WithTabId;
 
   requestLinkUrlAuth: {
@@ -2276,7 +2319,15 @@ export interface ActionPayloads {
 
   acceptLinkUrlAuth: {
     isWriteAllowed?: boolean;
+    wasPhoneShared?: boolean;
+    matchCode?: string;
   } & WithTabId;
+
+  checkUrlAuthMatchCode: {
+    matchCode: string;
+  } & WithTabId;
+
+  declineUrlAuth: WithTabId | undefined;
 
   // Settings
   loadAuthorizations: undefined;
@@ -2549,6 +2600,41 @@ export interface ActionPayloads {
   } & WithTabId) | undefined;
   closePremiumModal: WithTabId | undefined;
 
+  openAiMessageEditorModal: {
+    chatId: string;
+    text: ApiFormattedText;
+    initialTab?: 'translate' | 'style' | 'fix';
+    isFromAttachment?: boolean;
+  } & WithTabId;
+  closeAiMessageEditorModal: WithTabId | undefined;
+  setAiMessageEditorTab: {
+    tab: 'translate' | 'style' | 'fix';
+  } & WithTabId;
+  setAiMessageEditorTranslateOptions: {
+    selectedLanguage?: string;
+    selectedTone?: string;
+    shouldEmojify?: boolean;
+    clearResult?: boolean;
+  } & WithTabId;
+  setAiMessageEditorStyleOptions: {
+    selectedTone?: string;
+    shouldEmojify?: boolean;
+    clearResult?: boolean;
+  } & WithTabId;
+  composeWithAiMessageEditor: {
+    shouldProofread?: boolean;
+    isEmojify?: boolean;
+    translateToLang?: string;
+    changeTone?: string;
+  } & WithTabId;
+  applyAiMessageEditorResult: WithTabId | undefined;
+  sendAiMessageEditorResult: ({
+    isSilent?: boolean;
+    scheduledAt?: number;
+    scheduleRepeatPeriod?: number;
+  } & WithTabId) | undefined;
+  clearAiMessageEditorPendingResult: WithTabId | undefined;
+
   openGiveawayModal: ({
     chatId: string;
     gifts?: number[] | undefined;
@@ -2576,7 +2662,7 @@ export interface ActionPayloads {
     onPasswordTooFresh?: VoidFunction;
     onSessionTooFresh?: VoidFunction;
   };
-  transferChannelOwnership: {
+  transferChatOwnership: {
     chatId: string;
     userId: string;
     password: string;
@@ -3023,6 +3109,11 @@ export interface ActionPayloads {
     topicId: number;
   } & WithTabId;
   closeEditTopicPanel: WithTabId | undefined;
+
+  loadDiscussion: {
+    chatId: string;
+    threadId: number;
+  };
 
   uploadContactProfilePhoto: {
     userId: string;

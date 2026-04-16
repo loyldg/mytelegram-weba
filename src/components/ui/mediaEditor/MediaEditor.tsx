@@ -31,7 +31,7 @@ import Icon from '../../common/icons/Icon';
 import Button from '../Button';
 import FloatingActionButton from '../FloatingActionButton';
 import Portal from '../Portal';
-import TabList from '../TabList';
+import SquareTabList from '../SquareTabList';
 import Transition from '../Transition';
 import CropOverlay from './CropOverlay';
 import CropPanel from './CropPanel';
@@ -600,8 +600,6 @@ const MediaEditor = ({
   const canUndo = actions.length > 0;
   const canRedo = redoStack.length > 0;
 
-  if (!shouldRender) return undefined;
-
   const renderPanelContent = () => {
     switch (mode) {
       case 'crop':
@@ -690,6 +688,8 @@ const MediaEditor = ({
       `height: ${frameHeight}px`,
     );
   }, [displaySize, cropState, displayScale, mode, isTransitioning]);
+
+  if (!shouldRender) return undefined;
 
   return (
     <Portal>
@@ -807,7 +807,7 @@ const MediaEditor = ({
             >
               {renderPanelContent()}
             </Transition>
-            <TabList
+            <SquareTabList
               tabs={TABS}
               activeTab={activeTabIndex}
               onSwitchTab={handleTabSwitch}

@@ -11,7 +11,7 @@ import type { AnimationLevel } from '../../../../types';
 
 import { selectAnimationLevel } from '../../../../global/selectors/sharedState';
 import buildClassName from '../../../../util/buildClassName';
-import { getNextArrowReplacement } from '../../../../util/localization/format';
+import { NEXT_ARROW_REPLACEMENT } from '../../../../util/localization/format';
 import { resolveTransitionName } from '../../../../util/resolveTransitionName';
 import { getGiftAttributes, getRandomGiftPreviewAttributes } from '../../../common/helpers/gifts';
 
@@ -26,7 +26,7 @@ import Button from '../../../ui/Button';
 import InfiniteScroll from '../../../ui/InfiniteScroll';
 import Link from '../../../ui/Link';
 import Modal from '../../../ui/Modal';
-import TabList, { type TabWithProperties } from '../../../ui/TabList';
+import SquareTabList, { type TabWithProperties } from '../../../ui/SquareTabList';
 import Transition from '../../../ui/Transition';
 import GiftAttributeItem from '../GiftAttributeItem';
 import UniqueGiftHeader from '../UniqueGiftHeader';
@@ -359,7 +359,7 @@ const GiftPreviewModal = ({ modal, animationLevel }: OwnProps & StateProps) => {
                     {lang(
                       isCraftableModelsMode ? 'GiftPreviewToggleRegularModels' : 'GiftPreviewToggleCraftableModels',
                       undefined,
-                      { withNodes: true, specialReplacement: getNextArrowReplacement() },
+                      { withNodes: true, specialReplacement: NEXT_ARROW_REPLACEMENT },
                     )}
                   </Link>
                 )}
@@ -474,7 +474,7 @@ const GiftPreviewModal = ({ modal, animationLevel }: OwnProps & StateProps) => {
       onClose={handleClose}
     >
       {renderHeader()}
-      <TabList
+      <SquareTabList
         className={styles.tabs}
         activeTab={selectedTabIndex}
         tabs={tabs}

@@ -16,6 +16,7 @@ import {
   type ApiMessage,
   type ApiPeer,
   type KeyboardButtonGiftOffer,
+  type KeyboardButtonNoForwardsRequest,
   MAIN_THREAD_ID,
 } from '../../../api/types';
 import { MediaViewerOrigin } from '../../../types';
@@ -60,6 +61,7 @@ import ActionMessageText from './ActionMessageText';
 import ChannelPhoto from './actions/ChannelPhoto';
 import Gift from './actions/Gift';
 import GiveawayPrize from './actions/GiveawayPrize';
+import NoForwardsRequest from './actions/NoForwardsRequest';
 import StarGift from './actions/StarGift';
 import StarGiftPurchaseOffer from './actions/StarGiftPurchaseOffer';
 import StarGiftUnique from './actions/StarGiftUnique';
@@ -103,6 +105,7 @@ type StateProps = {
   isResizingContainer?: boolean;
   scrollTargetPosition?: ScrollTargetPosition;
   isAccountFrozen?: boolean;
+  noForwardsRequestExpirePeriod: number;
 };
 
 const SINGLE_LINE_ACTIONS = new Set<ApiMessageAction['type']>([
@@ -111,10 +114,12 @@ const SINGLE_LINE_ACTIONS = new Set<ApiMessageAction['type']>([
   'chatDeletePhoto',
   'todoCompletions',
   'todoAppendTasks',
+  'pollAppendAnswer',
+  'pollDeleteAnswer',
   'unsupported',
 ]);
 const HIDDEN_TEXT_ACTIONS = new Set<ApiMessageAction['type']>(['giftCode', 'prizeStars',
-  'suggestProfilePhoto', 'suggestedPostApproval', 'starGiftPurchaseOffer']);
+  'suggestProfilePhoto', 'suggestedPostApproval', 'starGiftPurchaseOffer', 'noForwardsRequest']);
 
 const ActionMessage = ({
   message,
@@ -138,6 +143,7 @@ const ActionMessage = ({
   isResizingContainer,
   scrollTargetPosition,
   isAccountFrozen,
+  noForwardsRequestExpirePeriod,
   observeIntersectionForBottom,
   observeIntersectionForLoading,
   observeIntersectionForPlaying,
@@ -159,6 +165,7 @@ const ActionMessage = ({
     openGiftOfferAcceptModal,
     declineStarGiftOffer,
     showNotification,
+    toggleNoForwards,
   } = getActions();
 
   const ref = useRef<HTMLDivElement>();
@@ -182,7 +189,12 @@ const ActionMessage = ({
   const shouldRenderGiftOfferButtons = action.type === 'starGiftPurchaseOffer'
     && !message.isOutgoing && !action.isAccepted && !action.isDeclined && !hasGiftOfferExpired;
 
-  const shouldRenderInlineButtons = shouldRenderGiftOfferButtons;
+  const hasNoForwardsRequestExpired = action.type === 'noForwardsRequest'
+    && (message.date + noForwardsRequestExpirePeriod) <= getServerTime();
+  const shouldRenderNoForwardsButtons = action.type === 'noForwardsRequest'
+    && !message.isOutgoing && !action.isExpired && !hasNoForwardsRequestExpired;
+
+  const shouldRenderInlineButtons = shouldRenderGiftOfferButtons || shouldRenderNoForwardsButtons;
 
   const shouldSkipRender = isInsideTopic && action.type === 'topicCreate';
 
@@ -204,6 +216,21 @@ const ActionMessage = ({
     ],
   ], [lang]);
 
+  const noForwardsInlineButtons: KeyboardButtonNoForwardsRequest[][] = useMemo(() => [
+    [
+      {
+        type: 'noForwardsRequest',
+        buttonType: 'reject',
+        text: lang('NoForwardsRequestReject'),
+      },
+      {
+        type: 'noForwardsRequest',
+        buttonType: 'accept',
+        text: lang('NoForwardsRequestAccept'),
+      },
+    ],
+  ], [lang]);
+
   const [isRejectOfferDialogOpen, openRejectOfferDialog, closeRejectOfferDialog] = useFlag(false);
 
   const handleInlineButtonClick = useLastCallback((button: ApiKeyboardButton) => {
@@ -219,6 +246,15 @@ const ActionMessage = ({
         }
       } else if (button.buttonType === 'reject') {
         openRejectOfferDialog();
+      }
+    } else if (button.type === 'noForwardsRequest') {
+      if (action.type === 'noForwardsRequest') {
+        const isAccept = button.buttonType === 'accept';
+        toggleNoForwards({
+          userId: chatId,
+          isEnabled: isAccept ? action.newValue : action.prevValue,
+          requestMsgId: id,
+        });
       }
     }
   });
@@ -275,8 +311,9 @@ const ActionMessage = ({
       return;
     }
 
+    // Message appearance animation works only if this timeout is not cleared
     setTimeout(markShown, appearanceOrder * MESSAGE_APPEARANCE_DELAY);
-  }, [appearanceOrder, markShown, noAppearanceAnimation]);
+  }, [appearanceOrder, noAppearanceAnimation]);
 
   const { ref: refWithTransition } = useShowTransition({
     isOpen: isShown,
@@ -522,6 +559,13 @@ const ActionMessage = ({
           />
         );
 
+      case 'noForwardsRequest':
+        return (
+          <NoForwardsRequest
+            message={message}
+          />
+        );
+
       case 'suggestedPostApproval':
         if (action.isBalanceTooLow) {
           return (
@@ -614,10 +658,17 @@ const ActionMessage = ({
       {(fullContent || shouldRenderInlineButtons) && (
         <div className={styles.contentWrapper}>
           {fullContent}
-          {shouldRenderInlineButtons && (
+          {shouldRenderGiftOfferButtons && (
             <InlineButtons
               className={styles.inlineButtons}
               inlineButtons={giftOfferInlineButtons}
+              onClick={handleInlineButtonClick}
+            />
+          )}
+          {shouldRenderNoForwardsButtons && (
+            <InlineButtons
+              className={styles.inlineButtons}
+              inlineButtons={noForwardsInlineButtons}
               onClick={handleInlineButtonClick}
             />
           )}
@@ -703,6 +754,7 @@ export default memo(withGlobal<OwnProps>(
       isResizingContainer,
       scrollTargetPosition,
       isAccountFrozen,
+      noForwardsRequestExpirePeriod: global.appConfig.noForwardsRequestExpirePeriod,
     };
   },
 )(ActionMessage));

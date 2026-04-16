@@ -110,6 +110,7 @@ export const DEFAULT_APP_CONFIG: ApiAppConfig = {
     'animated_userpics',
     'premium_stickers',
     'effects',
+    'pm_noforwards',
   ],
   isPremiumPurchaseBlocked: false,
   maxUniqueReactions: 11,
@@ -129,6 +130,7 @@ export const DEFAULT_APP_CONFIG: ApiAppConfig = {
   starsSuggestedPostFutureMin: 300,
   starsSuggestedPostFutureMax: 2678400,
   starsSuggestedPostCommissionPermille: 850,
+  noForwardsRequestExpirePeriod: 86400,
   tonSuggestedPostCommissionPermille: 850,
   todoItemLengthMax: 64,
   todoItemsMax: 30,
@@ -162,4 +164,5 @@ export const DEFAULT_APP_CONFIG: ApiAppConfig = {
   passkeysMaxCount: 5,
   diceEmojies: [],
   diceEmojiesSuccess: {},
+  aiComposeStyles: [],
 };

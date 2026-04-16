@@ -12,9 +12,11 @@ import {
 } from '../../../config';
 import {
   getMainUsername,
-  getMessageInvoice, getMessageTextWithFallback, isChatChannel,
+  getMessageContent,
+  getMessageInvoice,
+  getMessageTextWithFallback,
+  isChatChannel,
 } from '../../../global/helpers';
-import { getMessageContent } from '../../../global/helpers';
 import { getPeerTitle } from '../../../global/helpers/peers';
 import { getMessageReplyInfo } from '../../../global/helpers/replies';
 import {
@@ -27,9 +29,10 @@ import {
 } from '../../../global/selectors';
 import { selectThreadIdFromMessage } from '../../../global/selectors/threads';
 import { ensureProtocol } from '../../../util/browser/url';
-import { formatDateTimeToString, formatScheduledDateTime, formatShortDuration } from '../../../util/dates/dateFormat';
-import { formatCurrency } from '../../../util/formatCurrency';
-import { convertTonFromNanos } from '../../../util/formatCurrency';
+import {
+  formatDateTimeToString, formatScheduledDateTime, formatShortDuration,
+} from '../../../util/dates/oldDateFormat';
+import { convertTonFromNanos, formatCurrency } from '../../../util/formatCurrency';
 import { formatCurrencyAmountAsText, formatStarsAsText, formatTonAsText } from '../../../util/localization/format';
 import { conjuctionWithNodes } from '../../../util/localization/utils';
 import { getServerTime } from '../../../util/serverTime';
@@ -1054,8 +1057,50 @@ const ActionMessageText = ({
         });
       }
 
+      case 'pollAppendAnswer':
+      case 'pollDeleteAnswer': {
+        const optionLink = renderMessageLink(
+          replyMessage,
+          renderTextWithEntities({
+            text: action.answer.text.text,
+            entities: action.answer.text.entities,
+            asPreview: true,
+          }),
+          asPreview,
+        );
+
+        return translateWithYou(
+          lang,
+          action.type === 'pollAppendAnswer' ? 'MessageActionPollAppendAnswer' : 'MessageActionPollDeleteAnswer',
+          isOutgoing,
+          {
+            peer: senderLink,
+            option: optionLink,
+          },
+        );
+      }
+
       case 'phoneCall': // Rendered as a regular message, but considered an action for the summary
         return lang(getCallMessageKey(action, isOutgoing));
+
+      case 'noForwardsToggle': {
+        const { prevValue, newValue } = action;
+        if (newValue && newValue === prevValue) {
+          return lang('ActionSharingStillDisabled');
+        }
+        return translateWithYou(
+          lang,
+          newValue ? 'ActionSharingDisabled' : 'ActionSharingEnabled',
+          isOutgoing,
+          { from: senderLink },
+        );
+      }
+
+      case 'noForwardsRequest': {
+        return isOutgoing
+          ? lang('NoForwardsRequestYouTitle')
+          : lang('NoForwardsRequestTitle', { user: senderLink }, { withNodes: true });
+      }
 
       case 'newCreatorPending': {
         const { newCreatorId } = action;

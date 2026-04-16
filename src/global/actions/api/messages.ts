@@ -52,6 +52,7 @@ import {
   partition,
   split,
   unique,
+  uniqueByField,
 } from '../../../util/iteratees';
 import { getMessageKey, isLocalMessageId } from '../../../util/keys/messageKey';
 import { getTranslationFn, type RegularLangFnParameters } from '../../../util/localization';
@@ -73,6 +74,7 @@ import {
   isUserRightBanned,
   splitMessagesForForwarding,
 } from '../../helpers';
+import { isChatAdmin } from '../../helpers/chats';
 import { isApiPeerChat, isApiPeerUser } from '../../helpers/peers';
 import {
   addActionHandler, getActions, getGlobal, getPromiseActions, setGlobal,
@@ -139,9 +141,11 @@ import {
   selectIsMonoforumAdmin,
   selectLanguageCode,
   selectListedIds,
+  selectMessageIdsByGroupId,
   selectMessageReplyInfo,
   selectOutlyingListByMessageId,
   selectPeer,
+  selectPeerPaidMessagesStars,
   selectPeerStory,
   selectPinnedIds,
   selectPollFromMessage,
@@ -167,8 +171,7 @@ import {
   selectThreadLocalStateParam,
   selectThreadReadState,
 } from '../../selectors/threads';
-import { updateWithLocalMedia } from '../apiUpdaters/messages';
-import { deleteMessages } from '../apiUpdaters/messages';
+import { deleteMessages, updateWithLocalMedia } from '../apiUpdaters/messages';
 
 const AUTOLOGIN_TOKEN_KEY = 'autologin_token';
 
@@ -1477,17 +1480,17 @@ addActionHandler('loadPollOptionResults', async (global, actions, payload): Prom
 
   const tabState = selectTabState(global, tabId);
   const { pollResults } = tabState;
-  const { voters } = tabState.pollResults;
+  const { votesByOption } = pollResults;
+
+  const existingVotes = !shouldResetVoters && votesByOption?.[option] ? votesByOption[option] : [];
+  const newVotes = uniqueByField([...existingVotes, ...result.votes], 'peerId');
 
   global = updateTabState(global, {
     pollResults: {
       ...pollResults,
-      voters: {
-        ...voters,
-        [option]: unique([
-          ...(!shouldResetVoters && voters?.[option] ? voters[option] : []),
-          ...result.votes.map((vote) => vote.peerId),
-        ]),
+      votesByOption: {
+        ...votesByOption,
+        [option]: newVotes,
       },
       offsets: {
         ...(pollResults.offsets ? pollResults.offsets : {}),
@@ -1535,7 +1538,6 @@ addActionHandler('loadScheduledHistory', async (global, actions, payload): Promi
 
   Object.entries(idsByThreadId).forEach(([tId, newThreadScheduledIds]) => {
     const threadId = tId as ThreadId;
-    if (!chat.isForum && threadId !== MAIN_THREAD_ID) return;
     global = replaceThreadLocalStateParam(global, chat.id, threadId, 'scheduledIds', newThreadScheduledIds);
   });
   setGlobal(global);
@@ -1807,7 +1809,16 @@ async function loadViewportMessages<T extends GlobalState>(
   if (threadId !== MAIN_THREAD_ID && !getIsSavedDialog(chatId, threadId, global.currentUserId)) {
     const threadFirstMessageId = selectFirstMessageId(global, chatId, threadId);
     if ((!ids[0] || threadFirstMessageId === ids[0]) && threadFirstMessageId !== threadId) {
-      ids.unshift(Number(threadId));
+      const threadTopMessage = selectChatMessage(global, chatId, Number(threadId));
+      const groupedIds = threadTopMessage?.groupedId
+        ? selectMessageIdsByGroupId(global, chatId, threadTopMessage.groupedId)
+        : undefined;
+
+      if (groupedIds && groupedIds.length > 1) {
+        ids.unshift(...groupedIds);
+      } else {
+        ids.unshift(Number(threadId));
+      }
     }
   }
 
@@ -1907,7 +1918,7 @@ export async function getPeerStarsForMessage<T extends GlobalState>(
   if (!peer) return undefined;
 
   if (isApiPeerChat(peer)) {
-    if (selectIsMonoforumAdmin(global, peerId)) {
+    if (isChatAdmin(peer) || selectIsMonoforumAdmin(global, peerId)) {
       return undefined;
     }
     return peer.paidMessagesStars;
@@ -2554,7 +2565,17 @@ addActionHandler('setForwardChatOrTopic', async (global, actions, payload): Prom
   if (isSelectForwardsContainVoiceMessages && user && !await checkIfVoiceMessagesAllowed(global, user, chatId)) {
     actions.showDialog({
       data: {
-        message: oldTranslate('VoiceMessagesRestrictedByPrivacy', getUserFullName(user)),
+        type: 'localized',
+        text: {
+          key: 'NoVoiceMessagesAllowed',
+          variables: {
+            user: getUserFullName(user),
+          },
+          options: {
+            withNodes: true,
+            withMarkdown: true,
+          },
+        },
       },
       tabId,
     });
@@ -2582,7 +2603,7 @@ addActionHandler('setForwardChatOrTopic', async (global, actions, payload): Prom
 });
 
 addActionHandler('forwardToSavedMessages', (global, actions, payload): ActionReturnType => {
-  const { tabId = getCurrentTabId() } = payload || {};
+  const { scheduledAt, tabId = getCurrentTabId() } = payload || {};
   global = updateTabState(global, {
     forwardMessages: {
       ...selectTabState(global, tabId).forwardMessages,
@@ -2592,7 +2613,157 @@ addActionHandler('forwardToSavedMessages', (global, actions, payload): ActionRet
   setGlobal(global);
 
   actions.exitMessageSelectMode({ tabId });
-  actions.forwardMessages({ isSilent: true, tabId });
+  actions.forwardMessages({ isSilent: true, scheduledAt, tabId });
+});
+
+interface ForwardToChatOptions {
+  global: GlobalState;
+  fromChat: ApiChat;
+  toChat: ApiChat;
+  toThreadId?: ThreadId;
+  realMessages: ApiMessage[];
+  serviceMessages: ApiMessage[];
+  comment?: string;
+  withMyScore?: boolean;
+  noAuthors?: boolean;
+  noCaptions?: boolean;
+  isCurrentUserPremium: boolean;
+}
+
+function forwardMessagesToChat({
+  global,
+  fromChat,
+  toChat,
+  toThreadId = MAIN_THREAD_ID,
+  realMessages,
+  serviceMessages,
+  comment,
+  withMyScore,
+  noAuthors,
+  noCaptions,
+  isCurrentUserPremium,
+}: ForwardToChatOptions) {
+  const sendAs = selectSendAs(global, toChat.id);
+  const threadInfo = toThreadId !== MAIN_THREAD_ID ? selectThreadInfo(global, toChat.id, toThreadId) : undefined;
+  const lastMessageId = toThreadId === MAIN_THREAD_ID
+    ? selectChatLastMessageId(global, toChat.id)
+    : threadInfo?.lastMessageId;
+  const messagePriceInStars = selectPeerPaidMessagesStars(global, toChat.id);
+  const targetMessageList = {
+    chatId: toChat.id,
+    threadId: toThreadId,
+    type: 'thread',
+  } as const;
+
+  if (comment) {
+    sendMessage(global, {
+      chat: toChat,
+      messageList: targetMessageList,
+      text: comment,
+      sendAs,
+      lastMessageId,
+      messagePriceInStars,
+    });
+  }
+
+  if (realMessages.length) {
+    const messageSlices = global.config?.maxForwardedCount
+      ? splitMessagesForForwarding(realMessages, global.config.maxForwardedCount)
+      : [realMessages];
+
+    for (const slice of messageSlices) {
+      const forwardParams: ForwardMessagesParams = {
+        fromChat,
+        toChat,
+        toThreadId,
+        messages: slice,
+        isSilent: true,
+        sendAs,
+        withMyScore,
+        noAuthors,
+        noCaptions,
+        isCurrentUserPremium,
+        wasDrafted: false,
+        lastMessageId,
+        messagePriceInStars,
+      };
+
+      callApi('forwardMessages', forwardParams);
+    }
+  }
+
+  for (const message of serviceMessages) {
+    const { text, entities } = message.content.text || {};
+    const { sticker } = message.content;
+
+    sendMessage(global, {
+      chat: toChat,
+      messageList: targetMessageList,
+      text,
+      entities,
+      sticker,
+      isSilent: true,
+      sendAs,
+      lastMessageId,
+      messagePriceInStars,
+    });
+  }
+}
+
+addActionHandler('forwardToMultipleChats', (global, actions, payload): ActionReturnType => {
+  const { targets, comment, tabId = getCurrentTabId() } = payload;
+
+  const {
+    fromChatId, messageIds, withMyScore, noAuthors, noCaptions,
+  } = selectTabState(global, tabId).forwardMessages;
+
+  const fromChat = fromChatId ? selectChat(global, fromChatId) : undefined;
+  const isCurrentUserPremium = selectIsCurrentUserPremium(global);
+
+  const messages = fromChatId && messageIds
+    ? messageIds
+      .sort((a, b) => a - b)
+      .map((id) => selectChatMessage(global, fromChatId, id)).filter(Boolean)
+    : undefined;
+
+  if (!fromChat || !messages?.length) {
+    return;
+  }
+
+  const [realMessages, serviceMessages] = partition(messages, (m) => !isServiceNotificationMessage(m));
+  const forwardableRealMessages = realMessages.filter((message) => selectCanForwardMessage(global, message));
+
+  if (!forwardableRealMessages.length && !serviceMessages.length) {
+    return;
+  }
+
+  for (const { chatId, topicId } of targets) {
+    const toChat = selectChat(global, chatId);
+    if (!toChat) continue;
+
+    forwardMessagesToChat({
+      global,
+      fromChat,
+      toChat,
+      toThreadId: topicId || MAIN_THREAD_ID,
+      realMessages: forwardableRealMessages,
+      serviceMessages,
+      comment,
+      withMyScore,
+      noAuthors,
+      noCaptions,
+      isCurrentUserPremium,
+    });
+  }
+
+  global = updateTabState(global, {
+    forwardMessages: {},
+    isShareMessageModalShown: false,
+  }, tabId);
+
+  actions.exitMessageSelectMode({ tabId });
+
+  return global;
 });
 
 addActionHandler('forwardStory', (global, actions, payload): ActionReturnType => {

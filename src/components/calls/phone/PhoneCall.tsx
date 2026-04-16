@@ -18,7 +18,7 @@ import {
   IS_REQUEST_FULLSCREEN_SUPPORTED,
 } from '../../../util/browser/windowEnvironment';
 import buildClassName from '../../../util/buildClassName';
-import { formatMediaDuration } from '../../../util/dates/dateFormat';
+import { formatMediaDuration } from '../../../util/dates/oldDateFormat';
 import { getServerTime } from '../../../util/serverTime';
 import { LOCAL_TGS_URLS } from '../../common/helpers/animatedAssets';
 import renderText from '../../common/helpers/renderText';
@@ -218,9 +218,13 @@ const PhoneCall = ({
 
   useEffect(() => {
     if (phoneCall?.state === 'discarded') {
-      setTimeout(hangUp, 250);
+      const timeout = setTimeout(hangUp, 250);
+      return () => {
+        clearTimeout(timeout);
+      };
     }
-  }, [hangUp, phoneCall?.reason, phoneCall?.state]);
+    return undefined;
+  }, [phoneCall?.reason, phoneCall?.state]);
 
   return (
     <Modal

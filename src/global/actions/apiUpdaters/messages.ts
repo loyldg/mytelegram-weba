@@ -73,6 +73,7 @@ import {
   updateThreadInfoMessagesCount,
   updateThreadReadState,
 } from '../../reducers/threads';
+import { updateUserFullInfo } from '../../reducers/users';
 import {
   selectCanAnimateSnapEffect,
   selectChat,
@@ -179,10 +180,23 @@ addActionHandler('apiUpdate', (global, actions, update): ActionReturnType => {
         } else {
           global = updateChatLastMessage(global, chatId, newMessage);
         }
+
+        if (!isLocal && message.isOutgoing && message.content?.action?.type === 'noForwardsRequest') {
+          const currentMessageList = selectCurrentMessageList(global, tabId);
+          if (currentMessageList?.chatId === chatId && currentMessageList.type === 'thread') {
+            actions.focusMessage({
+              chatId,
+              threadId: MAIN_THREAD_ID,
+              messageId: message.id,
+              noHighlight: true,
+              tabId,
+            });
+          }
+        }
       });
 
       if (poll) {
-        global = updatePoll(global, poll.id, poll);
+        global = updatePoll(global, poll.summary.id, poll);
       }
 
       if (webPage) {
@@ -199,6 +213,37 @@ addActionHandler('apiUpdate', (global, actions, update): ActionReturnType => {
         const localDraftIds = Object.values(typingDraftStore || {});
         global = deleteChatMessages(global, chatId, localDraftIds);
         global = replaceThreadLocalStateParam(global, chatId, threadId, 'typingDraftIdByRandomId', undefined);
+      }
+
+      if (!isLocal && message.content?.action?.type === 'noForwardsToggle') {
+        const { newValue } = message.content.action;
+        if (message.isOutgoing) {
+          global = updateUserFullInfo(global, chatId, {
+            noForwardsMyEnabled: newValue,
+          });
+          const tabId = getCurrentTabId();
+          if (selectCurrentMessageList(global, tabId)?.chatId === chatId) {
+            actions.showNotification({
+              icon: newValue ? 'hand-stop-filled' : 'select-filled',
+              message: { key: newValue ? 'NotificationSharingDisabled' : 'NotificationSharingEnabled' },
+              tabId,
+            });
+          }
+        } else {
+          const originalMessage = replyInfo?.replyToMsgId ?
+            selectChatMessage(global, chatId, replyInfo.replyToMsgId) : undefined;
+
+          // When peer accepted user request to enable sharing
+          if (originalMessage?.isOutgoing && !newValue) {
+            global = updateUserFullInfo(global, chatId, {
+              noForwardsMyEnabled: false,
+            });
+          } else {
+            global = updateUserFullInfo(global, chatId, {
+              noForwardsPeerEnabled: newValue,
+            });
+          }
+        }
       }
 
       setGlobal(global);
@@ -275,7 +320,7 @@ addActionHandler('apiUpdate', (global, actions, update): ActionReturnType => {
       }
 
       if (poll) {
-        global = updatePoll(global, poll.id, poll);
+        global = updatePoll(global, poll.summary.id, poll);
       }
 
       if (webPage) {
@@ -323,7 +368,7 @@ addActionHandler('apiUpdate', (global, actions, update): ActionReturnType => {
         );
       }
       if (poll) {
-        global = updatePoll(global, poll.id, poll);
+        global = updatePoll(global, poll.summary.id, poll);
       }
 
       if (webPage) {
@@ -353,7 +398,7 @@ addActionHandler('apiUpdate', (global, actions, update): ActionReturnType => {
       }
 
       if (poll) {
-        global = updatePoll(global, poll.id, poll);
+        global = updatePoll(global, poll.summary.id, poll);
       }
 
       if (webPage) {
@@ -399,7 +444,7 @@ addActionHandler('apiUpdate', (global, actions, update): ActionReturnType => {
       global = updateQuickReplyMessage(global, id, message);
 
       if (poll) {
-        global = updatePoll(global, poll.id, poll);
+        global = updatePoll(global, poll.summary.id, poll);
       }
 
       if (webPage) {
@@ -502,7 +547,7 @@ addActionHandler('apiUpdate', (global, actions, update): ActionReturnType => {
       });
 
       if (poll) {
-        global = updatePoll(global, poll.id, poll);
+        global = updatePoll(global, poll.summary.id, poll);
       }
 
       global = {
@@ -579,7 +624,7 @@ addActionHandler('apiUpdate', (global, actions, update): ActionReturnType => {
       });
 
       if (poll) {
-        global = updatePoll(global, poll.id, poll);
+        global = updatePoll(global, poll.summary.id, poll);
       }
 
       setGlobal(global);

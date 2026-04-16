@@ -250,7 +250,8 @@ export const DEFAULT_TOPIC_ICON_STICKER_ID = 'topic-default-icon';
 export const DEFAULT_STATUS_ICON_ID = 'status-default-icon';
 export const EMOJI_IMG_REGEX = /<img[^>]+alt="([^"]+)"(?![^>]*data-document-id)[^>]*>/gm;
 
-export const BASE_EMOJI_KEYWORD_LANG = 'en';
+export const FALLBACK_LANG_CODE = 'en';
+export const BASE_EMOJI_KEYWORD_LANG = FALLBACK_LANG_CODE;
 
 export const MENU_TRANSITION_DURATION = 200;
 export const SLIDE_TRANSITION_DURATION = 450;
@@ -415,7 +416,9 @@ export const PREMIUM_FEATURE_SECTIONS = [
   'last_seen',
   'message_privacy',
   'effects',
+  'ai_compose',
   'todo',
+  'pm_noforwards',
 ] as const;
 
 export const PREMIUM_BOTTOM_VIDEOS: ApiPremiumSection[] = [
