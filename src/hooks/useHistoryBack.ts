@@ -52,6 +52,7 @@ let isAlteringHistory = false;
 let deferredHistoryOperations: HistoryOperation[] = [];
 let deferredPopstateOperations: HistoryOperationState[] = [];
 let isSafariGestureAnimation = false;
+let isHistoryInitialized = false;
 
 // Do not remove: used for history unit tests
 if (IS_TEST) {
@@ -127,7 +128,14 @@ function resetHistory() {
   window.history.replaceState({ index: 0, historyUniqueSessionId }, '', PATH_BASE);
 }
 
-resetHistory();
+function ensureHistoryInitialized() {
+  if (isHistoryInitialized) {
+    return;
+  }
+
+  isHistoryInitialized = true;
+  resetHistory();
+}
 
 function cleanupClosed(alreadyClosedCount = 1) {
   let countClosed = alreadyClosedCount;
@@ -164,6 +172,10 @@ function cleanupTrashedState() {
 }
 
 window.addEventListener('popstate', ({ state }: PopStateEvent) => {
+  if (!isHistoryInitialized) {
+    return;
+  }
+
   if (isAlteringHistory) {
     isAlteringHistory = false;
     if (deferredPopstateOperations.length) {
@@ -241,13 +253,15 @@ export default function useHistoryBack({
   shouldResetUrlHash?: boolean;
   onBack: VoidFunction;
 }) {
+  ensureHistoryInitialized();
+
   const lastOnBack = useLastCallback(onBack);
 
   // Active index of the record
   const indexRef = useRef<number>();
-  const wasReplaced = useRef(false);
+  const wasReplacedRef = useRef(false);
 
-  const isFirstRender = useRef(true);
+  const isFirstRenderRef = useRef(true);
 
   const pushState = useCallback((forceReplace = false) => {
     // Check if the old state should be replaced
@@ -267,7 +281,7 @@ export default function useHistoryBack({
       onBack: lastOnBack,
       shouldBeReplaced,
       markReplaced: () => {
-        wasReplaced.current = true;
+        wasReplacedRef.current = true;
       },
     };
 
@@ -284,9 +298,9 @@ export default function useHistoryBack({
 
   const processBack = useCallback(() => {
     // Only process back on open records
-    if (indexRef.current && historyState[indexRef.current] && !wasReplaced.current) {
+    if (indexRef.current && historyState[indexRef.current] && !wasReplacedRef.current) {
       historyState[indexRef.current].isClosed = true;
-      wasReplaced.current = true;
+      wasReplacedRef.current = true;
       if (indexRef.current === historyCursor && !shouldBeReplaced) {
         historyCursor -= cleanupClosed();
       }
@@ -295,16 +309,16 @@ export default function useHistoryBack({
 
   // Process back navigation when element is unmounted
   useEffectOnce(() => {
-    isFirstRender.current = false;
+    isFirstRenderRef.current = false;
     return () => {
-      if (!isActive || wasReplaced.current) return;
+      if (!isActive || wasReplacedRef.current) return;
       processBack();
     };
   });
 
   useSyncEffect(([prevIsActive]) => {
     if (prevIsActive === isActive) return;
-    if (isFirstRender.current && !isActive) return;
+    if (isFirstRenderRef.current && !isActive) return;
 
     if (isActive) {
       pushState();

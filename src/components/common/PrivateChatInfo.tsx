@@ -19,6 +19,7 @@ import {
 } from '../../global/selectors';
 import { selectThreadMessagesCount } from '../../global/selectors/threads';
 import buildClassName from '../../util/buildClassName';
+import { hasRank } from './helpers/chatMember';
 import { REM } from './helpers/mediaDimensions';
 import renderText from './helpers/renderText';
 
@@ -33,13 +34,14 @@ import Avatar from './Avatar';
 import DotAnimation from './DotAnimation';
 import FullNameTitle from './FullNameTitle';
 import Icon from './icons/Icon';
+import RankBadge from './RankBadge';
 import TopicIcon from './TopicIcon';
 import TypingStatus from './TypingStatus';
 
 const TOPIC_ICON_SIZE = 2.5 * REM;
 
 type BaseOwnProps = {
-  typingStatus?: ApiTypingStatus;
+  typingStatusByPeerId?: Record<string, ApiTypingStatus>;
   avatarSize?: 'tiny' | 'small' | 'medium' | 'large' | 'jumbo';
   forceShowSelf?: boolean;
   status?: string;
@@ -58,7 +60,8 @@ type BaseOwnProps = {
   emojiStatusSize?: number;
   noStatusOrTyping?: boolean;
   noRtl?: boolean;
-  adminMember?: ApiChatMember;
+  chatMemberOriginId?: string;
+  chatMember?: ApiChatMember;
   isSavedDialog?: boolean;
   noAvatar?: boolean;
   className?: string;
@@ -94,7 +97,7 @@ const UPDATE_INTERVAL = 1000 * 60; // 1 min
 const PrivateChatInfo = ({
   userId,
   customPeer,
-  typingStatus,
+  typingStatusByPeerId,
   avatarSize = 'medium',
   status,
   statusIcon,
@@ -118,7 +121,8 @@ const PrivateChatInfo = ({
   isSavedMessages,
   isSavedDialog,
   areMessagesLoaded,
-  adminMember,
+  chatMember,
+  chatMemberOriginId,
   ripple,
   className,
   storyViewerOrigin,
@@ -200,8 +204,8 @@ const PrivateChatInfo = ({
       return undefined;
     }
 
-    if (typingStatus) {
-      return <TypingStatus typingStatus={typingStatus} />;
+    if (typingStatusByPeerId) {
+      return <TypingStatus typingStatusByPeerId={typingStatusByPeerId} isPrivate />;
     }
 
     if (isTopic) {
@@ -237,10 +241,6 @@ const PrivateChatInfo = ({
     );
   }
 
-  const customTitle = adminMember
-    ? adminMember.customTitle || oldLang(adminMember.isOwner ? 'GroupInfo.LabelOwner' : 'GroupInfo.LabelAdmin')
-    : undefined;
-
   function renderNameTitle() {
     if (isTopic) {
       return (
@@ -248,18 +248,27 @@ const PrivateChatInfo = ({
       );
     }
 
-    if (customTitle) {
+    if (chatMember && hasRank(chatMember)) {
       return (
         <div className="info-name-title">
           <FullNameTitle
-            peer={user!}
+            peer={customPeer || user!}
+            noFake={noFake}
+            noVerified={noVerified}
             withEmojiStatus={!noEmojiStatus}
             emojiStatusSize={emojiStatusSize}
             isSavedMessages={isSavedMessages}
             isSavedDialog={isSavedDialog}
+            iconElement={iconElement}
             onEmojiStatusClick={onEmojiStatusClick}
           />
-          {customTitle && <span className="custom-title">{customTitle}</span>}
+          <RankBadge
+            chatId={chatMemberOriginId!}
+            userId={chatMember.userId}
+            isAdmin={chatMember.isAdmin}
+            isOwner={chatMember.isOwner}
+            rank={chatMember.rank}
+          />
         </div>
       );
     }
@@ -326,13 +335,19 @@ const PrivateChatInfo = ({
 };
 
 export default memo(withGlobal<OwnProps>(
-  (global, { userId, threadId, forceShowSelf }): Complete<StateProps> => {
+  (global, {
+    userId, threadId, forceShowSelf, isSavedDialog,
+  }): Complete<StateProps> => {
     const { isSynced } = global;
     const user = userId ? selectUser(global, userId) : undefined;
     const userStatus = userId ? selectUserStatus(global, userId) : undefined;
     const isSavedMessages = !forceShowSelf && user && user.isSelf;
     const self = isSavedMessages ? user : selectUser(global, global.currentUserId!);
-    const areMessagesLoaded = Boolean(userId ? selectChatMessages(global, userId) : undefined);
+    const areMessagesLoaded = Boolean(
+      isSavedDialog
+        ? selectChatMessages(global, global.currentUserId!)
+        : selectChatMessages(global, userId!),
+    );
 
     const topic = threadId ? selectTopic(global, userId, threadId) : undefined;
     const messagesCount = topic && userId ? selectThreadMessagesCount(global, userId, threadId!) : undefined;

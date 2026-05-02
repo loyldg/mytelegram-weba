@@ -40,6 +40,8 @@ interface OwnProps {
   canBeEmpty?: boolean;
   maxTimestamp?: number;
   shouldAnimateTyping?: boolean;
+  canAnimateTextStreaming?: boolean;
+  onTypingAnimationEnd?: NoneToVoidFunction;
 }
 
 const MIN_CUSTOM_EMOJIS_FOR_SHARED_CANVAS = 3;
@@ -66,6 +68,8 @@ function MessageText({
   maxTimestamp,
   threadId,
   shouldAnimateTyping,
+  canAnimateTextStreaming,
+  onTypingAnimationEnd,
 }: OwnProps) {
   const sharedCanvasRef = useRef<HTMLCanvasElement>();
   const sharedCanvasHqRef = useRef<HTMLCanvasElement>();
@@ -145,6 +149,7 @@ function MessageText({
     text: trimText(text || '', truncateLength),
     entities: entitiesWithFocusedQuote,
   };
+  const shouldRenderTypingPlaceholder = !('previousLocalId' in messageOrStory) || !messageOrStory.previousLocalId;
 
   return (
     <>
@@ -152,7 +157,15 @@ function MessageText({
         withSharedCanvas && <canvas key="shared-canvas" ref={sharedCanvasRef} className="shared-canvas" />,
         withSharedCanvas && <canvas key="shared-canvas-hq" ref={sharedCanvasHqRef} className="shared-canvas" />,
         shouldAnimateTyping ? (
-          <TypingWrapper key="typing-wrapper" text={textToRender}>{renderText}</TypingWrapper>
+          <TypingWrapper
+            key="typing-wrapper"
+            formattedText={textToRender}
+            renderText={renderText}
+            shouldAnimateMask={canAnimateTextStreaming}
+            shouldRenderPlaceholder={shouldRenderTypingPlaceholder}
+            onCompleted={onTypingAnimationEnd}
+            completionKey={messageOrStory.id}
+          />
         ) : renderText(textToRender),
       ].flat().filter(Boolean)}
     </>

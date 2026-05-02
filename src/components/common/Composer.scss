@@ -453,7 +453,30 @@
   --action-button-size: var(--base-height, 3rem);
   --action-button-compact-fix: -0.75rem;
 
+  position: relative;
   display: flex;
+
+  .ai-composer-button {
+    position: absolute;
+    z-index: 1;
+    top: 0.4375rem;
+    right: 0.625rem;
+
+    width: 1.75rem;
+    height: 1.75rem;
+
+    color: var(--color-composer-button);
+
+    opacity: 1;
+
+    transition: opacity 150ms ease-out;
+  }
+
+  .ai-composer-button-hidden {
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 150ms ease-out;
+  }
 
   .input-scroller {
     --_scroller-right-gap: calc((var(--action-button-size) + var(--action-button-compact-fix) - 0.125rem));
@@ -560,7 +583,7 @@
       height: 0.5rem;
       border-radius: 50%;
 
-      background: var(--color-green-darker);
+      background: var(--color-active-darker);
     }
   }
 
@@ -896,7 +919,7 @@
 }
 
 #caption-input-text .placeholder-text {
-  bottom: 0.8125rem;
+  bottom: 0.875rem;
 }
 
 #story-input-text .placeholder-text {

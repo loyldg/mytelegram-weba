@@ -8,32 +8,35 @@ import './Skeleton.scss';
 
 type OwnProps = {
   variant?: 'rectangular' | 'rounded-rect' | 'round';
-  animation?: 'wave' | 'pulse';
+  animation?: 'wave' | 'fast-wave' | 'pulse' | 'none';
   width?: number;
   height?: number;
   forceAspectRatio?: boolean;
   inline?: boolean;
   className?: string;
+  style?: string;
 };
 
 const Skeleton: FC<OwnProps> = ({
   variant = 'rectangular',
-  animation = 'wave',
+  animation = 'none',
   width,
   height,
   forceAspectRatio,
   inline,
   className,
+  style,
 }) => {
   const classNames = buildClassName('Skeleton', variant, animation, className, inline && 'inline');
   const aspectRatio = (width && height) ? `aspect-ratio: ${width}/${height}` : undefined;
-  const style = buildStyle(
+  const computedStyle = buildStyle(
+    style,
     forceAspectRatio && aspectRatio,
     Boolean(width) && `width: ${width}px`,
     !forceAspectRatio && Boolean(height) && `height: ${height}px`,
   );
   return (
-    <div className={classNames} style={style}>{inline && '\u00A0'}</div>
+    <div className={classNames} style={computedStyle}>{inline && '\u00A0'}</div>
   );
 };
 

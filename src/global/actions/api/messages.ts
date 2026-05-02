@@ -52,8 +52,10 @@ import {
   partition,
   split,
   unique,
+  uniqueByField,
 } from '../../../util/iteratees';
 import { getMessageKey, isLocalMessageId } from '../../../util/keys/messageKey';
+import { parseTranslationCacheKey } from '../../../util/keys/translationKey';
 import { getTranslationFn, type RegularLangFnParameters } from '../../../util/localization';
 import { formatStarsAsText } from '../../../util/localization/format';
 import { oldTranslate } from '../../../util/oldLangProvider';
@@ -73,18 +75,19 @@ import {
   isUserRightBanned,
   splitMessagesForForwarding,
 } from '../../helpers';
+import { isChatAdmin } from '../../helpers/chats';
 import { isApiPeerChat, isApiPeerUser } from '../../helpers/peers';
 import {
   addActionHandler, getActions, getGlobal, getPromiseActions, setGlobal,
 } from '../../index';
 import {
   addChatMessagesById,
-  addUnreadMentions,
   clearMessageSummary,
   deleteSponsoredMessage,
   removeOutlyingList,
   removeRequestedMessageTranslation,
   removeUnreadMentions,
+  removeUnreadPollVotes,
   replaceSettings,
   replaceUserStatuses,
   safeReplacePinnedIds,
@@ -104,6 +107,7 @@ import {
   updateScheduledMessages,
   updateSponsoredMessage,
   updateTopicWithState,
+  updateUnreadCounters,
   updateUploadByMessageKey,
   updateUserFullInfo,
 } from '../../reducers';
@@ -139,9 +143,11 @@ import {
   selectIsMonoforumAdmin,
   selectLanguageCode,
   selectListedIds,
+  selectMessageIdsByGroupId,
   selectMessageReplyInfo,
   selectOutlyingListByMessageId,
   selectPeer,
+  selectPeerPaidMessagesStars,
   selectPeerStory,
   selectPinnedIds,
   selectPollFromMessage,
@@ -167,9 +173,7 @@ import {
   selectThreadLocalStateParam,
   selectThreadReadState,
 } from '../../selectors/threads';
-import { updateWithLocalMedia } from '../apiUpdaters/messages';
-import { deleteMessages } from '../apiUpdaters/messages';
-
+import { deleteMessages, updateWithLocalMedia } from '../apiUpdaters/messages';
 const AUTOLOGIN_TOKEN_KEY = 'autologin_token';
 
 const uploadProgressCallbacks = new Map<MessageKey, ApiOnProgress>();
@@ -1477,17 +1481,17 @@ addActionHandler('loadPollOptionResults', async (global, actions, payload): Prom
 
   const tabState = selectTabState(global, tabId);
   const { pollResults } = tabState;
-  const { voters } = tabState.pollResults;
+  const { votesByOption } = pollResults;
+
+  const existingVotes = !shouldResetVoters && votesByOption?.[option] ? votesByOption[option] : [];
+  const newVotes = uniqueByField([...existingVotes, ...result.votes], 'peerId');
 
   global = updateTabState(global, {
     pollResults: {
       ...pollResults,
-      voters: {
-        ...voters,
-        [option]: unique([
-          ...(!shouldResetVoters && voters?.[option] ? voters[option] : []),
-          ...result.votes.map((vote) => vote.peerId),
-        ]),
+      votesByOption: {
+        ...votesByOption,
+        [option]: newVotes,
       },
       offsets: {
         ...(pollResults.offsets ? pollResults.offsets : {}),
@@ -1535,7 +1539,6 @@ addActionHandler('loadScheduledHistory', async (global, actions, payload): Promi
 
   Object.entries(idsByThreadId).forEach(([tId, newThreadScheduledIds]) => {
     const threadId = tId as ThreadId;
-    if (!chat.isForum && threadId !== MAIN_THREAD_ID) return;
     global = replaceThreadLocalStateParam(global, chat.id, threadId, 'scheduledIds', newThreadScheduledIds);
   });
   setGlobal(global);
@@ -1807,7 +1810,16 @@ async function loadViewportMessages<T extends GlobalState>(
   if (threadId !== MAIN_THREAD_ID && !getIsSavedDialog(chatId, threadId, global.currentUserId)) {
     const threadFirstMessageId = selectFirstMessageId(global, chatId, threadId);
     if ((!ids[0] || threadFirstMessageId === ids[0]) && threadFirstMessageId !== threadId) {
-      ids.unshift(Number(threadId));
+      const threadTopMessage = selectChatMessage(global, chatId, Number(threadId));
+      const groupedIds = threadTopMessage?.groupedId
+        ? selectMessageIdsByGroupId(global, chatId, threadTopMessage.groupedId)
+        : undefined;
+
+      if (groupedIds && groupedIds.length > 1) {
+        ids.unshift(...groupedIds);
+      } else {
+        ids.unshift(Number(threadId));
+      }
     }
   }
 
@@ -1907,7 +1919,7 @@ export async function getPeerStarsForMessage<T extends GlobalState>(
   if (!peer) return undefined;
 
   if (isApiPeerChat(peer)) {
-    if (selectIsMonoforumAdmin(global, peerId)) {
+    if (isChatAdmin(peer) || selectIsMonoforumAdmin(global, peerId)) {
       return undefined;
     }
     return peer.paidMessagesStars;
@@ -2276,19 +2288,45 @@ addActionHandler('loadUnreadMentions', async (global, actions, payload): Promise
 
   const { messages, topics, totalCount } = result;
 
-  const byId = buildCollectionByKey(messages, 'id');
-  const ids = Object.keys(byId).map(Number);
-
   global = getGlobal();
-  global = addChatMessagesById(global, chat.id, byId);
-  topics.forEach((topicState) => {
-    global = updateTopicWithState(global, chat.id, topicState);
-  });
-  global = addUnreadMentions({
+  global = updateUnreadCounters({
     global,
     chatId,
-    ids,
+    threadId,
+    messages,
+    topics,
     totalCount,
+    unreadCountKey: 'unreadMentionsCount',
+  });
+
+  setGlobal(global);
+});
+
+addActionHandler('loadUnreadPollVotes', async (global, actions, payload): Promise<void> => {
+  const { chatId, threadId = MAIN_THREAD_ID, offsetId } = payload;
+
+  const chat = selectChat(global, chatId);
+  if (!chat) return;
+
+  const result = await callApi('fetchUnreadPollVotes', {
+    chat,
+    threadId: threadId !== MAIN_THREAD_ID ? threadId : undefined,
+    offsetId,
+  });
+
+  if (!result) return;
+
+  const { messages, topics, totalCount } = result;
+
+  global = getGlobal();
+  global = updateUnreadCounters({
+    global,
+    chatId,
+    threadId,
+    messages,
+    topics,
+    totalCount,
+    unreadCountKey: 'unreadPollVotesCount',
   });
 
   setGlobal(global);
@@ -2380,6 +2418,21 @@ addActionHandler('markMentionsRead', (global, actions, payload): ActionReturnTyp
   actions.markMessagesRead({ chatId, messageIds });
 });
 
+addActionHandler('markPollVotesRead', (global, actions, payload): ActionReturnType => {
+  const { chatId, messageIds } = payload;
+  const chat = selectChat(global, chatId);
+  if (!chat) return;
+
+  global = removeUnreadPollVotes({
+    global,
+    chatId,
+    ids: messageIds,
+  });
+  setGlobal(global);
+
+  actions.markMessagesRead({ chatId, messageIds });
+});
+
 addActionHandler('focusNextMention', async (global, actions, payload): Promise<void> => {
   const { chatId, threadId = MAIN_THREAD_ID, tabId = getCurrentTabId() } = payload;
 
@@ -2396,6 +2449,28 @@ addActionHandler('focusNextMention', async (global, actions, payload): Promise<v
   actions.focusMessage({ chatId, messageId: readState.unreadMentions[0], tabId });
 });
 
+addActionHandler('focusNextPollVote', async (global, actions, payload): Promise<void> => {
+  const { chatId, threadId = MAIN_THREAD_ID, tabId = getCurrentTabId() } = payload;
+
+  let readState = selectThreadReadState(global, chatId, threadId);
+
+  if (!readState?.unreadPollVotes?.length) {
+    await getPromiseActions().loadUnreadPollVotes({ chatId, threadId });
+
+    global = getGlobal();
+    readState = selectThreadReadState(global, chatId, threadId);
+    if (!readState?.unreadPollVotes?.length) return;
+  }
+
+  actions.focusMessage({
+    chatId,
+    threadId,
+    messageId: readState.unreadPollVotes[0],
+    tabId,
+    scrollTargetPosition: 'end',
+  });
+});
+
 addActionHandler('readAllMentions', (global, actions, payload): ActionReturnType => {
   const { chatId, threadId = MAIN_THREAD_ID } = payload;
 
@@ -2407,6 +2482,21 @@ addActionHandler('readAllMentions', (global, actions, payload): ActionReturnType
   global = updateThreadReadState(global, chatId, threadId, {
     unreadMentionsCount: 0,
     unreadMentions: undefined,
+  });
+  return global;
+});
+
+addActionHandler('readAllPollVotes', (global, actions, payload): ActionReturnType => {
+  const { chatId, threadId = MAIN_THREAD_ID } = payload;
+
+  const chat = selectChat(global, chatId);
+  if (!chat) return undefined;
+
+  callApi('readAllPollVotes', { chat, threadId: threadId !== MAIN_THREAD_ID ? threadId : undefined });
+
+  global = updateThreadReadState(global, chatId, threadId, {
+    unreadPollVotesCount: 0,
+    unreadPollVotes: undefined,
   });
   return global;
 });
@@ -2554,7 +2644,17 @@ addActionHandler('setForwardChatOrTopic', async (global, actions, payload): Prom
   if (isSelectForwardsContainVoiceMessages && user && !await checkIfVoiceMessagesAllowed(global, user, chatId)) {
     actions.showDialog({
       data: {
-        message: oldTranslate('VoiceMessagesRestrictedByPrivacy', getUserFullName(user)),
+        type: 'localized',
+        text: {
+          key: 'NoVoiceMessagesAllowed',
+          variables: {
+            user: getUserFullName(user),
+          },
+          options: {
+            withNodes: true,
+            withMarkdown: true,
+          },
+        },
       },
       tabId,
     });
@@ -2582,7 +2682,7 @@ addActionHandler('setForwardChatOrTopic', async (global, actions, payload): Prom
 });
 
 addActionHandler('forwardToSavedMessages', (global, actions, payload): ActionReturnType => {
-  const { tabId = getCurrentTabId() } = payload || {};
+  const { scheduledAt, tabId = getCurrentTabId() } = payload || {};
   global = updateTabState(global, {
     forwardMessages: {
       ...selectTabState(global, tabId).forwardMessages,
@@ -2592,7 +2692,157 @@ addActionHandler('forwardToSavedMessages', (global, actions, payload): ActionRet
   setGlobal(global);
 
   actions.exitMessageSelectMode({ tabId });
-  actions.forwardMessages({ isSilent: true, tabId });
+  actions.forwardMessages({ isSilent: true, scheduledAt, tabId });
+});
+
+interface ForwardToChatOptions {
+  global: GlobalState;
+  fromChat: ApiChat;
+  toChat: ApiChat;
+  toThreadId?: ThreadId;
+  realMessages: ApiMessage[];
+  serviceMessages: ApiMessage[];
+  comment?: string;
+  withMyScore?: boolean;
+  noAuthors?: boolean;
+  noCaptions?: boolean;
+  isCurrentUserPremium: boolean;
+}
+
+function forwardMessagesToChat({
+  global,
+  fromChat,
+  toChat,
+  toThreadId = MAIN_THREAD_ID,
+  realMessages,
+  serviceMessages,
+  comment,
+  withMyScore,
+  noAuthors,
+  noCaptions,
+  isCurrentUserPremium,
+}: ForwardToChatOptions) {
+  const sendAs = selectSendAs(global, toChat.id);
+  const threadInfo = toThreadId !== MAIN_THREAD_ID ? selectThreadInfo(global, toChat.id, toThreadId) : undefined;
+  const lastMessageId = toThreadId === MAIN_THREAD_ID
+    ? selectChatLastMessageId(global, toChat.id)
+    : threadInfo?.lastMessageId;
+  const messagePriceInStars = selectPeerPaidMessagesStars(global, toChat.id);
+  const targetMessageList = {
+    chatId: toChat.id,
+    threadId: toThreadId,
+    type: 'thread',
+  } as const;
+
+  if (comment) {
+    sendMessage(global, {
+      chat: toChat,
+      messageList: targetMessageList,
+      text: comment,
+      sendAs,
+      lastMessageId,
+      messagePriceInStars,
+    });
+  }
+
+  if (realMessages.length) {
+    const messageSlices = global.config?.maxForwardedCount
+      ? splitMessagesForForwarding(realMessages, global.config.maxForwardedCount)
+      : [realMessages];
+
+    for (const slice of messageSlices) {
+      const forwardParams: ForwardMessagesParams = {
+        fromChat,
+        toChat,
+        toThreadId,
+        messages: slice,
+        isSilent: true,
+        sendAs,
+        withMyScore,
+        noAuthors,
+        noCaptions,
+        isCurrentUserPremium,
+        wasDrafted: false,
+        lastMessageId,
+        messagePriceInStars,
+      };
+
+      callApi('forwardMessages', forwardParams);
+    }
+  }
+
+  for (const message of serviceMessages) {
+    const { text, entities } = message.content.text || {};
+    const { sticker } = message.content;
+
+    sendMessage(global, {
+      chat: toChat,
+      messageList: targetMessageList,
+      text,
+      entities,
+      sticker,
+      isSilent: true,
+      sendAs,
+      lastMessageId,
+      messagePriceInStars,
+    });
+  }
+}
+
+addActionHandler('forwardToMultipleChats', (global, actions, payload): ActionReturnType => {
+  const { targets, comment, tabId = getCurrentTabId() } = payload;
+
+  const {
+    fromChatId, messageIds, withMyScore, noAuthors, noCaptions,
+  } = selectTabState(global, tabId).forwardMessages;
+
+  const fromChat = fromChatId ? selectChat(global, fromChatId) : undefined;
+  const isCurrentUserPremium = selectIsCurrentUserPremium(global);
+
+  const messages = fromChatId && messageIds
+    ? messageIds
+      .sort((a, b) => a - b)
+      .map((id) => selectChatMessage(global, fromChatId, id)).filter(Boolean)
+    : undefined;
+
+  if (!fromChat || !messages?.length) {
+    return;
+  }
+
+  const [realMessages, serviceMessages] = partition(messages, (m) => !isServiceNotificationMessage(m));
+  const forwardableRealMessages = realMessages.filter((message) => selectCanForwardMessage(global, message));
+
+  if (!forwardableRealMessages.length && !serviceMessages.length) {
+    return;
+  }
+
+  for (const { chatId, topicId } of targets) {
+    const toChat = selectChat(global, chatId);
+    if (!toChat) continue;
+
+    forwardMessagesToChat({
+      global,
+      fromChat,
+      toChat,
+      toThreadId: topicId || MAIN_THREAD_ID,
+      realMessages: forwardableRealMessages,
+      serviceMessages,
+      comment,
+      withMyScore,
+      noAuthors,
+      noCaptions,
+      isCurrentUserPremium,
+    });
+  }
+
+  global = updateTabState(global, {
+    forwardMessages: {},
+    isShareMessageModalShown: false,
+  }, tabId);
+
+  actions.exitMessageSelectMode({ tabId });
+
+  return global;
 });
 
 addActionHandler('forwardStory', (global, actions, payload): ActionReturnType => {
@@ -2630,13 +2880,16 @@ addActionHandler('forwardStory', (global, actions, payload): ActionReturnType =>
 
 addActionHandler('requestMessageTranslation', (global, actions, payload): ActionReturnType => {
   const {
-    chatId, id, toLanguageCode = selectTranslationLanguage(global), tabId = getCurrentTabId(),
+    chatId, id, toLanguageCode = selectTranslationLanguage(global), tone, tabId = getCurrentTabId(),
   } = payload;
 
-  global = updateRequestedMessageTranslation(global, chatId, id, toLanguageCode, tabId);
-  global = replaceSettings(global, {
-    translationLanguage: toLanguageCode,
-  });
+  global = updateRequestedMessageTranslation(global, chatId, id, toLanguageCode, tone, tabId);
+
+  if (!tone) {
+    global = replaceSettings(global, {
+      translationLanguage: toLanguageCode,
+    });
+  }
 
   return global;
 });
@@ -2653,13 +2906,13 @@ addActionHandler('showOriginalMessage', (global, actions, payload): ActionReturn
 
 addActionHandler('markMessagesTranslationPending', (global, actions, payload): ActionReturnType => {
   const {
-    chatId, messageIds, toLanguageCode = selectLanguageCode(global),
+    chatId, messageIds, toLanguageCode = selectLanguageCode(global), tone,
   } = payload;
 
   messageIds.forEach((id) => {
     global = updateMessageTranslation(global, chatId, id, toLanguageCode, {
       isPending: true,
-    });
+    }, tone);
   });
 
   return global;
@@ -2667,18 +2920,19 @@ addActionHandler('markMessagesTranslationPending', (global, actions, payload): A
 
 addActionHandler('translateMessages', (global, actions, payload): ActionReturnType => {
   const {
-    chatId, messageIds, toLanguageCode = selectLanguageCode(global),
+    chatId, messageIds, toLanguageCode = selectLanguageCode(global), tone,
   } = payload;
 
   const chat = selectChat(global, chatId);
   if (!chat) return undefined;
 
-  actions.markMessagesTranslationPending({ chatId, messageIds, toLanguageCode });
+  actions.markMessagesTranslationPending({ chatId, messageIds, toLanguageCode, tone });
 
   callApi('translateText', {
     chat,
     messageIds,
     toLanguageCode,
+    tone,
   });
 
   return global;
@@ -2689,6 +2943,11 @@ addActionHandler('summarizeMessage', async (global, actions, payload): Promise<v
   const chat = selectChat(global, chatId);
   if (!chat) return;
 
+  const { languageCode, tone } = toLanguageCode
+    ? parseTranslationCacheKey(toLanguageCode)
+    : { languageCode: undefined, tone: undefined };
+  const apiTone = tone === 'neutral' ? undefined : tone;
+
   const placeholderSummary: TextSummary = {
     isPending: true,
     text: undefined,
@@ -2697,10 +2956,9 @@ addActionHandler('summarizeMessage', async (global, actions, payload): Promise<v
   global = updateMessageSummary(global, chatId, id, placeholderSummary, toLanguageCode);
   setGlobal(global);
 
-  const result = await callApi('fetchMessageSummary', { chat, id, toLanguageCode });
+  const result = await callApi('fetchMessageSummary', { chat, id, toLanguageCode: languageCode, tone: apiTone });
   if (!result) {
     global = getGlobal();
-    // Disable summary to prevent endless loading
     global = updateChatMessage(global, chatId, id, { summaryLanguageCode: undefined });
     global = clearMessageSummary(global, chatId, id);
     setGlobal(global);

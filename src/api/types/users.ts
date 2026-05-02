@@ -85,6 +85,9 @@ export interface ApiUserFullInfo {
   settings?: ApiPeerSettings;
   mainTab?: ApiProfileTab;
   note?: ApiFormattedText;
+  noForwardsMyEnabled?: boolean;
+  noForwardsPeerEnabled?: boolean;
+  isUnofficialSecurityRisk?: boolean;
 }
 
 export type ApiUserType = 'userTypeBot' | 'userTypeRegular' | 'userTypeDeleted' | 'userTypeUnknown';

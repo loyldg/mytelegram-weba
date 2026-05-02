@@ -1,9 +1,9 @@
-import { useState } from '../lib/teact/teact';
+import { useMemo, useState } from '../lib/teact/teact';
 
 import type { RepeatedMessageMode } from '../util/scheduledMessages';
 
 import { SCHEDULED_WHEN_ONLINE } from '../config';
-import { getDayStartAt } from '../util/dates/dateFormat';
+import { getDayStartAt } from '../util/dates/oldDateFormat';
 import { getRepeatModeFromSeconds, getRepeatPeriodSeconds } from '../util/scheduledMessages';
 import { getServerTimeOffset } from '../util/serverTime';
 import useLastCallback from './useLastCallback';
@@ -45,12 +45,18 @@ const useSchedule = (
     setOnScheduled(() => whenScheduled);
   });
 
-  const scheduledDefaultDate = openAt ? new Date(openAt * 1000) : new Date();
-  scheduledDefaultDate.setSeconds(0);
-  scheduledDefaultDate.setMilliseconds(0);
+  const scheduledDefaultDate = useMemo(() => {
+    const date = openAt ? new Date(openAt * 1000) : new Date();
+    date.setSeconds(0);
+    date.setMilliseconds(0);
+    return date;
+  }, [openAt]);
 
-  const scheduledMaxDate = new Date();
-  scheduledMaxDate.setFullYear(scheduledMaxDate.getFullYear() + 1);
+  const scheduledMaxDate = useMemo(() => {
+    const date = new Date();
+    date.setFullYear(date.getFullYear() + 1);
+    return date;
+  }, []);
 
   const initialRepeatMode = getRepeatModeFromSeconds(initialRepeatPeriod);
 

@@ -7,8 +7,11 @@ import type { TextPart, ThreadId } from '../../../types';
 import type { TextFilter } from './renderText';
 import { ApiMessageEntityTypes } from '../../../api/types';
 
+import { ensureProtocol } from '../../../util/browser/url';
 import buildClassName from '../../../util/buildClassName';
 import { copyTextToClipboard } from '../../../util/clipboard';
+import { buildFormattedDateHtml } from '../../../util/dates/formattedDate';
+import { escapeHtmlAttribute } from '../../middle/composer/helpers/cleanHtml';
 import { buildCustomEmojiHtmlFromEntity } from '../../middle/composer/helpers/customEmoji';
 import renderText from './renderText';
 
@@ -16,6 +19,7 @@ import MentionLink from '../../middle/message/MentionLink';
 import Blockquote from '../Blockquote';
 import CodeBlock from '../code/CodeBlock';
 import CustomEmoji from '../CustomEmoji';
+import FormattedDate from '../FormattedDate';
 import SafeLink from '../SafeLink';
 import Spoiler from '../spoiler/Spoiler';
 
@@ -511,6 +515,11 @@ function processEntity({
         />
       );
     }
+
+    if (entity.type === ApiMessageEntityTypes.FormattedDate && entity.date) { // Old entities can have missing fields
+      return <FormattedDate entity={entity} asPreview>{text}</FormattedDate>;
+    }
+
     return text;
   }
 
@@ -668,6 +677,35 @@ function processEntity({
       return (
         <span className="matching-text-highlight is-quote">{renderNestedMessagePart()}</span>
       );
+    case ApiMessageEntityTypes.FormattedDate:
+      return (
+        <FormattedDate
+          entity={entity}
+          chatId={chatId}
+          messageId={messageId}
+        >
+          {renderNestedMessagePart()}
+        </FormattedDate>
+      );
+    case ApiMessageEntityTypes.DiffInsert:
+      return (
+        <span className="text-entity-diff-insert" data-entity-type={entity.type}>
+          {renderNestedMessagePart()}
+        </span>
+      );
+    case ApiMessageEntityTypes.DiffReplace:
+      return (
+        <span className="text-entity-diff-replace" data-entity-type={entity.type}>
+          <span className="text-entity-diff-replace-old">{entity.oldText}</span>
+          <span className="text-entity-diff-replace-new">{renderNestedMessagePart()}</span>
+        </span>
+      );
+    case ApiMessageEntityTypes.DiffDelete:
+      return (
+        <span className="text-entity-diff-delete" data-entity-type={entity.type}>
+          {renderNestedMessagePart()}
+        </span>
+      );
     default:
       return renderNestedMessagePart();
   }
@@ -717,7 +755,7 @@ function processEntityAsHtml(
     case ApiMessageEntityTypes.TextUrl:
       return `<a
         class="text-entity-link"
-        href=${getLinkUrl(rawEntityText, entity)}
+        href="${getHtmlLinkUrl(rawEntityText, entity)}"
         data-entity-type="${entity.type}"
         dir="auto"
       >${renderedContent}</a>`;
@@ -733,6 +771,8 @@ function processEntityAsHtml(
         class="blockquote"
         data-entity-type="${ApiMessageEntityTypes.Blockquote}"
         >${renderedContent}</blockquote>`;
+    case ApiMessageEntityTypes.FormattedDate:
+      return buildFormattedDateHtml(renderedContent, entity);
     default:
       return renderedContent;
   }
@@ -741,6 +781,10 @@ function processEntityAsHtml(
 function getLinkUrl(entityContent: string, entity: ApiMessageEntity) {
   const { type } = entity;
   return type === ApiMessageEntityTypes.TextUrl && entity.url ? entity.url : entityContent;
+}
+
+function getHtmlLinkUrl(entityContent: string, entity: ApiMessageEntity) {
+  return escapeHtmlAttribute(ensureProtocol(getLinkUrl(entityContent, entity)));
 }
 
 function handleBotCommandClick(e: React.MouseEvent<HTMLAnchorElement>) {

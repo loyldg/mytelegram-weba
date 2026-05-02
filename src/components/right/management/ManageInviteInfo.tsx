@@ -1,4 +1,3 @@
-import type { FC } from '../../../lib/teact/teact';
 import { memo, useEffect } from '../../../lib/teact/teact';
 import { getActions, withGlobal } from '../../../global';
 
@@ -6,7 +5,7 @@ import type { ApiChatInviteImporter, ApiExportedInvite } from '../../../api/type
 
 import { isChatChannel } from '../../../global/helpers';
 import { selectChat, selectTabState } from '../../../global/selectors';
-import { formatFullDate, formatMediaDateTime, formatTime } from '../../../util/dates/dateFormat';
+import { formatFullDate, formatMediaDateTime, formatTime } from '../../../util/dates/oldDateFormat';
 import { getServerTime } from '../../../util/serverTime';
 
 import useHistoryBack from '../../../hooks/useHistoryBack';
@@ -32,7 +31,7 @@ type StateProps = {
 
 const BULLET = '\u2022';
 
-const ManageInviteInfo: FC<OwnProps & StateProps> = ({
+const ManageInviteInfo = ({
   chatId,
   invite,
   importers,
@@ -40,7 +39,7 @@ const ManageInviteInfo: FC<OwnProps & StateProps> = ({
   isChannel,
   isActive,
   onClose,
-}) => {
+}: OwnProps & StateProps) => {
   const {
     loadChatInviteImporters,
     loadChatInviteRequesters,
@@ -51,6 +50,7 @@ const ManageInviteInfo: FC<OwnProps & StateProps> = ({
   const {
     usage = 0, usageLimit, link, adminId,
   } = invite || {};
+  // eslint-disable-next-line @eslint-react/purity
   const expireDate = invite?.expireDate && (invite.expireDate - getServerTime()) * 1000 + Date.now();
   const isExpired = ((invite?.expireDate || 0) - getServerTime()) < 0;
 

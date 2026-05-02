@@ -166,7 +166,10 @@ export function buildJson(json: GramJs.TypeJSONValue): any {
 
 export function buildApiUrlAuthResult(result: GramJs.TypeUrlAuthResult): ApiUrlAuthResult | undefined {
   if (result instanceof GramJs.UrlAuthResultRequest) {
-    const { bot, domain, requestWriteAccess } = result;
+    const {
+      bot, domain, requestWriteAccess, requestPhoneNumber, browser, platform, ip, region, matchCodes,
+      matchCodesFirst, userIdHint, isApp, verifiedAppName,
+    } = result;
     const user = buildApiUser(bot);
     if (!user) return undefined;
 
@@ -175,8 +178,18 @@ export function buildApiUrlAuthResult(result: GramJs.TypeUrlAuthResult): ApiUrlA
     return {
       type: 'request',
       domain,
+      isApp,
       shouldRequestWriteAccess: requestWriteAccess,
       bot: user,
+      shouldRequestPhoneNumber: requestPhoneNumber,
+      browser,
+      platform,
+      ip,
+      region,
+      matchCodes,
+      matchCodesFirst,
+      userIdHint: userIdHint?.toString(),
+      verifiedAppName,
     };
   }
 

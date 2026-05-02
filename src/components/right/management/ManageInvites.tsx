@@ -11,7 +11,7 @@ import { STICKER_SIZE_INVITES, TME_LINK_PREFIX } from '../../../config';
 import { getMainUsername, isChatChannel } from '../../../global/helpers';
 import { selectChat, selectTabState } from '../../../global/selectors';
 import { copyTextToClipboard } from '../../../util/clipboard';
-import { formatCountdown, MILLISECONDS_IN_DAY } from '../../../util/dates/dateFormat';
+import { formatCountdown, MILLISECONDS_IN_DAY } from '../../../util/dates/oldDateFormat';
 import { getServerTime } from '../../../util/serverTime';
 import { LOCAL_TGS_URLS } from '../../common/helpers/animatedAssets';
 
@@ -183,7 +183,7 @@ const ManageInvites: FC<OwnProps & StateProps> = ({
     const {
       usage = 0, usageLimit, expireDate, isPermanent, requested, isRevoked,
     } = invite;
-    let text = '';
+    let text;
     if (!isRevoked && usageLimit && usage < usageLimit) {
       text = oldLang('CanJoin', usageLimit - usage);
     } else if (usage) {

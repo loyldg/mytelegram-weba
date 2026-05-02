@@ -13,7 +13,7 @@ import type {
   WebAppOutboundEvent,
 } from '../../../types/webapp';
 
-import { TME_LINK_PREFIX } from '../../../config';
+import { TME_LINK_PREFIX, VERIFY_AGE_MIN_DEFAULT } from '../../../config';
 import { convertToApiChatType, getUserFullName } from '../../../global/helpers';
 import { getWebAppKey } from '../../../global/helpers/bots';
 import {
@@ -30,6 +30,7 @@ import buildStyle from '../../../util/buildStyle.ts';
 import download from '../../../util/download';
 import { extractCurrentThemeParams, validateHexColor } from '../../../util/themeStyle';
 import { callApi } from '../../../api/gramjs';
+import { REM } from '../../common/helpers/mediaDimensions';
 import renderText from '../../common/helpers/renderText';
 
 import { getIsWebAppsFullscreenSupported } from '../../../hooks/useAppLayout';
@@ -44,6 +45,7 @@ import useFullscreen, { checkIfFullscreen } from '../../../hooks/window/useFulls
 import usePopupLimit from './hooks/usePopupLimit';
 import useWebAppFrame from './hooks/useWebAppFrame';
 
+import CustomEmoji from '../../common/CustomEmoji';
 import Icon from '../../common/icons/Icon';
 import Button from '../../ui/Button';
 import ConfirmDialog from '../../ui/ConfirmDialog';
@@ -60,6 +62,8 @@ type WebAppButton = {
   color: string;
   textColor: string;
   isProgressVisible: boolean;
+  iconCustomEmojiId?: string;
+  hasShineEffect?: boolean;
   position?: 'left' | 'right' | 'top' | 'bottom';
 };
 
@@ -84,6 +88,8 @@ type StateProps = {
   paymentStatus?: TabState['payment']['status'];
   modalState?: WebAppModalStateType;
   botAppPermissions?: BotAppPermissions;
+  verifyAgeMin?: number;
+  verifyAgeBotUsername?: string;
 };
 
 const MAIN_BUTTON_ANIMATION_TIME = 250;
@@ -94,10 +100,10 @@ const POPUP_RESET_DELAY = 2000; // 2s
 const APP_NAME_DISPLAY_DURATION = 3800;
 const SANDBOX_ATTRIBUTES = [
   'allow-scripts',
-  'allow-same-origin',
   'allow-popups',
   'allow-forms',
   'allow-modals',
+  'allow-same-origin',
   'allow-storage-access-by-user-activation',
 ].join(' ');
 
@@ -116,15 +122,17 @@ const WebAppModalTabContent: FC<OwnProps & StateProps> = ({
   theme,
   isPaymentModalOpen,
   paymentStatus,
-  registerSendEventCallback,
-  registerReloadFrameCallback,
   isTransforming,
   modalState,
   isMultiTabSupported,
-  onContextMenuButtonClick,
   botAppPermissions,
   botAppSettings,
   modalHeight,
+  verifyAgeMin = VERIFY_AGE_MIN_DEFAULT,
+  verifyAgeBotUsername,
+  registerSendEventCallback,
+  registerReloadFrameCallback,
+  onContextMenuButtonClick,
 }) => {
   const {
     closeActiveWebApp,
@@ -143,6 +151,7 @@ const WebAppModalTabContent: FC<OwnProps & StateProps> = ({
     changeWebAppModalState,
     closeWebAppModal,
     openPreparedInlineMessageModal,
+    updateContentSettings,
   } = getActions();
   const [mainButton, setMainButton] = useState<WebAppButton>();
   const [secondaryButton, setSecondaryButton] = useState<WebAppButton>();
@@ -262,8 +271,22 @@ const WebAppModalTabContent: FC<OwnProps & StateProps> = ({
     if (isActive) registerReloadFrameCallback(reloadFrame);
   }, [reloadFrame, registerReloadFrameCallback, isActive]);
 
-  const isMainButtonVisible = isLoaded && mainButton?.isVisible && mainButton.text.trim().length > 0;
-  const isSecondaryButtonVisible = isLoaded && secondaryButton?.isVisible && secondaryButton.text.trim().length > 0;
+  function hasBottomButtonContent(text: string | undefined, iconCustomEmojiId?: string) {
+    return Boolean(text?.trim().length || iconCustomEmojiId);
+  }
+
+  function getValidHexColor(color: string | undefined) {
+    return color && validateHexColor(color) ? color : undefined;
+  }
+
+  const isMainButtonVisible = isLoaded && mainButton?.isVisible && hasBottomButtonContent(
+    mainButton.text,
+    mainButton.iconCustomEmojiId,
+  );
+  const isSecondaryButtonVisible = isLoaded && secondaryButton?.isVisible && hasBottomButtonContent(
+    secondaryButton.text,
+    secondaryButton.iconCustomEmojiId,
+  );
 
   const handleHideCloseModal = useLastCallback(() => {
     updateCurrentWebApp({ isCloseModalOpen: false });
@@ -298,6 +321,35 @@ const WebAppModalTabContent: FC<OwnProps & StateProps> = ({
       eventType: 'popup_closed',
       eventData: {
         button_id: buttonId,
+      },
+    });
+  });
+
+  const sendLocationUnavailable = useLastCallback(() => {
+    sendEvent({
+      eventType: 'location_requested',
+      eventData: {
+        available: false,
+      },
+    });
+  });
+
+  const sendLocation = useLastCallback((geolocation: GeolocationCoordinates) => {
+    sendEvent({
+      eventType: 'location_requested',
+      eventData: {
+        available: true,
+        latitude: geolocation.latitude,
+        longitude: geolocation.longitude,
+        altitude: geolocation.altitude,
+        course: geolocation.heading,
+        speed: geolocation.speed,
+        horizontal_accuracy: geolocation.accuracy,
+        vertical_accuracy: geolocation.altitudeAccuracy,
+        // eslint-disable-next-line no-null/no-null
+        course_accuracy: null,
+        // eslint-disable-next-line no-null/no-null
+        speed_accuracy: null,
       },
     });
   });
@@ -626,16 +678,21 @@ const WebAppModalTabContent: FC<OwnProps & StateProps> = ({
     }
 
     if (eventType === 'web_app_set_background_color') {
-      setBackgroundColorFromEvent(validateHexColor(eventData.color) ? eventData.color : undefined);
+      const validColor = getValidHexColor(eventData.color);
+      if (validColor) setBackgroundColorFromEvent(validColor);
     }
 
     if (eventType === 'web_app_set_header_color') {
+      const validColor = getValidHexColor(eventData.color);
       const key = eventData.color_key;
-      setHeaderColorFromEvent(eventData.color || (key ? themeParams[key] : undefined));
+      const fallback = key ? themeParams[key] : undefined;
+      const color = validColor || fallback;
+      if (color) setHeaderColorFromEvent(color);
     }
 
     if (eventType === 'web_app_set_bottom_bar_color') {
-      setBottomBarColor(eventData.color);
+      const color = getValidHexColor(eventData.color);
+      if (color) setBottomBarColor(color);
     }
 
     if (eventType === 'web_app_data_send') {
@@ -648,29 +705,43 @@ const WebAppModalTabContent: FC<OwnProps & StateProps> = ({
     }
 
     if (eventType === 'web_app_setup_main_button') {
-      const color = eventData.color;
-      const textColor = eventData.text_color;
-      setMainButton({
-        isVisible: eventData.is_visible && Boolean(eventData.text?.trim().length),
-        isActive: eventData.is_active,
-        text: eventData.text,
-        color,
-        textColor,
-        isProgressVisible: eventData.is_progress_visible,
+      setMainButton((prevButton) => {
+        const color = getValidHexColor(eventData.color) || prevButton?.color
+          || themeParams.button_color;
+        const textColor = getValidHexColor(eventData.text_color) || prevButton?.textColor
+          || themeParams.button_text_color;
+
+        return {
+          isVisible: eventData.is_visible && hasBottomButtonContent(eventData.text, eventData.icon_custom_emoji_id),
+          isActive: eventData.is_active,
+          text: eventData.text,
+          color,
+          textColor,
+          isProgressVisible: eventData.is_progress_visible,
+          iconCustomEmojiId: eventData.icon_custom_emoji_id,
+          hasShineEffect: eventData.has_shine_effect,
+        };
       });
     }
 
     if (eventType === 'web_app_setup_secondary_button') {
-      const color = eventData.color;
-      const textColor = eventData.text_color;
-      setSecondaryButton({
-        isVisible: eventData.is_visible && Boolean(eventData.text?.trim().length),
-        isActive: eventData.is_active,
-        text: eventData.text,
-        color,
-        textColor,
-        isProgressVisible: eventData.is_progress_visible,
-        position: eventData.position,
+      setSecondaryButton((prevButton) => {
+        const color = getValidHexColor(eventData.color) || prevButton?.color
+          || themeParams.button_color;
+        const textColor = getValidHexColor(eventData.text_color) || prevButton?.textColor
+          || themeParams.button_text_color;
+
+        return {
+          isVisible: eventData.is_visible && hasBottomButtonContent(eventData.text, eventData.icon_custom_emoji_id),
+          isActive: eventData.is_active,
+          text: eventData.text,
+          color,
+          textColor,
+          isProgressVisible: eventData.is_progress_visible,
+          iconCustomEmojiId: eventData.icon_custom_emoji_id,
+          hasShineEffect: eventData.has_shine_effect,
+          position: eventData.position,
+        };
       });
     }
 
@@ -750,10 +821,20 @@ const WebAppModalTabContent: FC<OwnProps & StateProps> = ({
 
     if (eventType === 'web_app_check_location') {
       const handleGeolocationCheck = () => {
+        if (!isAvailable) {
+          sendEvent({
+            eventType: 'location_checked',
+            eventData: {
+              available: false,
+            },
+          });
+          return;
+        }
+
         sendEvent({
           eventType: 'location_checked',
           eventData: {
-            available: isAvailable,
+            available: true,
             access_requested: isAccessRequested,
             access_granted: isAccessGranted,
           },
@@ -765,43 +846,38 @@ const WebAppModalTabContent: FC<OwnProps & StateProps> = ({
 
     if (eventType === 'web_app_request_location') {
       const handleRequestLocation = async () => {
-        const geolocationData = await getGeolocationStatus();
-        const { accessRequested, accessGranted, geolocation } = geolocationData;
-
-        if (!accessGranted || !accessRequested) {
-          sendEvent({
-            eventType: 'location_requested',
-            eventData: {
-              available: false,
-            },
-          });
+        if (!isAvailable) {
+          sendLocationUnavailable();
           showNotification({ message: oldLang('PermissionNoLocationPosition') });
           handleAppPopupClose(undefined);
           return;
         }
 
-        if (isAvailable) {
-          if (isAccessRequested) {
-            sendEvent({
-              eventType: 'location_requested',
-              eventData: {
-                available: Boolean(botAppPermissions?.geolocation),
-                latitude: geolocation?.latitude,
-                longitude: geolocation?.longitude,
-                altitude: geolocation?.altitude,
-                course: geolocation?.heading,
-                speed: geolocation?.speed,
-                horizontal_accuracy: geolocation?.accuracy,
-                vertical_accuracy: geolocation?.altitudeAccuracy,
-              },
-            });
-          } else {
+        if (!isAccessRequested) {
+          if (bot && webAppKey) {
             openLocationAccessModal({ bot, webAppKey });
+          } else {
+            sendLocationUnavailable();
           }
-        } else {
+          return;
+        }
+
+        if (!isAccessGranted) {
+          sendLocationUnavailable();
+          return;
+        }
+
+        const geolocationData = await getGeolocationStatus();
+        const { accessRequested, accessGranted, geolocation } = geolocationData;
+
+        if (!accessGranted || !accessRequested || !geolocation) {
+          sendLocationUnavailable();
           showNotification({ message: oldLang('PermissionNoLocationPosition') });
           handleAppPopupClose(undefined);
+          return;
         }
+
+        sendLocation(geolocation);
       };
 
       handleRequestLocation();
@@ -813,6 +889,29 @@ const WebAppModalTabContent: FC<OwnProps & StateProps> = ({
 
     if (eventType === 'web_app_read_text_from_clipboard') {
       setClipboardRequestId(eventData.req_id);
+    }
+
+    if (eventType === 'web_app_verify_age') {
+      if (!bot?.usernames?.some((username) => username.username === verifyAgeBotUsername)) return;
+
+      const { passed } = eventData;
+      const minAge = verifyAgeMin;
+      const ageFromParam = eventData.age || 0;
+
+      if (passed && ageFromParam >= minAge) {
+        showNotification({
+          message: {
+            key: 'TitleAgeCheckSuccess',
+          },
+        });
+        updateContentSettings({ isSensitiveEnabled: true });
+      } else {
+        showNotification({
+          message: {
+            key: 'TitleAgeCheckFailed',
+          },
+        });
+      }
     }
   }
 
@@ -857,79 +956,79 @@ const WebAppModalTabContent: FC<OwnProps & StateProps> = ({
   const hideDirection = (isHorizontalLayout
     && (!shouldHideMainButton && !shouldHideSecondaryButton)) ? 'horizontal' : 'vertical';
 
-  const mainButtonChangeTimeout = useRef<ReturnType<typeof setTimeout>>();
-  const mainButtonFastTimeout = useRef<ReturnType<typeof setTimeout>>();
-  const secondaryButtonChangeTimeout = useRef<ReturnType<typeof setTimeout>>();
-  const secondaryButtonFastTimeout = useRef<ReturnType<typeof setTimeout>>();
-  const appNameDisplayTimeout = useRef<ReturnType<typeof setTimeout>>();
+  const mainButtonChangeTimeoutRef = useRef<ReturnType<typeof setTimeout>>();
+  const mainButtonFastTimeoutRef = useRef<ReturnType<typeof setTimeout>>();
+  const secondaryButtonChangeTimeoutRef = useRef<ReturnType<typeof setTimeout>>();
+  const secondaryButtonFastTimeoutRef = useRef<ReturnType<typeof setTimeout>>();
+  const appNameDisplayTimeoutRef = useRef<ReturnType<typeof setTimeout>>();
 
   useEffect(() => {
     if (isFullscreen && isOpen && Boolean(activeWebAppName)) {
       setShouldShowAppNameInFullscreen(true);
 
-      if (appNameDisplayTimeout.current) {
-        clearTimeout(appNameDisplayTimeout.current);
+      if (appNameDisplayTimeoutRef.current) {
+        clearTimeout(appNameDisplayTimeoutRef.current);
       }
 
-      appNameDisplayTimeout.current = setTimeout(() => {
+      appNameDisplayTimeoutRef.current = setTimeout(() => {
         setShouldShowAppNameInFullscreen(false);
-        appNameDisplayTimeout.current = undefined;
+        appNameDisplayTimeoutRef.current = undefined;
       }, APP_NAME_DISPLAY_DURATION);
     } else {
       setShouldShowAppNameInFullscreen(false);
 
-      if (appNameDisplayTimeout.current) {
-        clearTimeout(appNameDisplayTimeout.current);
-        appNameDisplayTimeout.current = undefined;
+      if (appNameDisplayTimeoutRef.current) {
+        clearTimeout(appNameDisplayTimeoutRef.current);
+        appNameDisplayTimeoutRef.current = undefined;
       }
     }
 
     return () => {
-      if (appNameDisplayTimeout.current) {
-        clearTimeout(appNameDisplayTimeout.current);
+      if (appNameDisplayTimeoutRef.current) {
+        clearTimeout(appNameDisplayTimeoutRef.current);
       }
     };
   }, [isFullscreen, isOpen, activeWebAppName]);
 
   useEffect(() => {
-    if (mainButtonChangeTimeout.current) clearTimeout(mainButtonChangeTimeout.current);
-    if (mainButtonFastTimeout.current) clearTimeout(mainButtonFastTimeout.current);
+    if (mainButtonChangeTimeoutRef.current) clearTimeout(mainButtonChangeTimeoutRef.current);
+    if (mainButtonFastTimeoutRef.current) clearTimeout(mainButtonFastTimeoutRef.current);
 
     if (isMainButtonVisible) {
-      mainButtonFastTimeout.current = setTimeout(() => {
+      mainButtonFastTimeoutRef.current = setTimeout(() => {
         setShouldShowMainButton(true);
       }, 35);
       setShouldHideMainButton(false);
-      mainButtonChangeTimeout.current = setTimeout(() => {
+      mainButtonChangeTimeoutRef.current = setTimeout(() => {
         setShouldDecreaseWebFrameSize(true);
       }, MAIN_BUTTON_ANIMATION_TIME);
     }
 
     if (!isMainButtonVisible) {
       setShouldShowMainButton(false);
-      mainButtonChangeTimeout.current = setTimeout(() => {
+      mainButtonChangeTimeoutRef.current = setTimeout(() => {
         setShouldHideMainButton(true);
       }, MAIN_BUTTON_ANIMATION_TIME);
     }
   }, [isMainButtonVisible]);
 
   useEffect(() => {
-    if (secondaryButtonChangeTimeout.current) clearTimeout(secondaryButtonChangeTimeout.current);
-    if (secondaryButtonFastTimeout.current) clearTimeout(secondaryButtonFastTimeout.current);
+    if (secondaryButtonChangeTimeoutRef.current) clearTimeout(secondaryButtonChangeTimeoutRef.current);
+    if (secondaryButtonFastTimeoutRef.current) clearTimeout(secondaryButtonFastTimeoutRef.current);
 
     if (isSecondaryButtonVisible) {
-      secondaryButtonFastTimeout.current = setTimeout(() => {
+      secondaryButtonFastTimeoutRef.current = setTimeout(() => {
         setShouldShowSecondaryButton(true);
       }, 35);
       setShouldHideSecondaryButton(false);
-      secondaryButtonChangeTimeout.current = setTimeout(() => {
+      secondaryButtonChangeTimeoutRef.current = setTimeout(() => {
         setShouldDecreaseWebFrameSize(true);
       }, MAIN_BUTTON_ANIMATION_TIME);
     }
 
     if (!isSecondaryButtonVisible) {
       setShouldShowSecondaryButton(false);
-      secondaryButtonChangeTimeout.current = setTimeout(() => {
+      secondaryButtonChangeTimeoutRef.current = setTimeout(() => {
         setShouldHideSecondaryButton(true);
       }, MAIN_BUTTON_ANIMATION_TIME);
     }
@@ -1084,6 +1183,32 @@ const WebAppModalTabContent: FC<OwnProps & StateProps> = ({
     );
   }
 
+  function renderBottomButtonContent(text: string | undefined, iconCustomEmojiId?: string) {
+    const hasText = Boolean(text?.trim().length);
+    if (!hasText && !iconCustomEmojiId) return undefined;
+
+    const textContent = hasText ? renderText(text, ['emoji']) : undefined;
+    if (!iconCustomEmojiId) {
+      return textContent;
+    }
+
+    return (
+      <>
+        <CustomEmoji
+          className={buildClassName(styles.buttonEmoji, hasText && styles.buttonEmojiWithLabel)}
+          documentId={iconCustomEmojiId}
+          size={1.25 * REM}
+          forceAlways
+        />
+        {hasText && (
+          <span className={styles.buttonLabel}>
+            {textContent}
+          </span>
+        )}
+      </>
+    );
+  }
+
   return (
     <div
       ref={containerRef}
@@ -1133,9 +1258,13 @@ const WebAppModalTabContent: FC<OwnProps & StateProps> = ({
             style={`background-color: ${secondaryButtonCurrentColor}; color: ${secondaryButtonCurrentTextColor}`}
             disabled={!secondaryButtonCurrentIsActive && !secondaryButton?.isProgressVisible}
             nonInteractive={secondaryButton?.isProgressVisible}
+            isShiny={secondaryButton?.hasShineEffect && !secondaryButton?.isProgressVisible}
             onClick={handleSecondaryButtonClick}
           >
-            {!secondaryButton?.isProgressVisible && secondaryButtonCurrentText}
+            {!secondaryButton?.isProgressVisible && renderBottomButtonContent(
+              secondaryButtonCurrentText,
+              secondaryButton?.iconCustomEmojiId,
+            )}
             {secondaryButton?.isProgressVisible
               && <Spinner className={styles.mainButtonSpinner} color="blue" />}
           </Button>
@@ -1149,9 +1278,13 @@ const WebAppModalTabContent: FC<OwnProps & StateProps> = ({
             style={`background-color: ${mainButtonCurrentColor}; color: ${mainButtonCurrentTextColor}`}
             disabled={!mainButtonCurrentIsActive && !mainButton?.isProgressVisible}
             nonInteractive={mainButton?.isProgressVisible}
+            isShiny={mainButton?.hasShineEffect && !mainButton?.isProgressVisible}
             onClick={handleMainButtonClick}
           >
-            {!mainButton?.isProgressVisible && mainButtonCurrentText}
+            {!mainButton?.isProgressVisible && renderBottomButtonContent(
+              mainButtonCurrentText,
+              mainButton?.iconCustomEmojiId,
+            )}
             {mainButton?.isProgressVisible && <Spinner className={styles.mainButtonSpinner} color="white" />}
           </Button>
         </div>
@@ -1203,7 +1336,7 @@ const WebAppModalTabContent: FC<OwnProps & StateProps> = ({
       />
       <ConfirmDialog
         isOpen={Boolean(requestedFileDownload)}
-        title={oldLang('BotDownloadFileTitle')}
+        title={lang('BotDownloadFileTitle')}
         textParts={lang('BotDownloadFileDescription', {
           bot: bot?.firstName,
           filename: requestedFileDownload?.fileName,
@@ -1211,7 +1344,7 @@ const WebAppModalTabContent: FC<OwnProps & StateProps> = ({
           withNodes: true,
           withMarkdown: true,
         })}
-        confirmLabel={oldLang('BotDownloadFileButton')}
+        confirmLabel={lang('BotDownloadFileButton')}
         onClose={handleRejectFileDownload}
         confirmHandler={handleDownloadFile}
       />
@@ -1250,6 +1383,7 @@ export default memo(withGlobal<OwnProps>(
     const activeWebApp = modal?.activeWebAppKey ? selectWebApp(global, modal.activeWebAppKey) : undefined;
     const { botId: activeBotId } = activeWebApp || {};
     const modalState = modal?.modalState;
+    const { verifyAgeMin, verifyAgeBotUsername } = global.appConfig;
 
     const attachBot = activeBotId ? global.attachMenu.bots[activeBotId] : undefined;
     const bot = activeBotId ? selectUser(global, activeBotId) : undefined;
@@ -1273,6 +1407,8 @@ export default memo(withGlobal<OwnProps>(
       modalState,
       botAppPermissions,
       botAppSettings,
+      verifyAgeMin,
+      verifyAgeBotUsername,
     };
   },
 )(WebAppModalTabContent));

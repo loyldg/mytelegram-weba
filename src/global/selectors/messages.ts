@@ -14,6 +14,7 @@ import type {
   MessageListType,
   TextSummary,
   ThreadId,
+  TranslationTone,
 } from '../../types';
 import type { IAllowedAttachmentOptions } from '../helpers';
 import type {
@@ -31,6 +32,7 @@ import { isUserId } from '../../util/entities/ids';
 import { getCurrentTabId } from '../../util/establishMultitabRole';
 import { findLast } from '../../util/iteratees';
 import { getMessageKey, isLocalMessageId } from '../../util/keys/messageKey';
+import { parseTranslationCacheKey } from '../../util/keys/translationKey';
 import { isIpRevealingMedia } from '../../util/media/ipRevealingMedia';
 import { MEMO_EMPTY_ARRAY } from '../../util/memo';
 import { getServerTime } from '../../util/serverTime';
@@ -68,6 +70,7 @@ import {
   isOwnMessage,
   isServiceNotificationMessage,
   isUserRightBanned,
+  prepareMessageReplyInfo,
 } from '../helpers';
 import { getMessageReplyInfo } from '../helpers/replies';
 import {
@@ -97,7 +100,7 @@ import {
 } from './threads';
 import { selectTopic, selectTopicFromMessage } from './topics';
 import {
-  selectBot, selectUser, selectUserStatus,
+  selectBot, selectIsUserChatProtected, selectUser, selectUserStatus,
 } from './users';
 
 export function selectCurrentMessageList<T extends GlobalState>(
@@ -646,8 +649,12 @@ export function selectAllowedMessageActionsSlow<T extends GlobalState>(
   const canSaveGif = message.content.video?.isGif;
 
   const poll = content.pollId ? selectPoll(global, content.pollId) : undefined;
-  const canRevote = !poll?.summary.closed && !poll?.summary.quiz && poll?.results.results?.some((r) => r.isChosen);
-  const canClosePoll = hasMessageEditRight && poll && !poll.summary.closed && !isForwarded;
+  const hasChosenPollAnswer = Boolean(
+    poll && Object.values(poll.results.resultByOption || {}).some((result) => result.isChosen),
+  );
+  const canRevote = poll && !poll.summary.isClosed && !poll.summary.isRevoteDisabled
+    && hasChosenPollAnswer;
+  const canClosePoll = hasMessageEditRight && poll && !poll.summary.isClosed && !isForwarded;
 
   const noOptions = [
     canReply,
@@ -689,6 +696,20 @@ export function selectAllowedMessageActionsSlow<T extends GlobalState>(
     canRevote,
     canClosePoll,
   };
+}
+
+export function selectCanCopyMessageLink<T extends GlobalState>(
+  global: T, message: ApiMessage,
+) {
+  const chat = selectChat(global, message.chatId);
+  if (!chat || selectIsChatRestricted(global, message.chatId)) return false;
+
+  const isLocal = isMessageLocal(message);
+  const isAction = isActionMessage(message);
+  const isChannel = isChatChannel(chat);
+  const isSuperGroup = isChatSuperGroup(chat);
+
+  return !isLocal && !isAction && (isChannel || isSuperGroup) && !chat.isMonoforum;
 }
 
 export function selectCanDeleteMessages<T extends GlobalState>(
@@ -1141,11 +1162,19 @@ export function selectIsMessageProtected<T extends GlobalState>(global: T, messa
 }
 
 export function selectIsChatProtected<T extends GlobalState>(global: T, chatId: string) {
-  return selectChat(global, chatId)?.isProtected || false;
+  const chat = selectChat(global, chatId);
+
+  if (!chat) return false;
+
+  if (chat.isProtected || (isUserId(chatId) && selectIsUserChatProtected(global, chatId))) {
+    return true;
+  }
+
+  return false;
 }
 
 export function selectHasProtectedMessage<T extends GlobalState>(global: T, chatId: string, messageIds?: number[]) {
-  if (selectChat(global, chatId)?.isProtected) {
+  if (selectIsChatProtected(global, chatId)) {
     return true;
   }
 
@@ -1159,7 +1188,7 @@ export function selectHasProtectedMessage<T extends GlobalState>(global: T, chat
 }
 
 export function selectCanForwardMessages<T extends GlobalState>(global: T, chatId: string, messageIds?: number[]) {
-  if (selectChat(global, chatId)?.isProtected) {
+  if (selectIsChatProtected(global, chatId)) {
     return false;
   }
 
@@ -1337,9 +1366,9 @@ export function selectChatTranslations<T extends GlobalState>(
 }
 
 export function selectMessageTranslations<T extends GlobalState>(
-  global: T, chatId: string, toLanguageCode: string,
+  global: T, chatId: string, cacheKey: string,
 ) {
-  return selectChatTranslations(global, chatId)?.byLangCode[toLanguageCode] || {};
+  return selectChatTranslations(global, chatId)?.byLangCode[cacheKey] || {};
 }
 
 export function selectRequestedMessageTranslationLanguage<T extends GlobalState>(
@@ -1348,6 +1377,23 @@ export function selectRequestedMessageTranslationLanguage<T extends GlobalState>
   const requestedInChat = selectTabState(global, tabId).requestedTranslations.byChatId[chatId];
   return requestedInChat?.toLanguage || requestedInChat?.manualMessages?.[messageId];
 }
+
+export function selectRequestedMessageTranslationTone<T extends GlobalState>(
+  global: T, chatId: string, messageId: number, ...[tabId = getCurrentTabId()]: TabArgs<T>
+): TranslationTone | undefined {
+  const requestedInChat = selectTabState(global, tabId).requestedTranslations.byChatId[chatId];
+
+  if (requestedInChat?.toLanguage) {
+    return requestedInChat.tone || 'neutral';
+  }
+
+  const cacheKey = requestedInChat?.manualMessages?.[messageId];
+  if (!cacheKey) return undefined;
+
+  const { tone } = parseTranslationCacheKey(cacheKey);
+  return tone;
+}
+
 export function selectReplyCanBeSentToChat<T extends GlobalState>(
   global: T,
   toChatId: string,
@@ -1438,17 +1484,8 @@ export function selectMessageReplyInfo<T extends GlobalState>(
 ) {
   const chat = selectChat(global, chatId);
   if (!chat) return undefined;
-  const isMainThread = threadId === MAIN_THREAD_ID;
-  if (!additionalReplyInfo && isMainThread) return undefined;
 
-  const replyInfo: ApiInputMessageReplyInfo = {
-    type: 'message',
-    ...additionalReplyInfo,
-    replyToMsgId: additionalReplyInfo?.replyToMsgId || Number(threadId),
-    replyToTopId: additionalReplyInfo?.replyToTopId || (!isMainThread ? Number(threadId) : undefined),
-  };
-
-  return replyInfo;
+  return prepareMessageReplyInfo(threadId, additionalReplyInfo);
 }
 
 export function selectReplyMessage<T extends GlobalState>(global: T, message: ApiMessage) {

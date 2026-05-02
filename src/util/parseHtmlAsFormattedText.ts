@@ -2,31 +2,20 @@ import type { ApiFormattedText, ApiMessageEntity } from '../api/types';
 import { ApiMessageEntityTypes } from '../api/types';
 
 import { RE_LINK_TEMPLATE } from '../config';
+import {
+  ENTITY_CLASS_BY_NODE_NAME,
+  escapeHtmlAttribute,
+  parseHtmlBody,
+} from '../components/middle/composer/helpers/cleanHtml';
 import { IS_EMOJI_SUPPORTED } from './browser/windowEnvironment';
-
-export const ENTITY_CLASS_BY_NODE_NAME: Record<string, ApiMessageEntityTypes> = {
-  B: ApiMessageEntityTypes.Bold,
-  STRONG: ApiMessageEntityTypes.Bold,
-  I: ApiMessageEntityTypes.Italic,
-  EM: ApiMessageEntityTypes.Italic,
-  INS: ApiMessageEntityTypes.Underline,
-  U: ApiMessageEntityTypes.Underline,
-  S: ApiMessageEntityTypes.Strike,
-  STRIKE: ApiMessageEntityTypes.Strike,
-  DEL: ApiMessageEntityTypes.Strike,
-  CODE: ApiMessageEntityTypes.Code,
-  PRE: ApiMessageEntityTypes.Pre,
-  BLOCKQUOTE: ApiMessageEntityTypes.Blockquote,
-};
 
 const MAX_TAG_DEEPNESS = 3;
 
 export default function parseHtmlAsFormattedText(
   html: string, withMarkdownLinks = false, skipMarkdown = false,
 ): ApiFormattedText {
-  const fragment = document.createElement('div');
-  fragment.innerHTML = skipMarkdown ? html
-    : withMarkdownLinks ? parseMarkdown(parseMarkdownLinks(html)) : parseMarkdown(html);
+  const fragment = parseHtmlBody(skipMarkdown ? html
+    : withMarkdownLinks ? parseMarkdown(parseMarkdownLinks(html)) : parseMarkdown(html));
   fixImageContent(fragment);
   const text = fragment.innerText.trim().replace(/\u200b+/g, '');
   const trimShift = fragment.innerText.indexOf(text[0]);
@@ -66,7 +55,7 @@ export default function parseHtmlAsFormattedText(
   };
 }
 
-export function fixImageContent(fragment: HTMLDivElement) {
+export function fixImageContent(fragment: HTMLElement) {
   fragment.querySelectorAll('img').forEach((node) => {
     if (node.dataset.documentId) { // Custom Emoji
       node.textContent = (node).alt || '';
@@ -137,7 +126,7 @@ function parseMarkdown(html: string) {
 function parseMarkdownLinks(html: string) {
   return html.replace(new RegExp(`\\[([^\\]]+?)]\\((${RE_LINK_TEMPLATE}+?)\\)`, 'g'), (_, text, link) => {
     const url = link.includes('://') ? link : link.includes('@') ? `mailto:${link}` : `https://${link}`;
-    return `<a href="${url}">${text}</a>`;
+    return `<a href="${escapeHtmlAttribute(url)}">${text}</a>`;
   });
 }
 
@@ -198,13 +187,21 @@ function getEntityDataFromNode(
   }
 
   if (type === ApiMessageEntityTypes.CustomEmoji) {
+    const nodeElement = node as HTMLElement;
+    const documentId = nodeElement.dataset.documentId || nodeElement.getAttribute('emoji-id');
+    if (!documentId) {
+      return {
+        index,
+        entity: undefined,
+      };
+    }
     return {
       index,
       entity: {
         type,
         offset,
         length,
-        documentId: (node as HTMLImageElement).dataset.documentId!,
+        documentId,
       },
     };
   }
@@ -226,6 +223,37 @@ function getEntityDataFromNode(
         length,
         timestamp,
       },
+    };
+  }
+
+  if (type === ApiMessageEntityTypes.FormattedDate) {
+    const date = Number((node as HTMLElement).dataset.unix);
+    if (Number.isNaN(date)) {
+      return {
+        index,
+        entity: undefined,
+      };
+    }
+    const format = (node as HTMLElement).dataset.format;
+    const relative = format?.includes('r') || undefined;
+    const dayOfWeek = format?.includes('w') || undefined;
+    const shortDate = format?.includes('d') || undefined;
+    const longDate = format?.includes('D') || undefined;
+    const shortTime = format?.includes('t') || undefined;
+    const longTime = format?.includes('T') || undefined;
+
+    return {
+      index,
+      entity: { type, offset, length, date, relative, dayOfWeek, shortDate, longDate, shortTime, longTime },
+    };
+  }
+
+  if (type === ApiMessageEntityTypes.DiffInsert
+    || type === ApiMessageEntityTypes.DiffReplace
+    || type === ApiMessageEntityTypes.DiffDelete) {
+    return {
+      index,
+      entity: undefined,
     };
   }
 
@@ -277,6 +305,14 @@ function getEntityTypeFromNode(node: ChildNode): ApiMessageEntityTypes | undefin
     if ((node as HTMLImageElement).dataset.documentId) {
       return ApiMessageEntityTypes.CustomEmoji;
     }
+  }
+
+  if (node.nodeName === 'TG-TIME') {
+    return ApiMessageEntityTypes.FormattedDate;
+  }
+
+  if (node.nodeName === 'TG-EMOJI') {
+    return ApiMessageEntityTypes.CustomEmoji;
   }
 
   return undefined;

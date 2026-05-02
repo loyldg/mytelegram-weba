@@ -61,7 +61,7 @@ export const MEDIA_PROGRESSIVE_CACHE_DISABLED = false;
 export const MEDIA_PROGRESSIVE_CACHE_NAME = 'tt-media-progressive';
 export const MEDIA_CACHE_MAX_BYTES = 512 * 1024; // 512 KB
 export const CUSTOM_BG_CACHE_NAME = 'tt-custom-bg';
-export const LANG_CACHE_NAME = 'tt-lang-packs-v51';
+export const LANG_CACHE_NAME = 'tt-lang-packs-v52';
 export const ASSET_CACHE_NAME = 'tt-assets';
 export const AUTODOWNLOAD_FILESIZE_MB_LIMITS = [1, 5, 10, 50, 100, 500];
 export const DATA_BROADCAST_CHANNEL_PREFIX = 'tt-global';
@@ -116,6 +116,7 @@ export const GLOBAL_SUGGESTED_CHANNELS_ID = 'global';
 // https://github.com/DrKLO/Telegram/blob/51e9947527/TMessagesProj/src/main/java/org/telegram/messenger/MediaDataController.java#L7781
 export const REACTION_UNREAD_SLICE = 100;
 export const MENTION_UNREAD_SLICE = 100;
+export const POLL_UNREAD_SLICE = 100;
 export const TOPICS_SLICE = 20;
 export const TOPICS_SLICE_SECOND_LOAD = 500;
 
@@ -250,7 +251,8 @@ export const DEFAULT_TOPIC_ICON_STICKER_ID = 'topic-default-icon';
 export const DEFAULT_STATUS_ICON_ID = 'status-default-icon';
 export const EMOJI_IMG_REGEX = /<img[^>]+alt="([^"]+)"(?![^>]*data-document-id)[^>]*>/gm;
 
-export const BASE_EMOJI_KEYWORD_LANG = 'en';
+export const FALLBACK_LANG_CODE = 'en';
+export const BASE_EMOJI_KEYWORD_LANG = FALLBACK_LANG_CODE;
 
 export const MENU_TRANSITION_DURATION = 200;
 export const SLIDE_TRANSITION_DURATION = 450;
@@ -318,7 +320,7 @@ export const SUPPORTED_TRANSLATION_LANGUAGES = [
 export const RE_LINK_TEMPLATE = '((ftp|https?):\\/\\/)?((www\\.)?[-a-zA-Z0-9@:%._+~#=]{1,256}\\.[a-zA-Z][-a-zA-Z0-9]{1,62})\\b([-a-zA-Z0-9()@:%_+.,~#?&/=]*)';
 export const RE_MENTION_TEMPLATE = '(@[\\w\\d_-]+)';
 export const RE_TG_LINK = /^tg:(\/\/)?/i;
-export const RE_TME_LINK = /^(https?:\/\/)?([-a-zA-Z0-9@:%_+~#=]{1,32}\.)?t\.me/i;
+export const RE_TME_LINK = /^(https?:\/\/)?([-a-zA-Z0-9@:%_+~#=]{1,32}\.)?t\.me(?=[:/?#]|$)/i;
 export const RE_TELEGRAM_LINK = /^(https?:\/\/)?telegram\.org\//i;
 export const TME_LINK_PREFIX = 'https://t.me/';
 export const BOT_FATHER_USERNAME = 'botfather';
@@ -415,7 +417,9 @@ export const PREMIUM_FEATURE_SECTIONS = [
   'last_seen',
   'message_privacy',
   'effects',
+  'ai_compose',
   'todo',
+  'pm_noforwards',
 ] as const;
 
 export const PREMIUM_BOTTOM_VIDEOS: ApiPremiumSection[] = [

@@ -10,7 +10,7 @@ import {
   getMediaFormat, getMediaThumbUri, getMediaTransferState, getVideoMediaHash,
 } from '../../../global/helpers';
 import buildClassName from '../../../util/buildClassName';
-import { formatMediaDuration } from '../../../util/dates/dateFormat';
+import { formatMediaDuration } from '../../../util/dates/oldDateFormat';
 import * as mediaLoader from '../../../util/mediaLoader';
 import { calculateExtendedPreviewDimensions, calculateVideoDimensions } from '../../common/helpers/mediaDimensions';
 import { MIN_MEDIA_HEIGHT } from './helpers/mediaDimensions';
@@ -38,7 +38,7 @@ export type OwnProps<T> = {
   video: ApiVideo | ApiMediaExtendedPreview;
   lastPlaybackTimestamp?: number;
   isOwn?: boolean;
-  isInWebPage?: boolean;
+  isNestedMedia?: boolean;
   noAvatars?: boolean;
   canAutoLoad?: boolean;
   canAutoPlay?: boolean;
@@ -65,7 +65,7 @@ const Video = <T,>({
   id,
   video,
   isOwn,
-  isInWebPage,
+  isNestedMedia,
   noAvatars,
   canAutoLoad,
   canAutoPlay,
@@ -209,8 +209,8 @@ const Video = <T,>({
     width, height,
   } = dimensions || (
     isPaidPreview
-      ? calculateExtendedPreviewDimensions(video, Boolean(isOwn), asForwarded, isInWebPage, noAvatars, isMobile)
-      : calculateVideoDimensions(video, Boolean(isOwn), asForwarded, isInWebPage, noAvatars, isMobile)
+      ? calculateExtendedPreviewDimensions(video, Boolean(isOwn), asForwarded, isNestedMedia, noAvatars, isMobile)
+      : calculateVideoDimensions(video, Boolean(isOwn), asForwarded, isNestedMedia, noAvatars, isMobile)
   );
 
   const handleClick = useLastCallback((e: React.MouseEvent<HTMLElement, MouseEvent>, isFromSpinner?: boolean) => {
@@ -299,14 +299,16 @@ const Video = <T,>({
           style={forcedWidth ? `width: ${forcedWidth}px` : undefined}
         />
       )}
-      <img
-        ref={previewRef}
-        src={previewBlobUrl}
-        className={buildClassName('thumbnail', withBlurredBackground && 'with-blurred-bg')}
-        alt=""
-        style={forcedWidth ? `width: ${forcedWidth}px;` : undefined}
-        draggable={!isProtected}
-      />
+      {previewBlobUrl && (
+        <img
+          ref={previewRef}
+          src={previewBlobUrl}
+          className={buildClassName('thumbnail', withBlurredBackground && 'with-blurred-bg')}
+          alt=""
+          style={forcedWidth ? `width: ${forcedWidth}px;` : undefined}
+          draggable={!isProtected}
+        />
+      )}
       {hasThumb && !isPreviewPreloaded && (
         <canvas ref={thumbRef} className="thumbnail" />
       )}

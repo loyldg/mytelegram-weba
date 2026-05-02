@@ -1,30 +1,31 @@
 import type { ElementRef } from '../../lib/teact/teact';
 import {
-  memo, useRef, useState,
+  memo, useRef,
 } from '../../lib/teact/teact';
 
+import type { ApiAttachment, MediaContent } from '../../api/types';
+import type { ObserveFn } from '../../hooks/useIntersectionObserver';
 import type { IconName } from '../../types/icons';
 
-import { IS_CANVAS_FILTER_SUPPORTED } from '../../util/browser/windowEnvironment';
 import buildClassName from '../../util/buildClassName';
-import { formatMediaDateTime, formatPastTimeShort } from '../../util/dates/dateFormat';
+import { formatMediaDateTime, formatPastTimeShort } from '../../util/dates/oldDateFormat';
 import { getColorFromExtension } from './helpers/documentInfo';
 import { getDocumentThumbnailDimensions } from './helpers/mediaDimensions';
 import renderText from './helpers/renderText';
 
-import useAppLayout from '../../hooks/useAppLayout';
-import useCanvasBlur from '../../hooks/useCanvasBlur';
 import useLang from '../../hooks/useLang';
-import useMediaTransitionDeprecated from '../../hooks/useMediaTransitionDeprecated';
 import useOldLang from '../../hooks/useOldLang';
 import useShowTransitionDeprecated from '../../hooks/useShowTransitionDeprecated';
 
 import Link from '../ui/Link';
 import ProgressSpinner from '../ui/ProgressSpinner';
 import AnimatedFileSize from './AnimatedFileSize';
+import CompactMediaPreview, { canRenderCompactMediaPreview } from './CompactMediaPreview';
 import Icon from './icons/Icon';
 
 import './File.scss';
+
+type FileSize = 'small' | 'medium' | 'large';
 
 type OwnProps = {
   ref?: ElementRef<HTMLDivElement>;
@@ -34,10 +35,11 @@ type OwnProps = {
   size: number;
   timestamp?: number;
   sender?: string;
-  thumbnailDataUri?: string;
-  previewData?: string;
+  previewMedia?: MediaContent;
+  previewAttachment?: ApiAttachment;
+  observeIntersection?: ObserveFn;
   className?: string;
-  smaller?: boolean;
+  previewSize?: FileSize;
   isTransferring?: boolean;
   isUploading?: boolean;
   isSelectable?: boolean;
@@ -56,16 +58,17 @@ const File = ({
   extension = '',
   timestamp,
   sender,
-  thumbnailDataUri,
-  previewData,
+  previewMedia,
+  previewAttachment,
   className,
-  smaller,
+  previewSize = 'medium',
   isTransferring,
   isUploading,
   isSelectable,
   isSelected,
   transferProgress,
   actionIcon,
+  observeIntersection,
   onClick,
   onDateClick,
 }: OwnProps) => {
@@ -76,12 +79,6 @@ const File = ({
     elementRef = ref;
   }
 
-  const { isMobile } = useAppLayout();
-  const [withThumb] = useState(!previewData);
-  const noThumb = Boolean(previewData);
-  const thumbRef = useCanvasBlur(thumbnailDataUri, noThumb, isMobile && !IS_CANVAS_FILTER_SUPPORTED);
-  const thumbClassNames = useMediaTransitionDeprecated(!noThumb);
-
   const {
     shouldRender: shouldSpinnerRender,
     transitionClassNames: spinnerClassNames,
@@ -89,12 +86,13 @@ const File = ({
 
   const color = getColorFromExtension(extension);
 
-  const { width, height } = getDocumentThumbnailDimensions(smaller);
+  const { width } = getDocumentThumbnailDimensions(previewSize);
+  const shouldRenderPreview = canRenderCompactMediaPreview(previewMedia, previewAttachment);
 
   const fullClassName = buildClassName(
     'File',
     className,
-    smaller && 'smaller',
+    previewSize !== 'medium' && `size-${previewSize}`,
     onClick && !isUploading && 'interactive',
     isSelected && 'file-is-selected',
   );
@@ -107,23 +105,14 @@ const File = ({
         </div>
       )}
       <div className="file-icon-container" onClick={isUploading ? undefined : onClick}>
-        {thumbnailDataUri || previewData ? (
-          <div className="file-preview media-inner">
-            <img
-              src={previewData}
-              className="full-media"
-              width={width}
-              height={height}
-              draggable={false}
-              alt=""
-            />
-            {withThumb && (
-              <canvas
-                ref={thumbRef}
-                className={buildClassName('thumbnail', thumbClassNames)}
-              />
-            )}
-          </div>
+        {shouldRenderPreview ? (
+          <CompactMediaPreview
+            className="file-preview media-inner"
+            media={previewMedia}
+            attachment={previewAttachment}
+            size={width}
+            observeIntersectionForLoading={observeIntersection}
+          />
         ) : (
           <div className={`file-icon ${color}`}>
             {extension.length <= 4 && (
@@ -135,7 +124,7 @@ const File = ({
           <div className={buildClassName('file-progress', color, spinnerClassNames)}>
             <ProgressSpinner
               progress={transferProgress}
-              size={smaller ? 's' : 'm'}
+              size={previewSize === 'small' ? 's' : 'm'}
               onClick={isUploading ? onClick : undefined}
             />
           </div>

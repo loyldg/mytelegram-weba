@@ -5,10 +5,9 @@ import type {
   ApiEmojiStatusCollectible, ApiEmojiStatusType, ApiSavedStarGift, ApiStarGift,
 } from '../../../api/types';
 
-import { DEFAULT_STATUS_ICON_ID, TME_LINK_PREFIX } from '../../../config';
-import { STARS_CURRENCY_CODE } from '../../../config';
+import { DEFAULT_STATUS_ICON_ID, STARS_CURRENCY_CODE, TME_LINK_PREFIX } from '../../../config';
 import { copyTextToClipboard } from '../../../util/clipboard';
-import { formatDateAtTime } from '../../../util/dates/dateFormat';
+import { formatDateAtTime } from '../../../util/dates/oldDateFormat';
 import { getServerTime } from '../../../util/serverTime';
 
 import useLang from '../../../hooks/useLang';

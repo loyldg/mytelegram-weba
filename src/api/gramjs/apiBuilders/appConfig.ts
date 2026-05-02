@@ -52,6 +52,7 @@ export interface GramJsAppConfig extends LimitsConfig {
   autologin_domains: string[];
   autologin_token: string;
   url_auth_domains: string[];
+  web_app_allowed_protocols?: string[];
   whitelisted_domains: string[];
   premium_purchase_blocked: boolean;
   giveaway_gifts_purchase_available: boolean;
@@ -110,6 +111,7 @@ export interface GramJsAppConfig extends LimitsConfig {
   stars_suggested_post_age_min?: number;
   stars_suggested_post_future_max?: number;
   stars_suggested_post_future_min?: number;
+  no_forwards_request_expire_period?: number;
   ton_suggested_post_commission_permille?: number;
   ton_suggested_post_amount_max?: number;
   ton_suggested_post_amount_min?: number;
@@ -129,6 +131,7 @@ export interface GramJsAppConfig extends LimitsConfig {
   whitelisted_bots?: string[];
   settings_display_passkeys?: boolean;
   passkeys_account_passkeys_max?: number;
+  ai_compose_styles?: [string, string, string][];
 }
 
 function buildEmojiSounds(appConfig: GramJsAppConfig) {
@@ -160,6 +163,11 @@ function buildDiceEmojiesSuccess(appConfig: GramJsAppConfig) {
   }, {} as ApiAppConfig['diceEmojiesSuccess']) : {};
 }
 
+function buildAiComposeStyles(appConfig: GramJsAppConfig) {
+  const { ai_compose_styles } = appConfig;
+  return ai_compose_styles?.map(([tone, documentId, title]) => ({ tone, documentId, title }));
+}
+
 function getLimit(appConfig: GramJsAppConfig, key: Limit, fallbackKey: ApiLimitType) {
   const defaultLimit = appConfig[`${key}_default`] || DEFAULT_LIMITS[fallbackKey][0];
   const premiumLimit = appConfig[`${key}_premium`] || DEFAULT_LIMITS[fallbackKey][1];
@@ -177,6 +185,7 @@ export function buildAppConfig(json: GramJs.TypeJSONValue, hash: number): ApiApp
     autologinDomains: appConfig.autologin_domains || [],
     urlAuthDomains: appConfig.url_auth_domains || [],
     whitelistedDomains: appConfig.whitelisted_domains || [],
+    webAppAllowedProtocols: appConfig.web_app_allowed_protocols,
     maxUniqueReactions: appConfig.reactions_uniq_max,
     premiumBotUsername: appConfig.premium_bot_username,
     premiumInvoiceSlug: appConfig.premium_invoice_slug,
@@ -250,6 +259,7 @@ export function buildAppConfig(json: GramJs.TypeJSONValue, hash: number): ApiApp
     starsSuggestedPostAgeMin: appConfig.stars_suggested_post_age_min,
     starsSuggestedPostFutureMax: appConfig.stars_suggested_post_future_max,
     starsSuggestedPostFutureMin: appConfig.stars_suggested_post_future_min,
+    noForwardsRequestExpirePeriod: appConfig.no_forwards_request_expire_period,
     tonSuggestedPostCommissionPermille: appConfig.ton_suggested_post_commission_permille,
     tonSuggestedPostAmountMax: appConfig.ton_suggested_post_amount_max,
     tonSuggestedPostAmountMin: appConfig.ton_suggested_post_amount_min,
@@ -270,6 +280,7 @@ export function buildAppConfig(json: GramJs.TypeJSONValue, hash: number): ApiApp
     passkeysMaxCount: appConfig.passkeys_account_passkeys_max,
     diceEmojies: appConfig.emojies_send_dice,
     diceEmojiesSuccess: buildDiceEmojiesSuccess(appConfig),
+    aiComposeStyles: buildAiComposeStyles(appConfig),
   };
 
   return {

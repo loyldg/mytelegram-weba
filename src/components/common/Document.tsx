@@ -1,15 +1,14 @@
 import {
-  memo, useEffect, useRef, useState,
+  memo, useEffect, useMemo, useRef, useState,
 } from '../../lib/teact/teact';
 import { getActions } from '../../global';
 
-import type { ApiDocument, ApiMessage } from '../../api/types';
+import type { ApiDocument, ApiMessage, MediaContent } from '../../api/types';
 import type { ObserveFn } from '../../hooks/useIntersectionObserver';
 
 import {
   getDocumentMediaHash,
   getMediaFormat,
-  getMediaThumbUri,
   getMediaTransferState,
   isDocumentVideo,
 } from '../../global/helpers';
@@ -20,7 +19,6 @@ import { preloadDocumentMedia } from './helpers/preloadDocumentMedia';
 import useFlag from '../../hooks/useFlag';
 import { useIsIntersecting } from '../../hooks/useIntersectionObserver';
 import useLastCallback from '../../hooks/useLastCallback';
-import useMedia from '../../hooks/useMedia';
 import useMediaWithLoadProgress from '../../hooks/useMediaWithLoadProgress';
 import useOldLang from '../../hooks/useOldLang';
 
@@ -31,7 +29,7 @@ import File from './File';
 type OwnProps = {
   document: ApiDocument;
   observeIntersection?: ObserveFn;
-  smaller?: boolean;
+  fileSize?: 'small' | 'medium' | 'large';
   isSelected?: boolean;
   isSelectable?: boolean;
   canAutoLoad?: boolean;
@@ -59,7 +57,7 @@ const BYTES_PER_MB = 1024 * 1024;
 const Document = ({
   document,
   observeIntersection,
-  smaller,
+  fileSize,
   canAutoLoad,
   autoLoadFileMaxSizeMb,
   uploadProgress,
@@ -117,9 +115,10 @@ const Document = ({
   );
 
   const hasPreview = getDocumentHasPreview(document);
-  const thumbDataUri = hasPreview ? getMediaThumbUri(document) : undefined;
-  const localBlobUrl = hasPreview ? document.previewBlobUrl : undefined;
-  const previewData = useMedia(getDocumentMediaHash(document, 'pictogram'), !isIntersecting);
+  const previewMedia = useMemo<MediaContent | undefined>(
+    () => (hasPreview ? { document } : undefined),
+    [document, hasPreview],
+  );
 
   const shouldForceDownload = document.innerMediaType === 'photo' && document.mediaSize
     && !document.mediaSize.fromDocumentAttribute && !document.mediaSize.fromPreload;
@@ -199,9 +198,9 @@ const Document = ({
         extension={extension}
         size={size}
         timestamp={datetime}
-        thumbnailDataUri={thumbDataUri}
-        previewData={localBlobUrl || previewData}
-        smaller={smaller}
+        previewMedia={previewMedia}
+        observeIntersection={observeIntersection}
+        previewSize={fileSize}
         isTransferring={isTransferring}
         isUploading={isUploading}
         transferProgress={transferProgress}

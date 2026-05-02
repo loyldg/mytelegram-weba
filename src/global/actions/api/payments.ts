@@ -55,6 +55,31 @@ import {
 } from '../../selectors';
 
 const LOCAL_BOOST_COOLDOWN = 86400; // 24 hours
+const SMART_GLOCAL_DOMAIN = 'smart-glocal.com';
+const SMART_GLOCAL_TOKENIZE_PATH = '/cds/v1/tokenize/card';
+
+function isValidSmartGlocalTokenizeUrl(tokenizeUrl: string) {
+  if (tokenizeUrl !== tokenizeUrl.trim()) {
+    return false;
+  }
+
+  let parsedUrl: URL;
+  try {
+    parsedUrl = new URL(tokenizeUrl);
+  } catch {
+    return false;
+  }
+
+  const { protocol, hostname, pathname, port, username, password } = parsedUrl;
+  const isSmartGlocalHost = hostname === SMART_GLOCAL_DOMAIN || hostname.endsWith(`.${SMART_GLOCAL_DOMAIN}`);
+
+  return protocol === 'https:'
+    && isSmartGlocalHost
+    && pathname === SMART_GLOCAL_TOKENIZE_PATH
+    && !port
+    && !username
+    && !password;
+}
 
 addActionHandler('validateRequestedInfo', (global, actions, payload): ActionReturnType => {
   const { requestInfo, saveInfo, tabId = getCurrentTabId() } = payload;
@@ -111,6 +136,7 @@ addActionHandler('openInvoice', async (global, actions, payload): Promise<void> 
       form,
       isPaymentModalOpen: true,
       isExtendedMedia: (payload as any).isExtendedMedia,
+      confirmPaymentUrl: undefined,
       status: undefined,
     }, tabId);
     global = setPaymentStep(global, PaymentStep.Checkout, tabId);
@@ -280,11 +306,24 @@ addActionHandler('sendPaymentForm', async (global, actions, payload): Promise<vo
     tipAmount,
   });
 
+  global = getGlobal();
+  if (selectTabState(global, tabId).payment.form?.formId !== formId) {
+    return;
+  }
+
   if (!result) {
     return;
   }
 
-  global = getGlobal();
+  if ('verificationUrl' in result) {
+    global = updatePayment(global, {
+      confirmPaymentUrl: result.verificationUrl,
+      step: PaymentStep.ConfirmPayment,
+    }, tabId);
+    setGlobal(global);
+    return;
+  }
+
   global = updatePayment(global, { status: 'paid' }, tabId);
   global = closeInvoice(global, tabId);
   setGlobal(global);
@@ -415,8 +454,7 @@ async function sendSmartGlocalCredentials<T extends GlobalState>(
     url = 'https://tgb.smart-glocal.com/cds/v1/tokenize/card';
   }
 
-  if (tokenizeUrl?.startsWith('https://')
-    && tokenizeUrl.endsWith('.smart-glocal.com/cds/v1/tokenize/card')) {
+  if (tokenizeUrl && isValidSmartGlocalTokenizeUrl(tokenizeUrl)) {
     url = tokenizeUrl;
   }
 
@@ -1329,5 +1367,5 @@ function handlePaymentFormError(error: string, tabId: number) {
     return;
   }
 
-  getActions().showDialog({ data: { message: error, hasErrorKey: true }, tabId });
+  getActions().showDialog({ data: { type: 'error', message: error, hasErrorKey: true }, tabId });
 }

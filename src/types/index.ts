@@ -96,7 +96,19 @@ export interface IAlbum {
   commentsMessage?: ApiMessage;
 }
 
+export interface IDocumentGroup {
+  documentGroupId: string;
+  messages: ApiMessage[];
+  firstMessageId: number;
+  commentsMessage?: ApiMessage;
+}
+
 export type ThreadId = string | number;
+
+export type ForwardTarget = {
+  chatId: string;
+  topicId?: number;
+};
 
 export type ThemeKey = 'light' | 'dark';
 export type AnimationLevel = 0 | 1 | 2;
@@ -105,7 +117,7 @@ export type PerformanceTypeKey = (
   'pageTransitions' | 'messageSendingAnimations' | 'mediaViewerAnimations'
   | 'messageComposerAnimations' | 'contextMenuAnimations' | 'contextMenuBlur' | 'messageBlur'
   | 'rightColumnAnimations' | 'animatedEmoji' | 'loopAnimatedStickers' | 'reactionEffects' | 'stickerEffects'
-  | 'autoplayGifs' | 'autoplayVideos' | 'storyRibbonAnimations' | 'snapEffect'
+  | 'autoplayGifs' | 'autoplayVideos' | 'storyRibbonAnimations' | 'snapEffect' | 'textStreaming'
 );
 export type PerformanceType = Record<PerformanceTypeKey, boolean>;
 
@@ -127,6 +139,7 @@ export interface AccountSettings {
   hasWebNotifications: boolean;
   hasPushNotifications: boolean;
   hasContactJoinedNotifications?: boolean;
+  shouldNotifyAboutPinnedMessages: boolean;
   notificationSoundVolume: number;
   canAutoLoadPhotoFromContacts: boolean;
   canAutoLoadPhotoInPrivateChats: boolean;
@@ -157,6 +170,7 @@ export interface AccountSettings {
   canTranslateChats: boolean;
   translationLanguage?: string;
   doNotTranslate: string[];
+  translationTone?: TranslationTone;
   shouldPaidMessageAutoApprove: boolean;
 }
 
@@ -330,6 +344,7 @@ export enum MediaViewerOrigin {
   StarsTransaction,
   PreviewMedia,
   SponsoredMessage,
+  PollPreview,
 }
 
 export enum StoryViewerOrigin {
@@ -610,8 +625,10 @@ export interface ThreadReadState {
   unreadCount?: number;
   unreadMentionsCount?: number;
   unreadReactionsCount?: number;
+  unreadPollVotesCount?: number;
   unreadReactions?: number[];
   unreadMentions?: number[];
+  unreadPollVotes?: number[];
   hasUnreadMark?: boolean;
 
   lastReadOutboxMessageId?: number;
@@ -636,7 +653,7 @@ export interface ThreadLocalState {
 
   noWebPage?: boolean;
 
-  typingStatus?: ApiTypingStatus;
+  typingStatusByPeerId?: Record<string, ApiTypingStatus>;
 
   typingDraftIdByRandomId?: Record<string, number>;
 }
@@ -668,6 +685,9 @@ export type TranslatedMessage = {
   summary?: TextSummary;
 };
 
+export const TRANSLATION_TONES = ['neutral', 'formal', 'casual'] as const;
+export type TranslationTone = typeof TRANSLATION_TONES[number];
+
 export type TextSummary = {
   isPending?: false;
   text: ApiFormattedText;
@@ -683,6 +703,7 @@ export type ChatTranslatedMessages = {
 export type ChatRequestedTranslations = {
   toLanguage?: string;
   manualMessages?: Record<number, string>;
+  tone?: TranslationTone;
 };
 
 export type SimilarBotsInfo = {
@@ -739,6 +760,7 @@ export type ResaleGiftsFilterOptions = {
   modelAttributes?: StarGiftAttributeIdModel[];
   patternAttributes?: ApiStarGiftAttributeIdPattern[];
   backdropAttributes?: ApiStarGiftAttributeIdBackdrop[];
+  starsOnly?: boolean;
 };
 
 export type SendMessageParams = {
@@ -777,7 +799,6 @@ export type SendMessageParams = {
   messagePriceInStars?: number;
   localMessage?: ApiMessage;
   forwardedLocalMessagesSlice?: ForwardedLocalMessagesSlice;
-  isForwarding?: boolean;
   forwardParams?: ForwardMessagesParams;
   isStoryReply?: boolean;
   suggestedMedia?: MediaContent;

@@ -12,6 +12,7 @@ import Button from './Button';
 
 type OwnProps = {
   onActivate: (e: React.MouseEvent<HTMLButtonElement, MouseEvent>) => void;
+  noClickActivation?: boolean;
 } & Omit<ButtonProps, (
   'onClick' | 'onMouseDown' |
   'onMouseEnter' | 'onMouseLeave' |
@@ -22,11 +23,11 @@ const BUTTON_ACTIVATE_DELAY = 200;
 let openTimeout: number | undefined;
 let isFirstTimeActivation = true;
 
-const ResponsiveHoverButton: FC<OwnProps> = ({ onActivate, ...buttonProps }) => {
-  const isMouseInside = useRef(false);
+const ResponsiveHoverButton: FC<OwnProps> = ({ onActivate, noClickActivation, ...buttonProps }) => {
+  const isMouseInsideRef = useRef(false);
 
   const handleMouseEnter = useLastCallback((e: React.MouseEvent<HTMLButtonElement, MouseEvent>) => {
-    isMouseInside.current = true;
+    isMouseInsideRef.current = true;
 
     // This is used to counter additional delay caused by asynchronous module loading
     if (isFirstTimeActivation) {
@@ -40,18 +41,18 @@ const ResponsiveHoverButton: FC<OwnProps> = ({ onActivate, ...buttonProps }) => 
       openTimeout = undefined;
     }
     openTimeout = window.setTimeout(() => {
-      if (isMouseInside.current) {
+      if (isMouseInsideRef.current) {
         onActivate(e);
       }
     }, BUTTON_ACTIVATE_DELAY);
   });
 
   const handleMouseLeave = useLastCallback(() => {
-    isMouseInside.current = false;
+    isMouseInsideRef.current = false;
   });
 
   const handleClick = useLastCallback((e: React.MouseEvent<HTMLButtonElement, MouseEvent>) => {
-    isMouseInside.current = true;
+    isMouseInsideRef.current = true;
     onActivate(e);
   });
 
@@ -60,7 +61,7 @@ const ResponsiveHoverButton: FC<OwnProps> = ({ onActivate, ...buttonProps }) => 
       {...buttonProps}
       onMouseEnter={!IS_TOUCH_ENV ? handleMouseEnter : undefined}
       onMouseLeave={!IS_TOUCH_ENV ? handleMouseLeave : undefined}
-      onClick={!IS_TOUCH_ENV ? onActivate : handleClick}
+      onClick={!IS_TOUCH_ENV ? (noClickActivation ? undefined : onActivate) : handleClick}
     />
   );
 };

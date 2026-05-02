@@ -9,8 +9,8 @@ import type {
   ApiChat,
   ApiChatReactions,
   ApiMessage,
+  ApiMessagePoll,
   ApiPeer,
-  ApiPoll,
   ApiReaction,
   ApiStickerSet,
   ApiThreadInfo,
@@ -18,7 +18,7 @@ import type {
   ApiUser,
   ApiWebPage,
 } from '../../../api/types';
-import type { IAnchorPosition } from '../../../types';
+import type { IAnchorPosition, TranslationTone } from '../../../types';
 
 import {
   getUserFullName,
@@ -38,9 +38,11 @@ import useLastCallback from '../../../hooks/useLastCallback';
 import useOldLang from '../../../hooks/useOldLang';
 
 import AvatarList from '../../common/AvatarList';
+import Icon from '../../common/icons/Icon';
 import Menu from '../../ui/Menu';
 import MenuItem from '../../ui/MenuItem';
 import MenuSeparator from '../../ui/MenuSeparator';
+import NestedMenuItem from '../../ui/NestedMenuItem';
 import Skeleton from '../../ui/placeholder/Skeleton';
 import LastEditTimeMenuItem from './LastEditTimeMenuItem';
 import ReactionSelector from './reactions/ReactionSelector';
@@ -57,7 +59,7 @@ type OwnProps = {
   anchor: IAnchorPosition;
   targetHref?: string;
   message: ApiMessage;
-  poll?: ApiPoll;
+  poll?: ApiMessagePoll;
   webPage?: ApiWebPage;
   story?: ApiTypeStory;
   canSendNow?: boolean;
@@ -86,6 +88,7 @@ type OwnProps = {
   canTranslate?: boolean;
   canShowOriginal?: boolean;
   canSelectLanguage?: boolean;
+  currentTranslationTone?: TranslationTone;
   isPrivate?: boolean;
   isCurrentUserPremium?: boolean;
   canDownload?: boolean;
@@ -128,6 +131,7 @@ type OwnProps = {
   onShowSeenBy?: NoneToVoidFunction;
   onShowReactors?: NoneToVoidFunction;
   onTranslate?: NoneToVoidFunction;
+  onTranslateWithTone?: (tone: TranslationTone) => void;
   onShowOriginal?: NoneToVoidFunction;
   onSelectLanguage?: NoneToVoidFunction;
   onToggleReaction?: (reaction: ApiReaction) => void;
@@ -136,6 +140,7 @@ type OwnProps = {
   onReactionPickerOpen?: (position: IAnchorPosition) => void;
   userFullName?: string;
   canGift?: boolean;
+  noForwardsNotice?: string;
 };
 
 const SCROLLBAR_WIDTH = 10;
@@ -184,6 +189,7 @@ const MessageContextMenu: FC<OwnProps> = ({
   canTranslate,
   canShowOriginal,
   canSelectLanguage,
+  currentTranslationTone,
   isDownloading,
   repliesThreadInfo,
   canShowSeenBy,
@@ -226,10 +232,12 @@ const MessageContextMenu: FC<OwnProps> = ({
   onCopyMessages,
   onReactionPickerOpen,
   onTranslate,
+  onTranslateWithTone,
   onShowOriginal,
   onSelectLanguage,
   userFullName,
   canGift,
+  noForwardsNotice,
 }) => {
   const {
     showNotification, openStickerSet, openCustomEmojiSets, loadStickers, openGiftModal,
@@ -253,6 +261,11 @@ const MessageContextMenu: FC<OwnProps> = ({
   const [isReady, markIsReady, unmarkIsReady] = useFlag();
   const { isMobile } = useAppLayout();
   const seenByDatesCount = useMemo(() => (seenByDates ? Object.keys(seenByDates).length : 0), [seenByDates]);
+  const totalSeenCount = useMemo(() => {
+    const ids = new Set(seenByDates ? Object.keys(seenByDates) : []);
+    message.reactors?.reactions?.forEach(({ peerId }) => ids.add(peerId));
+    return ids.size;
+  }, [seenByDates, message.reactors?.reactions]);
 
   const handleAfterCopy = useLastCallback(() => {
     showNotification({
@@ -330,10 +343,14 @@ const MessageContextMenu: FC<OwnProps> = ({
       return;
     }
 
-    setTimeout(() => {
+    const timeout = setTimeout(() => {
       markIsReady();
     }, ANIMATION_DURATION);
-  }, [isOpen, markIsReady, unmarkIsReady]);
+
+    return () => {
+      clearTimeout(timeout);
+    };
+  }, [isOpen]);
 
   useEffect(() => {
     return disableScrolling(scrollableRef.current, '.ReactionPicker');
@@ -424,11 +441,46 @@ const MessageContextMenu: FC<OwnProps> = ({
         {canUnfaveSticker && (
           <MenuItem icon="favorite" onClick={onUnfaveSticker}>{oldLang('Stickers.RemoveFromFavorites')}</MenuItem>
         )}
-        {canTranslate && <MenuItem icon="language" onClick={onTranslate}>{oldLang('TranslateMessage')}</MenuItem>}
+        {canTranslate && (
+          <MenuItem icon="language" onClick={() => onTranslate?.()}>{oldLang('TranslateMessage')}</MenuItem>
+        )}
         {canShowOriginal && (
           <MenuItem icon="language" onClick={onShowOriginal}>
             {oldLang('ShowOriginalButton')}
           </MenuItem>
+        )}
+        {canShowOriginal && (
+          <NestedMenuItem
+            icon="tone"
+            submenuClassName="translation-tone-menu"
+            submenu={(
+              <>
+                <MenuItem
+                  icon={currentTranslationTone === 'neutral' ? 'message-succeeded' : undefined}
+                  customIcon={currentTranslationTone !== 'neutral' ? <Icon name="placeholder" /> : undefined}
+                  onClick={() => onTranslateWithTone?.('neutral')}
+                >
+                  {lang('TranslationToneNeutral')}
+                </MenuItem>
+                <MenuItem
+                  icon={currentTranslationTone === 'formal' ? 'message-succeeded' : undefined}
+                  customIcon={currentTranslationTone !== 'formal' ? <Icon name="placeholder" /> : undefined}
+                  onClick={() => onTranslateWithTone?.('formal')}
+                >
+                  {lang('TranslationToneFormal')}
+                </MenuItem>
+                <MenuItem
+                  icon={currentTranslationTone === 'casual' ? 'message-succeeded' : undefined}
+                  customIcon={currentTranslationTone !== 'casual' ? <Icon name="placeholder" /> : undefined}
+                  onClick={() => onTranslateWithTone?.('casual')}
+                >
+                  {lang('TranslationToneCasual')}
+                </MenuItem>
+              </>
+            )}
+          >
+            {lang('TranslationTone')}
+          </NestedMenuItem>
         )}
         {canSelectLanguage && (
           <MenuItem icon="web" onClick={onSelectLanguage}>{oldLang('lng_settings_change_lang')}</MenuItem>
@@ -462,8 +514,8 @@ const MessageContextMenu: FC<OwnProps> = ({
             <MenuSeparator size="thick" />
             {!customEmojiSets && (
               <>
-                <Skeleton inline className="menu-loading-row" />
-                <Skeleton inline className="menu-loading-row" />
+                <Skeleton inline className="menu-loading-row" animation="wave" />
+                <Skeleton inline className="menu-loading-row" animation="wave" />
               </>
             )}
             {customEmojiSets && customEmojiSets.length === 1 && (
@@ -492,11 +544,15 @@ const MessageContextMenu: FC<OwnProps> = ({
                 <span className="MessageContextMenu--seen-by-label" dir={lang.isRtl ? 'rtl' : undefined}>
                   {canShowReactionsCount && message.reactors?.count ? (
                     canShowSeenBy && seenByDatesCount
-                      ? oldLang(
-                        'Chat.OutgoingContextMixedReactionCount',
-                        [message.reactors.count, seenByDatesCount],
+                      ? lang(
+                        'ChatOutgoingContextMixedReactionCount',
+                        { count: message.reactors.count, total: totalSeenCount },
                       )
-                      : oldLang('Chat.ContextReactionCount', message.reactors.count, 'i')
+                      : lang(
+                        'ChatContextReactionCount',
+                        { count: message.reactors.count },
+                        { pluralValue: message.reactors.count },
+                      )
                   ) : (
                     seenByDatesCount === 1 && seenByRecentPeers
                       ? renderText(
@@ -505,8 +561,12 @@ const MessageContextMenu: FC<OwnProps> = ({
                           : (seenByRecentPeers[0] as ApiChat).title,
                       ) : (
                         seenByDatesCount
-                          ? oldLang('Conversation.ContextMenuSeen', seenByDatesCount, 'i')
-                          : oldLang('Conversation.ContextMenuNoViews')
+                          ? lang(
+                            'ConversationContextMenuSeen',
+                            { count: seenByDatesCount },
+                            { pluralValue: seenByDatesCount },
+                          )
+                          : lang('ConversationContextMenuNoViews')
                       )
                   )}
                 </span>
@@ -515,7 +575,7 @@ const MessageContextMenu: FC<OwnProps> = ({
             </MenuItem>
           </>
         )}
-        {(canLoadReadDate || shouldRenderShowWhen || isEdited) && (
+        {(canLoadReadDate || shouldRenderShowWhen || isEdited || noForwardsNotice) && (
           <MenuSeparator size={hasCustomEmoji ? 'thin' : 'thick'} />
         )}
         {(canLoadReadDate || shouldRenderShowWhen) && (
@@ -530,6 +590,11 @@ const MessageContextMenu: FC<OwnProps> = ({
           <LastEditTimeMenuItem
             message={message}
           />
+        )}
+        {noForwardsNotice && (
+          <MenuItem disabled withWrap className="no-forwards-notice">
+            {noForwardsNotice}
+          </MenuItem>
         )}
       </div>
     </Menu>
