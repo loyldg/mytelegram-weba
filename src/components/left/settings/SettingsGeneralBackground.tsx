@@ -11,7 +11,7 @@ import { SettingsScreens, UPLOADING_WALLPAPER_SLUG } from '../../../types';
 
 import { DARK_THEME_PATTERN_COLOR, DEFAULT_PATTERN_COLOR } from '../../../config';
 import { selectTheme, selectThemeValues } from '../../../global/selectors';
-import { getAverageColor, getPatternColor, rgb2hex } from '../../../util/colors';
+import { getAverageColor, getPatternColor } from '../../../util/colors';
 import { validateFiles } from '../../../util/files';
 import { throttle } from '../../../util/schedulers';
 import { openSystemFilesDialog } from '../../../util/systemFilesDialog';
@@ -19,6 +19,7 @@ import { openSystemFilesDialog } from '../../../util/systemFilesDialog';
 import useHistoryBack from '../../../hooks/useHistoryBack';
 import useOldLang from '../../../hooks/useOldLang';
 
+import Island from '../../gili/layout/Island';
 import Checkbox from '../../ui/Checkbox';
 import ListItem from '../../ui/ListItem';
 import Loading from '../../ui/Loading';
@@ -102,7 +103,7 @@ const SettingsGeneralBackground: FC<OwnProps & StateProps> = ({
         .then((averageColor) => {
           setThemeSettings({
             theme: themeRef.current!,
-            backgroundColor: rgb2hex(averageColor),
+            backgroundColor: averageColor.toString({ format: 'hex', collapse: false, alpha: false }),
             patternColor: getPatternColor(averageColor),
           });
         });
@@ -124,7 +125,7 @@ const SettingsGeneralBackground: FC<OwnProps & StateProps> = ({
 
   return (
     <div className="SettingsGeneralBackground settings-content custom-scroll">
-      <div className="settings-item">
+      <Island>
         <ListItem
           icon="camera-add"
           className="mb-0"
@@ -151,7 +152,7 @@ const SettingsGeneralBackground: FC<OwnProps & StateProps> = ({
           checked={Boolean(isBlurred)}
           onChange={handleWallPaperBlurChange}
         />
-      </div>
+      </Island>
 
       {loadedWallpapers ? (
         <div className="settings-wallpapers">

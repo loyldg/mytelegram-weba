@@ -1,6 +1,6 @@
 import type React from '@teact';
 import type { ElementRef } from '@teact';
-import { memo, useEffect, useMemo, useState } from '@teact';
+import { memo, useEffect, useMemo, useRef, useState } from '@teact';
 import { getActions, withGlobal } from '../../global';
 
 import type { ApiChat, ApiChatBannedRights, ApiInputMessageReplyInfo, ApiTopic } from '../../api/types';
@@ -54,19 +54,21 @@ import {
 } from '../../global/selectors';
 import { selectSharedSettings } from '../../global/selectors/sharedState';
 import { selectDraft, selectEditingId, selectThreadInfo } from '../../global/selectors/threads';
-import { IS_TAURI } from '../../util/browser/globalEnvironment';
 import {
-  IS_ANDROID, IS_IOS, IS_MAC_OS, IS_SAFARI, IS_TRANSLATION_SUPPORTED, MASK_IMAGE_DISABLED,
+  IS_ANDROID, IS_IOS, IS_SAFARI, IS_TRANSLATION_SUPPORTED, MASK_IMAGE_DISABLED,
 } from '../../util/browser/windowEnvironment';
 import buildClassName from '../../util/buildClassName';
 import buildStyle from '../../util/buildStyle';
 import captureEscKeyListener from '../../util/captureEscKeyListener';
+import { waitForTransitionEnd } from '../../util/cssAnimationEndListeners';
 import { isUserId } from '../../util/entities/ids';
 import { resolveTransitionName } from '../../util/resolveTransitionName';
 import calculateMiddleFooterTransforms from './helpers/calculateMiddleFooterTransforms';
+import getHasMiddleFooter from './helpers/getHasMiddleFooter';
+import { syncMessageListBottomReserve } from './helpers/messageListReserves';
 
 import useAppLayout from '../../hooks/useAppLayout';
-import useCustomBackground from '../../hooks/useCustomBackground';
+import useDebouncedCallback from '../../hooks/useDebouncedCallback';
 import useForceUpdate from '../../hooks/useForceUpdate';
 import useHistoryBack from '../../hooks/useHistoryBack';
 import useLang from '../../hooks/useLang';
@@ -100,7 +102,6 @@ import ReactorListModal from './ReactorListModal.async';
 import MiddleSearch from './search/MiddleSearch.async';
 
 import './MiddleColumn.scss';
-import backgroundStyles from '../../styles/_patternBackground.module.scss';
 
 interface OwnProps {
   leftColumnRef: ElementRef<HTMLDivElement>;
@@ -160,6 +161,7 @@ type StateProps = {
   isAccountFrozen?: boolean;
   freezeAppealChat?: ApiChat;
   shouldBlockSendInMonoforum?: boolean;
+  isUiReady?: boolean;
 };
 
 function isImage(item: DataTransferItem) {
@@ -171,6 +173,7 @@ function isVideo(item: DataTransferItem) {
 }
 
 const LAYER_ANIMATION_DURATION_MS = 450 + ANIMATION_END_DELAY;
+const KEYBOARD_SETTLE_DURATION = 400;
 
 function MiddleColumn({
   leftColumnRef,
@@ -227,6 +230,7 @@ function MiddleColumn({
   isAccountFrozen,
   freezeAppealChat,
   shouldBlockSendInMonoforum,
+  isUiReady,
 }: OwnProps & StateProps) {
   const {
     openChat,
@@ -238,7 +242,6 @@ function MiddleColumn({
     joinChannel,
     sendBotCommand,
     restartBot,
-    showNotification,
     loadFullChat,
     setLeftColumnWidth,
     resetLeftColumnWidth,
@@ -253,7 +256,6 @@ function MiddleColumn({
   const [dropAreaState, setDropAreaState] = useState(DropAreaState.None);
   const [isScrollDownNeeded, setIsScrollDownNeeded] = useState(false);
   const isScrollDownShown = isScrollDownNeeded && (!isMobile || !hasActiveMiddleSearch);
-  const [isNotchShown, setIsNotchShown] = useState<boolean | undefined>();
   const [isUnpinModalOpen, setIsUnpinModalOpen] = useState(false);
 
   const {
@@ -292,25 +294,68 @@ function MiddleColumn({
     prevTransitionKey !== undefined && prevTransitionKey < currentTransitionKey ? prevTransitionKey : undefined
   );
 
-  const { isReady, handleCssTransitionEnd, handleSlideTransitionStop } = useIsReady(
+  const middleColumnRef = useRef<HTMLDivElement>();
+  const isViewportAnimatingRef = useRef(false);
+  const getIsKeyboardAnimating = useLastCallback(() => isViewportAnimatingRef.current);
+
+  const syncFooterSlide = useLastCallback((footer: HTMLElement) => {
+    if (!footer.offsetParent) return;
+
+    const scroller = footer.parentElement?.querySelector<HTMLElement>('.MessageList');
+    if (scroller) syncMessageListBottomReserve(scroller, getIsKeyboardAnimating());
+  });
+
+  const updateFooterHeight = useLastCallback(() => {
+    const middleColumn = middleColumnRef.current;
+    if (!middleColumn) return;
+
+    middleColumn.querySelectorAll<HTMLElement>('.middle-column-footer').forEach((footer) => {
+      syncFooterSlide(footer);
+    });
+  });
+
+  const markViewportSettled = useDebouncedCallback(() => {
+    isViewportAnimatingRef.current = false;
+    updateFooterHeight();
+  }, [updateFooterHeight], KEYBOARD_SETTLE_DURATION, true, false);
+
+  useEffect(() => {
+    const middleColumn = middleColumnRef.current;
+    if (!middleColumn) return undefined;
+
+    updateFooterHeight();
+
+    const observer = new ResizeObserver((entries) => {
+      entries.forEach((entry) => syncFooterSlide(entry.target as HTMLElement));
+    });
+    middleColumn.querySelectorAll<HTMLElement>('.middle-column-footer').forEach((footer) => observer.observe(footer));
+
+    return () => observer.disconnect();
+  }, [currentTransitionKey, renderingChatId, renderingThreadId, updateFooterHeight, syncFooterSlide]);
+
+  const { isReady, handleSlideTransitionStop } = useIsReady(
     !shouldSkipHistoryAnimations && withInterfaceAnimations,
     currentTransitionKey,
     prevTransitionKey,
     chatId,
     isMobile,
+    isLeftColumnShown,
+    middleColumnRef,
   );
 
   useEffect(() => {
     return chatId
       ? captureEscKeyListener(() => {
+        // Let the Right Column (profile, management, etc.) handle Esc first while it is open
+        if (isRightColumnShown) return false;
         openChat({ id: undefined });
+        return undefined;
       })
       : undefined;
-  }, [chatId, openChat]);
+  }, [chatId, openChat, isRightColumnShown]);
 
   useSyncEffect(() => {
     setDropAreaState(DropAreaState.None);
-    setIsNotchShown(undefined);
   }, [chatId]);
 
   // Fix for mobile virtual keyboard
@@ -325,6 +370,9 @@ function MiddleColumn({
     }
 
     const handleResize = () => {
+      isViewportAnimatingRef.current = true;
+      markViewportSettled();
+
       const isFixNeeded = visualViewport.height !== document.documentElement.clientHeight;
 
       requestMutation(() => {
@@ -345,7 +393,7 @@ function MiddleColumn({
     return () => {
       visualViewport.removeEventListener('resize', handleResize);
     };
-  }, []);
+  }, [markViewportSettled]);
 
   useEffect(() => {
     if (isPrivate) {
@@ -412,12 +460,6 @@ function MiddleColumn({
 
   const handleSubscribeClick = useLastCallback(() => {
     joinChannel({ chatId: chatId! });
-    if (renderingShouldSendJoinRequest) {
-      showNotification({
-        message: isChannel
-          ? oldLang('RequestToJoinChannelSentDescription') : oldLang('RequestToJoinGroupSentDescription'),
-      });
-    }
   });
 
   const handleStartBot = useLastCallback(() => {
@@ -432,19 +474,9 @@ function MiddleColumn({
     unblockUser({ userId: chatId! });
   });
 
-  const customBackgroundValue = useCustomBackground(theme, customBackground);
-
   const className = buildClassName(
     MASK_IMAGE_DISABLED ? 'mask-image-disabled' : 'mask-image-enabled',
-  );
-
-  const bgClassName = buildClassName(
-    backgroundStyles.background,
-    withRightColumnAnimation && backgroundStyles.withTransition,
-    customBackground && backgroundStyles.customBgImage,
-    backgroundColor && backgroundStyles.customBgColor,
-    customBackground && isBackgroundBlurred && backgroundStyles.blurred,
-    isRightColumnShown && backgroundStyles.withRightColumn,
+    isUiReady && 'ui-ready',
   );
 
   const messagingDisabledClassName = buildClassName(
@@ -478,7 +510,6 @@ function MiddleColumn({
   const footerClassName = buildClassName(
     'middle-column-footer',
     !renderingCanPost && 'no-composer',
-    renderingCanPost && isNotchShown && !isSelectModeActive && 'with-notch',
   );
 
   useHistoryBack({
@@ -499,11 +530,33 @@ function MiddleColumn({
   );
   const withExtraShift = Boolean(isMessagingDisabled || isSelectModeActive);
 
+  const hasFooter = getHasMiddleFooter({
+    isMobile,
+    canPost: renderingCanPost,
+    withExtraShift,
+    isPinnedMessageList,
+    canUnpin,
+    canShowOpenChatButton,
+    canSubscribe: renderingCanSubscribe,
+    shouldJoinToSend: renderingShouldJoinToSend,
+    shouldSendJoinRequest: renderingShouldSendJoinRequest,
+    canStartBot: renderingCanStartBot,
+    canRestartBot: renderingCanRestartBot,
+    canUnblock: renderingCanUnblock,
+  });
+
+  useEffect(() => {
+    updateFooterHeight();
+  }, [
+    updateFooterHeight, renderingChatId, renderingThreadId, currentTransitionKey, renderingCanPost,
+    isMessagingDisabled, isSelectModeActive, withMessageListBottomShift, footerClassName,
+  ]);
+
   return (
     <div
+      ref={middleColumnRef}
       id="MiddleColumn"
       className={className}
-      onTransitionEnd={handleCssTransitionEnd}
       style={buildStyle(
         `--composer-hidden-scale: ${composerHiddenScale}`,
         `--toolbar-hidden-scale: ${toolbarHiddenScale}`,
@@ -511,8 +564,6 @@ function MiddleColumn({
         `--toolbar-unpin-hidden-scale: ${toolbarForUnpinHiddenScale}`,
         `--composer-translate-x: ${composerTranslateX}px`,
         `--toolbar-translate-x: ${toolbarTranslateX}px`,
-        `--pattern-color: ${patternColor}`,
-        backgroundColor && `--theme-background-color: ${backgroundColor}`,
       )}
       onClick={(isTablet && isLeftColumnShown) ? handleTabletFocus : undefined}
     >
@@ -524,17 +575,12 @@ function MiddleColumn({
           onDoubleClick={resetResize}
         />
       )}
-      <div
-        className={bgClassName}
-        style={customBackgroundValue ? `--custom-background: ${customBackgroundValue}` : undefined}
-        data-tauri-drag-region={IS_TAURI && IS_MAC_OS && !(renderingChatId && renderingThreadId) ? true : undefined}
-      />
       <div id="middle-column-portals" />
       {Boolean(renderingChatId && renderingThreadId) && (
         <>
           <div className="messages-layout" onDragEnter={renderingCanPost ? handleDragEnter : undefined}>
             <MiddleHeaderPanes
-              key={renderingChatId}
+              key={`${renderingChatId}-${renderingThreadId}-${renderingMessageListType}`}
               chatId={renderingChatId!}
               threadId={renderingThreadId!}
               messageListType={renderingMessageListType!}
@@ -571,8 +617,8 @@ function MiddleColumn({
                 type={renderingMessageListType!}
                 isComments={isComments}
                 canPost={renderingCanPost!}
+                hasFooter={hasFooter}
                 onScrollDownToggle={setIsScrollDownNeeded}
-                onNotchToggle={setIsNotchShown}
                 isReady={isReady}
                 isContactRequirePremium={isContactRequirePremium}
                 paidMessagesStars={paidMessagesStars}
@@ -608,6 +654,7 @@ function MiddleColumn({
                       fluid
                       color="secondary"
                       className="composer-button unpin-all-button"
+                      noForcedUpperCase
                       onClick={handleOpenUnpinModal}
                       iconName="unpin"
                     >
@@ -752,6 +799,7 @@ export default memo(withGlobal<OwnProps>(
       messageLists, isLeftColumnShown, activeEmojiInteractions,
       seenByModal, reactorModal, shouldSkipHistoryAnimations,
       chatLanguageModal, privacySettingsNoticeModal,
+      uiReadyState,
     } = selectTabState(global);
     const currentMessageList = selectCurrentMessageList(global);
     const { leftColumnWidth } = global;
@@ -777,6 +825,7 @@ export default memo(withGlobal<OwnProps>(
       currentTransitionKey: Math.max(0, messageLists.length - 1),
       activeEmojiInteractions,
       leftColumnWidth,
+      isUiReady: uiReadyState >= 1,
     };
 
     if (!currentMessageList) {
@@ -895,6 +944,8 @@ function useIsReady(
   prevTransitionKey?: number,
   chatId?: string,
   isMobile?: boolean,
+  isLeftColumnShown?: boolean,
+  middleColumnRef?: ElementRef<HTMLDivElement>,
 ) {
   const [isReady, setIsReady] = useState(!isMobile);
   const forceUpdate = useForceUpdate();
@@ -909,13 +960,9 @@ function useIsReady(
     setIsReady(false);
 
     // Make sure to end even if end callback was not called (which was some hardly-reproducible bug)
-    const timeout = setTimeout(() => {
+    window.setTimeout(() => {
       setIsReady(true);
     }, LAYER_ANIMATION_DURATION_MS);
-
-    return () => {
-      clearTimeout(timeout);
-    };
   }, [willSwitchMessageList, withAnimations]);
 
   useSyncEffect(() => {
@@ -924,11 +971,40 @@ function useIsReady(
     }
   }, [withAnimations]);
 
-  function handleCssTransitionEnd(e: React.TransitionEvent<HTMLDivElement>) {
-    if (e.propertyName === 'transform' && e.target === e.currentTarget) {
-      setIsReady(Boolean(chatId));
+  // Mobile only: wait until `MiddleColumn` slides in after the left column closes
+  useSyncEffect(([prevIsLeftColumnShown, prevWillSwitchMessageList]) => {
+    if (!isMobile) {
+      return;
     }
-  }
+
+    if (!chatId) {
+      setIsReady(false);
+      return;
+    }
+
+    if (!withAnimations) {
+      setIsReady(true);
+      return;
+    }
+
+    if (willSwitchMessageList || prevWillSwitchMessageList) {
+      return;
+    }
+
+    if (isLeftColumnShown) {
+      setIsReady(false);
+      return;
+    }
+
+    if (prevIsLeftColumnShown !== true) {
+      setIsReady(true);
+      return;
+    }
+
+    waitForTransitionEnd(middleColumnRef!.current!, () => {
+      setIsReady(true);
+    }, 'transform', LAYER_ANIMATION_DURATION_MS);
+  }, [isLeftColumnShown, willSwitchMessageList, chatId, isMobile, withAnimations, middleColumnRef]);
 
   function handleSlideTransitionStop() {
     setIsReady(true);
@@ -936,7 +1012,6 @@ function useIsReady(
 
   return {
     isReady: isReady && !willSwitchMessageList,
-    handleCssTransitionEnd: withAnimations ? handleCssTransitionEnd : undefined,
     handleSlideTransitionStop: withAnimations ? handleSlideTransitionStop : undefined,
   };
 }

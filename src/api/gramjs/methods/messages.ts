@@ -15,11 +15,13 @@ import type {
   ApiError,
   ApiFormattedText,
   ApiGlobalMessageSearchType,
+  ApiInputAiComposeTone,
   ApiInputReplyInfo,
   ApiInputSuggestedPostInfo,
   ApiMessage,
   ApiMessageEntity,
   ApiMessagePoll,
+  ApiMessageReadMetric,
   ApiMessageSearchContext,
   ApiMessageSearchType,
   ApiNewMediaTodo,
@@ -63,11 +65,15 @@ import {
   buildApiSponsoredMessageReportResult,
   buildThreadReadState,
 } from '../apiBuilders/chats';
-import { buildApiComposedMessageWithAI, buildApiFormattedText } from '../apiBuilders/common';
+import {
+  buildApiAiComposeTone, buildApiAiComposeToneExample, buildApiComposedMessageWithAI, buildApiFormattedText,
+} from '../apiBuilders/common';
 import { buildApiTopicWithState } from '../apiBuilders/forums';
 import {
   buildMessageMediaContent, buildMessagePollFromMedia, buildMessageTextContent,
+  buildWebPage,
   buildWebPageFromMedia,
+  buildWebPagesFromMedia,
 } from '../apiBuilders/messageContent';
 import {
   buildApiFactCheck,
@@ -87,6 +93,7 @@ import {
 import { getApiChatIdFromMtpPeer } from '../apiBuilders/peers';
 import { buildApiUser, buildApiUserStatuses } from '../apiBuilders/users';
 import {
+  buildInputAiComposeTone,
   buildInputChannel,
   buildInputDocument,
   buildInputMediaDocument,
@@ -162,6 +169,7 @@ export async function fetchMessages({
   const RequestClass = threadId === MAIN_THREAD_ID
     ? GramJs.messages.GetHistory : isSavedDialog
       ? GramJs.messages.GetSavedHistory : GramJs.messages.GetReplies;
+  const isChannel = getEntityTypeById(chat.id) === 'channel';
   let result;
 
   try {
@@ -174,7 +182,7 @@ export async function fetchMessages({
       ...(threadId !== MAIN_THREAD_ID && !isSavedDialog && {
         msgId: Number(threadId),
       }),
-      // Workaround for local message IDs overflowing some internal `Buffer` range check
+      // Workaround for local message IDs overflowing some internal range check
       offsetId: offsetId ? Math.min(offsetId, MAX_INT_32) : DEFAULT_PRIMITIVES.INT,
       addOffset: addOffset ?? DEFAULT_PRIMITIVES.INT,
       limit,
@@ -201,6 +209,10 @@ export async function fetchMessages({
     || !result.messages
   ) {
     return undefined;
+  }
+
+  if (isChannel && 'pts' in result) {
+    updateChannelState(chat.id, result.pts);
   }
 
   const messages = result.messages.map(buildApiMessage).filter(Boolean);
@@ -259,7 +271,7 @@ export async function fetchMessage({ chat, messageId }: { chat: ApiChat; message
     return undefined;
   }
 
-  if ('pts' in result) {
+  if (isChannel && 'pts' in result) {
     updateChannelState(chat.id, result.pts);
   }
 
@@ -270,6 +282,42 @@ export async function fetchMessage({ chat, messageId }: { chat: ApiChat; message
 
   if (mtpMessage instanceof GramJs.MessageEmpty) {
     return MESSAGE_DELETED;
+  }
+
+  processMessageAndUpdateThreadInfo(mtpMessage);
+  const message = buildApiMessage(mtpMessage);
+
+  if (!message) {
+    return undefined;
+  }
+
+  return { message };
+}
+
+export async function fetchRichMessage({ chat, messageId }: { chat: ApiChat; messageId: number }) {
+  const isChannel = getEntityTypeById(chat.id) === 'channel';
+
+  const result = await invokeRequest(
+    new GramJs.messages.GetRichMessage({
+      peer: buildInputPeer(chat.id, chat.accessHash),
+      id: messageId,
+    }),
+    {
+      abortControllerChatId: chat.id,
+    },
+  );
+
+  if (!result || result instanceof GramJs.messages.MessagesNotModified) {
+    return undefined;
+  }
+
+  if (isChannel && 'pts' in result) {
+    updateChannelState(chat.id, result.pts);
+  }
+
+  const mtpMessage = result.messages[0];
+  if (!mtpMessage || mtpMessage instanceof GramJs.MessageEmpty) {
+    return undefined;
   }
 
   processMessageAndUpdateThreadInfo(mtpMessage);
@@ -374,9 +422,10 @@ export function sendApiMessage(
 
   if (!chat) return undefined;
 
-  // This is expected to arrive after `updateMessageSendSucceeded` which replaces the local ID,
-  // so in most cases this will be simply ignored
+  let isSendCompleted = false;
   const timeout = setTimeout(() => {
+    if (isSendCompleted) return;
+
     sendApiUpdate({
       '@type': localMessage.isScheduled ? 'updateScheduledMessage' : 'updateMessage',
       id: localMessage.id,
@@ -387,6 +436,10 @@ export function sendApiMessage(
       isFull: false,
     });
   }, FAST_SEND_TIMEOUT);
+  const cancelSendingStatusTimeout = () => {
+    isSendCompleted = true;
+    clearTimeout(timeout);
+  };
 
   const randomId = generateRandomBigInt();
 
@@ -403,7 +456,7 @@ export function sendApiMessage(
       scheduledAt,
       scheduleRepeatPeriod,
       messagePriceInStars,
-    }, randomId, localMessage, onProgress);
+    }, randomId, localMessage, onProgress, cancelSendingStatusTimeout);
   }
 
   const messagePromise = (async () => {
@@ -559,8 +612,11 @@ export function sendApiMessage(
         });
       }
 
+      cancelSendingStatusTimeout();
       if (update) handleLocalMessageUpdate(localMessage, update);
     } catch (error: any) {
+      cancelSendingStatusTimeout();
+
       if (error.errorMessage === 'PRIVACY_PREMIUM_REQUIRED') {
         sendApiUpdate({ '@type': 'updateRequestUserUpdate', id: chat.id });
       }
@@ -571,7 +627,6 @@ export function sendApiMessage(
         localId: localMessage.id,
         error: error.errorMessage,
       });
-      clearTimeout(timeout);
     }
   })();
 
@@ -590,6 +645,7 @@ const groupedUploads: Record<string, {
   counter: number;
   singleMediaByIndex: Record<number, GramJs.InputSingleMedia>;
   localMessages: Record<string, ApiMessage>;
+  cancelSendingStatusTimeouts: Record<string, NoneToVoidFunction>;
 }> = {};
 
 function sendGroupedMedia(
@@ -622,7 +678,8 @@ function sendGroupedMedia(
   },
   randomId: GramJs.long,
   localMessage: ApiMessage,
-  onProgress?: ApiOnProgress,
+  onProgress: ApiOnProgress | undefined,
+  cancelSendingStatusTimeout: NoneToVoidFunction,
 ) {
   let groupIndex = -1;
   if (!groupedUploads[groupedId]) {
@@ -630,6 +687,7 @@ function sendGroupedMedia(
       counter: 0,
       singleMediaByIndex: {},
       localMessages: {},
+      cancelSendingStatusTimeouts: {},
     };
   }
 
@@ -684,12 +742,13 @@ function sendGroupedMedia(
       entities: entities ? entities.map(buildMtpMessageEntity) : undefined,
     });
     groupedUploads[groupedId].localMessages[randomId.toString()] = localMessage;
+    groupedUploads[groupedId].cancelSendingStatusTimeouts[randomId.toString()] = cancelSendingStatusTimeout;
 
     if (Object.keys(groupedUploads[groupedId].singleMediaByIndex).length < groupedUploads[groupedId].counter) {
       return;
     }
 
-    const { singleMediaByIndex, localMessages } = groupedUploads[groupedId];
+    const { singleMediaByIndex, localMessages, cancelSendingStatusTimeouts } = groupedUploads[groupedId];
     delete groupedUploads[groupedId];
     const count = Object.values(singleMediaByIndex).length;
 
@@ -708,7 +767,10 @@ function sendGroupedMedia(
       shouldIgnoreUpdates: true,
     });
 
-    if (update) handleMultipleLocalMessagesUpdate(localMessages, update);
+    if (!update) return;
+
+    Object.values(cancelSendingStatusTimeouts).forEach((cancel) => cancel());
+    handleMultipleLocalMessagesUpdate(localMessages, update);
   })();
 
   return mediaQueue;
@@ -1033,7 +1095,7 @@ async function uploadMedia(message: ApiMessage, attachment: ApiAttachment, onPro
       attributes.push(new GramJs.DocumentAttributeAudio({
         voice: true,
         duration,
-        waveform: Buffer.from(inputWaveform),
+        waveform: Uint8Array.from(inputWaveform),
       }));
     }
   }
@@ -1453,6 +1515,36 @@ export async function fetchMessageViews({
   };
 }
 
+export async function reportMessageReadMetrics({
+  chat, metrics,
+}: {
+  chat: ApiChat;
+  metrics: ApiMessageReadMetric[];
+}) {
+  const chunks = split(metrics, API_GENERAL_ID_LIMIT);
+  const results = await Promise.all(chunks.map((chunkMetrics) => (
+    invokeRequest(new GramJs.messages.ReportReadMetrics({
+      peer: buildInputPeer(chat.id, chat.accessHash),
+      metrics: chunkMetrics.map(buildInputMessageReadMetric),
+    }))
+  )));
+
+  if (results.some((result) => !result)) return undefined;
+
+  return true;
+}
+
+function buildInputMessageReadMetric(metric: ApiMessageReadMetric) {
+  return new GramJs.InputMessageReadMetric({
+    msgId: metric.messageId,
+    viewId: BigInt(metric.viewId),
+    timeInViewMs: metric.timeInViewMs,
+    activeTimeInViewMs: metric.activeTimeInViewMs,
+    heightToViewportRatioPermille: metric.heightToViewportRatioPermille,
+    seenRangeRatioPermille: metric.seenRangeRatioPermille,
+  });
+}
+
 export async function fetchFactChecks({
   chat, ids,
 }: {
@@ -1842,6 +1934,25 @@ export async function fetchWebPagePreview({
   return buildWebPageFromMedia(preview.media);
 }
 
+export async function fetchWebPage({
+  url,
+  hash = DEFAULT_PRIMITIVES.INT,
+}: {
+  url: string;
+  hash?: number;
+}) {
+  const result = await invokeRequest(new GramJs.messages.GetWebPage({
+    url,
+    hash,
+  }), {
+    shouldIgnoreErrors: true,
+  });
+
+  if (!result?.webpage) return undefined;
+
+  return buildWebPage(result.webpage);
+}
+
 export async function sendPollVote({
   chat, messageId, options,
 }: {
@@ -1855,6 +1966,24 @@ export async function sendPollVote({
     peer: buildInputPeer(id, accessHash),
     msgId: messageId,
     options: options.map(deserializeBytes),
+  }));
+}
+
+export async function appendPollAnswer({
+  chat, messageId, text,
+}: {
+  chat: ApiChat;
+  messageId: number;
+  text: string;
+}) {
+  const { id, accessHash } = chat;
+
+  await invokeRequest(new GramJs.messages.AddPollAnswer({
+    peer: buildInputPeer(id, accessHash),
+    msgId: messageId,
+    answer: new GramJs.InputPollAnswer({
+      text: buildInputTextWithEntities({ text }),
+    }),
   }));
 }
 
@@ -2590,7 +2719,7 @@ function handleLocalMessageUpdate(
 
   let newContent: MediaContent | undefined;
   let poll: ApiMessagePoll | undefined;
-  let webPage: ApiWebPage | undefined;
+  let webPages: ApiWebPage[] | undefined;
   if (messageUpdate instanceof GramJs.UpdateShortSentMessage) {
     if (localMessage.content.text && messageUpdate.entities) {
       newContent = {
@@ -2605,7 +2734,7 @@ function handleLocalMessageUpdate(
         }),
       };
       poll = buildMessagePollFromMedia(messageUpdate.media);
-      webPage = buildWebPageFromMedia(messageUpdate.media);
+      webPages = buildWebPagesFromMedia(messageUpdate.media);
     }
 
     const mtpMessage = buildMessageFromUpdate(messageUpdate.id, localMessage.chatId, messageUpdate);
@@ -2646,7 +2775,7 @@ function handleLocalMessageUpdate(
       localId: localMessage.id,
       message: updatedMessage,
       poll,
-      webPage,
+      webPages,
     });
   }
 
@@ -2763,13 +2892,13 @@ export async function composeMessageWithAI({
   shouldProofread,
   isEmojify,
   translateToLang,
-  changeTone,
+  tone,
 }: {
   text: ApiFormattedText;
   shouldProofread?: boolean;
   isEmojify?: boolean;
   translateToLang?: string;
-  changeTone?: string;
+  tone?: ApiInputAiComposeTone;
 }): Promise<{ result?: ApiComposedMessageWithAI; error?: 'floodPremium' | 'aiError' | 'generic' }> {
   try {
     const result = await invokeRequest(new GramJs.messages.ComposeMessageWithAI({
@@ -2777,7 +2906,7 @@ export async function composeMessageWithAI({
       proofread: shouldProofread || undefined,
       emojify: isEmojify || undefined,
       translateToLang,
-      changeTone,
+      tone: tone ? buildInputAiComposeTone(tone) : undefined,
     }), { shouldThrow: true });
 
     if (!result) return { error: 'generic' };
@@ -2794,4 +2923,130 @@ export async function composeMessageWithAI({
     }
     return { error: 'generic' };
   }
+}
+
+export async function fetchAiComposeTones({
+  hash,
+}: {
+  hash?: string;
+}) {
+  const result = await invokeRequest(new GramJs.aicompose.GetTones({
+    hash: hash ? BigInt(hash) : DEFAULT_PRIMITIVES.BIGINT,
+  }));
+
+  if (!result || result instanceof GramJs.aicompose.TonesNotModified) {
+    return undefined;
+  }
+
+  return {
+    tones: result.tones.map(buildApiAiComposeTone),
+    hash: result.hash.toString(),
+  };
+}
+
+export async function createAiTone({
+  title,
+  emojiId,
+  prompt,
+  shouldDisplayAuthor,
+}: {
+  title: string;
+  emojiId: string;
+  prompt: string;
+  shouldDisplayAuthor?: boolean;
+}) {
+  const result = await invokeRequest(new GramJs.aicompose.CreateTone({
+    title,
+    prompt,
+    emojiId: BigInt(emojiId),
+    displayAuthor: shouldDisplayAuthor || undefined,
+  }));
+
+  if (!result) return undefined;
+
+  return buildApiAiComposeTone(result);
+}
+
+export async function deleteAiTone({
+  tone,
+}: {
+  tone: ApiInputAiComposeTone;
+}) {
+  return invokeRequest(new GramJs.aicompose.DeleteTone({
+    tone: buildInputAiComposeTone(tone),
+  }));
+}
+
+export async function updateAiTone({
+  tone,
+  title,
+  emojiId,
+  prompt,
+  shouldDisplayAuthor,
+}: {
+  tone: ApiInputAiComposeTone;
+  title?: string;
+  emojiId?: string;
+  prompt?: string;
+  shouldDisplayAuthor?: boolean;
+}) {
+  const result = await invokeRequest(new GramJs.aicompose.UpdateTone({
+    tone: buildInputAiComposeTone(tone),
+    title,
+    prompt,
+    emojiId: emojiId ? BigInt(emojiId) : undefined,
+    displayAuthor: shouldDisplayAuthor,
+  }));
+
+  if (!result) return undefined;
+
+  return buildApiAiComposeTone(result);
+}
+
+export async function fetchAiTone({
+  tone,
+}: {
+  tone: ApiInputAiComposeTone;
+}) {
+  const result = await invokeRequest(new GramJs.aicompose.GetTone({
+    tone: buildInputAiComposeTone(tone),
+  }));
+
+  if (!result || !('tones' in result)) {
+    return undefined;
+  }
+
+  return {
+    tones: result.tones.map(buildApiAiComposeTone),
+  };
+}
+
+export async function fetchAiToneExample({
+  tone,
+  num,
+}: {
+  tone: ApiInputAiComposeTone;
+  num: number;
+}) {
+  const result = await invokeRequest(new GramJs.aicompose.GetToneExample({
+    tone: buildInputAiComposeTone(tone),
+    num,
+  }));
+
+  if (!result) return undefined;
+
+  return buildApiAiComposeToneExample(result);
+}
+
+export async function saveAiTone({
+  tone,
+  unsave,
+}: {
+  tone: ApiInputAiComposeTone;
+  unsave?: boolean;
+}) {
+  return invokeRequest(new GramJs.aicompose.SaveTone({
+    tone: buildInputAiComposeTone(tone),
+    unsave: Boolean(unsave),
+  }));
 }

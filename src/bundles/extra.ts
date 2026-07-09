@@ -73,9 +73,13 @@ export { default as ReactionPicker } from '../components/middle/message/reaction
 
 export { default as AiMessageEditorModal }
   from '../components/middle/composer/AiMessageEditorModal/AiMessageEditorModal';
+export { default as AiToneEmojiPickerModal }
+  from '../components/middle/composer/AiMessageEditorModal/AiToneEmojiPickerModal';
+export { default as AiTonePreviewModal }
+  from '../components/modals/aiTonePreview/AiTonePreviewModal';
 
 export { default as AttachmentModal } from '../components/middle/composer/AttachmentModal';
-export { default as PollModal } from '../components/middle/composer/PollModal';
+export { default as PollModal } from '../components/modals/poll/PollModal';
 export { default as ToDoListModal } from '../components/middle/composer/ToDoListModal';
 export { default as SymbolMenu } from '../components/middle/composer/SymbolMenu';
 export { default as ChatCommandTooltip } from '../components/middle/composer/ChatCommandTooltip';
@@ -112,6 +116,7 @@ export { default as DisableSharingAboutModal } from '../components/modals/disabl
 export { default as EditRankModal } from '../components/modals/rank/EditRankModal';
 export { default as RankModal } from '../components/modals/rank/RankModal';
 export { default as QuickPreviewModal } from '../components/modals/quickPreview/QuickPreviewModal';
+export { default as InstantViewer } from '../components/modals/instantView/InstantViewer';
 export { default as StealthModeModal } from '../components/modals/storyStealthMode/StealthModeModal';
 export { default as LeaveGroupModal } from '../components/modals/leaveGroup/LeaveGroupModal';
 export { default as TwoFaCheckModal } from '../components/modals/twoFaCheck/TwoFaCheckModal';

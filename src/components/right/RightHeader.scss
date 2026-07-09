@@ -6,12 +6,22 @@
   display: flex;
   align-items: center;
 
-  height: var(--header-height);
+  height: var(--column-header-height);
   padding: 0.5rem 0.8125rem;
 
-  background: var(--color-background);
+  background-color: var(--color-background);
+
+  transition: background-color 150ms;
+
+  &.secondary {
+    background-color: var(--color-background-secondary);
+  }
 
   @include mixins.with-vt-type('rightColumn');
+
+  .active-vt-profileAvatar & {
+    view-transition-name: none !important;
+  }
 
   .close-button {
     flex-shrink: 0;

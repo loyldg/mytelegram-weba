@@ -1,9 +1,9 @@
 import { Api as GramJs } from '../../../lib/gramjs';
 import { generateRandomInt32 } from '../../../lib/gramjs/Helpers';
 
-import type { JoinGroupCallPayload } from '../../../lib/secret-sauce';
+import type { JoinGroupCallPayload } from '../../../lib/vibecalls';
 import type {
-  ApiChat, ApiGroupCall, ApiPhoneCall, ApiUser,
+  ApiChat, ApiGroupCall, ApiPeer, ApiPhoneCall, ApiUser,
 } from '../../types';
 
 import { GROUP_CALL_PARTICIPANTS_LIMIT } from '../../../limits';
@@ -17,6 +17,20 @@ import {
 } from '../gramjsBuilders';
 import { sendApiUpdate } from '../updates/apiUpdateEmitter';
 import { invokeRequest, invokeRequestBeacon } from './client';
+
+const MAX_SIGNED_INT64 = (1n << 63n) - 1n;
+const UINT64_MOD = 1n << 64n;
+
+type DhConfig = {
+  g: number;
+  p: number[];
+  random: number[];
+};
+
+function buildSignedLong(value: string) {
+  const parsed = BigInt(value);
+  return parsed > MAX_SIGNED_INT64 ? parsed - UINT64_MOD : parsed;
+}
 
 export async function getGroupCall({
   call,
@@ -127,13 +141,13 @@ export async function fetchGroupCallParticipants({
 }
 
 export function leaveGroupCall({
-  call, isPageUnload,
+  call, isPageUnload, source,
 }: {
-  call: ApiGroupCall; isPageUnload?: boolean;
+  call: ApiGroupCall; isPageUnload?: boolean; source?: number;
 }) {
   const request = new GramJs.phone.LeaveGroupCall({
     call: buildInputGroupCall(call),
-    source: DEFAULT_PRIMITIVES.INT,
+    source: source ?? DEFAULT_PRIMITIVES.INT,
   });
 
   if (isPageUnload) {
@@ -141,19 +155,19 @@ export function leaveGroupCall({
     return;
   }
 
-  invokeRequest(request, {
+  return invokeRequest(request, {
     shouldReturnTrue: true,
   });
 }
 
 export async function joinGroupCall({
-  call, inviteHash, params,
+  call, inviteHash, params, joinAs,
 }: {
-  call: ApiGroupCall; inviteHash?: string; params: JoinGroupCallPayload;
+  call: ApiGroupCall; inviteHash?: string; params: JoinGroupCallPayload; joinAs?: ApiPeer;
 }) {
   const result = await invokeRequest(new GramJs.phone.JoinGroupCall({
     call: buildInputGroupCall(call),
-    joinAs: new GramJs.InputPeerSelf(),
+    joinAs: joinAs ? buildInputPeer(joinAs.id, joinAs.accessHash) : new GramJs.InputPeerSelf(),
     muted: true,
     videoStopped: true,
     params: new GramJs.DataJSON({
@@ -241,7 +255,7 @@ export function leaveGroupCallPresentation({
   });
 }
 
-export async function getDhConfig() {
+export async function fetchDhConfig(): Promise<DhConfig | undefined> {
   const dhConfig = await invokeRequest(new GramJs.messages.GetDhConfig({
     version: DEFAULT_PRIMITIVES.INT,
     randomLength: DEFAULT_PRIMITIVES.INT,
@@ -286,8 +300,8 @@ export async function requestCall({
   const result = await invokeRequest(new GramJs.phone.RequestCall({
     randomId: generateRandomInt32(),
     userId: buildInputUser(user.id, user.accessHash),
-    gAHash: Buffer.from(gAHash),
-    ...(isVideo && { video: true }),
+    gAHash: Uint8Array.from(gAHash),
+    video: isVideo ? true : undefined,
     protocol: buildCallProtocol(),
   }));
 
@@ -336,7 +350,7 @@ export async function acceptCall({
 }) {
   const result = await invokeRequest(new GramJs.phone.AcceptCall({
     peer: buildInputPhoneCall(call),
-    gB: Buffer.from(gB),
+    gB: Uint8Array.from(gB),
     protocol: buildCallProtocol(),
   }));
 
@@ -361,8 +375,8 @@ export async function confirmCall({
 }) {
   const result = await invokeRequest(new GramJs.phone.ConfirmCall({
     peer: buildInputPhoneCall(call),
-    gA: Buffer.from(gA),
-    keyFingerprint: BigInt(keyFingerprint),
+    gA: Uint8Array.from(gA),
+    keyFingerprint: buildSignedLong(keyFingerprint),
     protocol: buildCallProtocol(),
   }));
 
@@ -386,7 +400,22 @@ export function sendSignalingData({
   data: number[]; call: ApiPhoneCall;
 }) {
   return invokeRequest(new GramJs.phone.SendSignalingData({
-    data: Buffer.from(data),
+    data: Uint8Array.from(data),
     peer: buildInputPhoneCall(call),
   }));
+}
+
+export async function fetchCallConfig() {
+  const result = await invokeRequest(new GramJs.phone.GetCallConfig());
+  if (!result) {
+    return undefined;
+  }
+
+  try {
+    const parsed = JSON.parse(result.data);
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed)
+      ? parsed as Record<string, unknown> : undefined;
+  } catch {
+    return undefined;
+  }
 }

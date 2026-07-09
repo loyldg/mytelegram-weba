@@ -1,5 +1,5 @@
-import type { ElementRef } from '../../lib/teact/teact';
-import { getIsHeavyAnimating, memo } from '../../lib/teact/teact';
+import type { ElementRef, TeactNode } from '../../lib/teact/teact';
+import { getIsHeavyAnimating, memo, useRef } from '../../lib/teact/teact';
 import { getActions, getGlobal } from '../../global';
 
 import type { ApiMessage } from '../../api/types';
@@ -23,6 +23,7 @@ import { getPeerTitle } from '../../global/helpers/peers';
 import { selectChatMessage, selectSender } from '../../global/selectors';
 import buildClassName from '../../util/buildClassName';
 import { formatHumanDate, formatScheduledDateTime } from '../../util/dates/oldDateFormat';
+import { isUserId } from '../../util/entities/ids';
 import { convertTonFromNanos } from '../../util/formatCurrency';
 import { compact } from '../../util/iteratees';
 import { formatMessageListDate } from '../../util/localization/dateFormat';
@@ -33,8 +34,10 @@ import { renderPeerLink } from './message/helpers/messageActions';
 
 import useDerivedSignal from '../../hooks/useDerivedSignal';
 import useLang from '../../hooks/useLang';
+import useLastCallback from '../../hooks/useLastCallback';
 import useOldLang from '../../hooks/useOldLang';
 import usePreviousDeprecated from '../../hooks/usePreviousDeprecated';
+import useResizeObserver from '../../hooks/useResizeObserver';
 import useMessageObservers from './hooks/useMessageObservers';
 import useScrollHooks from './hooks/useScrollHooks';
 
@@ -69,8 +72,11 @@ interface OwnProps {
   anchorIdRef: { current: string | undefined };
   memoUnreadDividerBeforeIdRef: { current: number | undefined };
   memoFirstUnreadIdRef: { current: number | undefined };
+  liveTailStartOriginalId?: number;
+  isReplacingHistoryRef: { current: boolean };
   type: MessageListType;
   isReady: boolean;
+  isActive?: boolean;
   hasLinkedChat: boolean | undefined;
   isSchedule: boolean;
   shouldRenderAccountInfo?: boolean;
@@ -82,12 +88,24 @@ interface OwnProps {
   canPost?: boolean;
   shouldScrollToBottom?: boolean;
   onScrollDownToggle?: BooleanToVoidFunction;
-  onNotchToggle?: AnyToVoidFunction;
+  onContentResize?: (growth: number) => void;
   onIntersectPinnedMessage?: OnIntersectPinnedMessage;
-  onTallTypingDraft?: (messageId: number, isNearExit: boolean) => void;
 }
 
 const UNREAD_DIVIDER_CLASS = 'unread-divider';
+
+function senderGroupContainsOriginalId(
+  senderGroup: (ApiMessage | IAlbum | IDocumentGroup)[],
+  originalId: number,
+) {
+  return senderGroup.some((messageOrAlbum) => {
+    if (isAlbum(messageOrAlbum) || isDocumentGroup(messageOrAlbum)) {
+      return messageOrAlbum.messages.some((message) => getMessageOriginalId(message) === originalId);
+    }
+
+    return getMessageOriginalId(messageOrAlbum) === originalId;
+  });
+}
 
 const MessageListContent = ({
   canShowAds,
@@ -109,8 +127,11 @@ const MessageListContent = ({
   anchorIdRef,
   memoUnreadDividerBeforeIdRef,
   memoFirstUnreadIdRef,
+  liveTailStartOriginalId,
+  isReplacingHistoryRef,
   type,
   isReady,
+  isActive,
   hasLinkedChat,
   isSchedule,
   shouldRenderAccountInfo,
@@ -122,16 +143,31 @@ const MessageListContent = ({
   shouldScrollToBottom,
   canPost,
   onScrollDownToggle,
-  onNotchToggle,
+  onContentResize,
   onIntersectPinnedMessage,
-  onTallTypingDraft,
 }: OwnProps) => {
   const { openHistoryCalendar } = getActions();
+
+  const messagesContainerRef = useRef<HTMLDivElement>();
+  const prevContentHeightRef = useRef<number>();
+
+  const handleContentResize = useLastCallback((entry: ResizeObserverEntry) => {
+    const newHeight = entry.contentRect.height;
+    const prevHeight = prevContentHeightRef.current;
+    prevContentHeightRef.current = newHeight;
+    if (prevHeight === undefined) return;
+
+    const growth = newHeight - prevHeight;
+    if (growth > 0) onContentResize?.(growth);
+  });
+
+  useResizeObserver(messagesContainerRef, handleContentResize);
 
   const getIsHeavyAnimating2 = getIsHeavyAnimating;
   const getIsReady = useDerivedSignal(() => isReady && !getIsHeavyAnimating2(), [isReady, getIsHeavyAnimating2]);
 
   const areDatesClickable = !isSavedDialog && !isSchedule;
+  const isPrivate = isUserId(chatId);
   const shouldRenderSponsoredMessage = canShowAds && isViewportNewest;
   const shouldHideComments = hasLinkedChat === false || !isChannelChat || Boolean(isChatMonoforum);
 
@@ -155,7 +191,6 @@ const MessageListContent = ({
     backwardsTriggerRef,
     forwardsTriggerRef,
     fabTriggerRef,
-    observeIntersectionForTopExit,
   } = useScrollHooks({
     type,
     containerRef,
@@ -164,8 +199,8 @@ const MessageListContent = ({
     isViewportNewest,
     isUnread,
     isReady,
+    isReplacingHistoryRef,
     onScrollDownToggle,
-    onNotchToggle,
   });
 
   const oldLang = useOldLang();
@@ -347,8 +382,10 @@ const MessageListContent = ({
         ) {
           const isOwn = isOwnMessage(message);
           const originalId = getMessageOriginalId(message);
+          const isInLiveTail = liveTailStartOriginalId !== undefined && originalId >= liveTailStartOriginalId;
           const key = isServiceNotificationMessage(message)
             ? `${message.date}_${originalId}` : originalId;
+          const shouldShowGuestAvatar = isPrivate && !withUsers && Boolean(message.guestChatViaId);
 
           return compact([
             message.id === memoUnreadDividerBeforeIdRef.current && unreadDivider,
@@ -357,14 +394,16 @@ const MessageListContent = ({
             <Message
               key={key}
               message={message}
+              containerRef={containerRef}
               observeIntersectionForBottom={observeIntersectionForReading}
               observeIntersectionForLoading={observeIntersectionForLoading}
               observeIntersectionForPlaying={observeIntersectionForPlaying}
               album={album}
               documentGroup={documentGroup}
-              noAvatars={noAvatars}
-              withAvatar={position.isLastInGroup && withUsers && !isOwn && (!isThreadTopMessage || !isComments)}
-              withSenderName={position.isFirstInGroup && withUsers && !isOwn}
+              noAvatars={noAvatars && !shouldShowGuestAvatar}
+              withAvatar={position.isLastInGroup && (withUsers || shouldShowGuestAvatar)
+                && !isOwn && (!isThreadTopMessage || !isComments)}
+              withSenderName={position.isFirstInGroup && (withUsers || shouldShowGuestAvatar) && !isOwn}
               threadId={threadId}
               messageListType={type}
               noComments={shouldHideComments}
@@ -377,11 +416,12 @@ const MessageListContent = ({
               isFirstInDocumentGroup={position.isFirstInDocumentGroup}
               isLastInDocumentGroup={position.isLastInDocumentGroup}
               isLastInList={position.isLastInList}
+              shouldIgnoreSendFocus={isInLiveTail && isOwn}
+              isQuickPreview={isQuickPreview}
               memoFirstUnreadIdRef={memoFirstUnreadIdRef}
               getIsMessageListReady={getIsReady}
-              observeIntersectionForTopExit={observeIntersectionForTopExit}
+              isMessageListActive={isActive}
               onMessageUnmount={onMessageUnmount}
-              onTallTypingDraft={onTallTypingDraft}
             />,
           ]);
         }
@@ -447,8 +487,6 @@ const MessageListContent = ({
         return renderMessageElement(message, position, isThreadTopMessage, album);
       }).flat();
 
-      if (!withUsers) return senderGroupElements;
-
       const lastItem = senderGroup[senderGroup.length - 1];
       const lastMessage = isAlbum(lastItem)
         ? lastItem.mainMessage
@@ -471,11 +509,14 @@ const MessageListContent = ({
       const isThreadTopMessage = lastMessage.id === threadId
         || (firstMessage.id === threadId && Boolean(firstMessage.groupedId));
 
+      const shouldShowGuestAvatar = isPrivate && !withUsers && Boolean(lastMessage.guestChatViaId);
+      if (!withUsers && !shouldShowGuestAvatar) return senderGroupElements;
+
       const key = `${firstMessageId}-${lastMessageId}`;
       const id = (firstMessageId === lastMessageId) ? `message-group-${firstMessageId}`
         : `message-group-${firstMessageId}-${lastMessageId}`;
 
-      const withAvatar = withUsers && !isOwn && (!isThreadTopMessage || !isComments);
+      const withAvatar = (withUsers || shouldShowGuestAvatar) && !isOwn && (!isThreadTopMessage || !isComments);
       return compact([
         <SenderGroupContainer
           key={key}
@@ -496,51 +537,111 @@ const MessageListContent = ({
           </div>
         ),
       ]);
-    }).flat();
+    });
   }
 
-  const dateGroups = messageGroups.map((
+  function renderDateHeader(dateGroup: MessageDateGroup) {
+    return (
+      <div
+        className={buildClassName('sticky-date', areDatesClickable && 'interactive')}
+        key="date-header"
+        onMouseDown={preventMessageInputBlur}
+        onClick={areDatesClickable ? () => openHistoryCalendar({ selectedAt: dateGroup.datetime }) : undefined}
+      >
+        <span dir="auto">
+          {isSchedule && dateGroup.originalDate === SCHEDULED_WHEN_ONLINE && (
+            oldLang('MessageScheduledUntilOnline')
+          )}
+          {isSchedule && dateGroup.originalDate !== SCHEDULED_WHEN_ONLINE && (
+            oldLang('MessageScheduledOn', formatHumanDate(oldLang, dateGroup.datetime, undefined, true))
+          )}
+          {!isSchedule && formatMessageListDate(lang, new Date(dateGroup.datetime))}
+        </span>
+      </div>
+    );
+  }
+
+  function renderDateGroup(
+    dateGroup: MessageDateGroup,
+    children: TeactNode[],
+    keySuffix: string,
+    shouldAddFirstClass: boolean,
+  ) {
+    return (
+      <div
+        className={buildClassName('message-date-group', shouldAddFirstClass && 'first-message-date-group')}
+        key={`${dateGroup.datetime}-${keySuffix}`}
+        onMouseDown={preventMessageInputBlur}
+        teactFastList
+      >
+        {children}
+      </div>
+    );
+  }
+
+  let isRenderingLiveTail = false;
+  const dateGroups: TeactNode[] = [];
+  const liveTailDateGroups: TeactNode[] = [];
+
+  messageGroups.forEach((
     dateGroup: MessageDateGroup,
     dateGroupIndex: number,
     dateGroupsArray: MessageDateGroup[],
   ) => {
     const senderGroups = calculateSenderGroups(dateGroup, dateGroupIndex, dateGroupsArray);
+    const beforeTailChildren: TeactNode[] = [];
+    const liveTailChildren: TeactNode[] = [];
 
-    return (
-      <div
-        className={buildClassName('message-date-group', !(nameChangeDate || photoChangeDate)
-        && dateGroupIndex === 0 && 'first-message-date-group')}
-        key={dateGroup.datetime}
-        onMouseDown={preventMessageInputBlur}
-        teactFastList
-      >
-        <div
-          className={buildClassName('sticky-date', areDatesClickable && 'interactive')}
-          key="date-header"
-          onMouseDown={preventMessageInputBlur}
-          onClick={areDatesClickable ? () => openHistoryCalendar({ selectedAt: dateGroup.datetime }) : undefined}
-        >
-          <span dir="auto">
-            {isSchedule && dateGroup.originalDate === SCHEDULED_WHEN_ONLINE && (
-              oldLang('MessageScheduledUntilOnline')
-            )}
-            {isSchedule && dateGroup.originalDate !== SCHEDULED_WHEN_ONLINE && (
-              oldLang('MessageScheduledOn', formatHumanDate(oldLang, dateGroup.datetime, undefined, true))
-            )}
-            {!isSchedule && formatMessageListDate(lang, new Date(dateGroup.datetime))}
-          </span>
-        </div>
-        {senderGroups.flat()}
-      </div>
-    );
+    if (isRenderingLiveTail) {
+      liveTailChildren.push(renderDateHeader(dateGroup));
+    } else {
+      beforeTailChildren.push(renderDateHeader(dateGroup));
+    }
+
+    senderGroups.forEach((senderGroupElements, senderGroupIndex) => {
+      const isLiveTailStart = (
+        !isRenderingLiveTail
+        && liveTailStartOriginalId !== undefined
+        && senderGroupContainsOriginalId(
+          dateGroup.senderGroups[senderGroupIndex],
+          liveTailStartOriginalId,
+        )
+      );
+
+      if (isLiveTailStart) {
+        isRenderingLiveTail = true;
+      }
+
+      const target = isRenderingLiveTail ? liveTailChildren : beforeTailChildren;
+      target.push(...senderGroupElements);
+    });
+
+    const shouldAddFirstClass = !shouldRenderAccountInfo
+      && !(nameChangeDate || photoChangeDate) && dateGroupIndex === 0;
+    if (beforeTailChildren.length) {
+      dateGroups.push(renderDateGroup(
+        dateGroup, beforeTailChildren, 'before-tail', shouldAddFirstClass,
+      ));
+    }
+
+    if (liveTailChildren.length) {
+      liveTailDateGroups.push(renderDateGroup(
+        dateGroup, liveTailChildren, 'live-tail', shouldAddFirstClass && !beforeTailChildren.length,
+      ));
+    }
   });
 
   return (
-    <div className="messages-container" teactFastList>
+    <div ref={messagesContainerRef} className="messages-container" teactFastList>
       {withHistoryTriggers && <div ref={backwardsTriggerRef} key="backwards-trigger" className="backwards-trigger" />}
       {shouldRenderAccountInfo
         && <MessageListAccountInfo key={`account_info_${chatId}`} chatId={chatId} hasMessages />}
-      {dateGroups.flat()}
+      {dateGroups}
+      {Boolean(liveTailDateGroups.length) && (
+        <div className="live-tail" key="live-tail" teactFastList>
+          {liveTailDateGroups}
+        </div>
+      )}
       {isViewportNewest && renderBotForumTopicAction()}
       {withHistoryTriggers && (
         <div

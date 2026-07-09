@@ -23,12 +23,14 @@ import { formatStarsAsText } from '../../../util/localization/format';
 import { oldTranslate } from '../../../util/oldLangProvider';
 import requestActionTimeout from '../../../util/requestActionTimeout';
 import { debounce } from '../../../util/schedulers';
-import { getServerTime } from '../../../util/serverTime';
 import { extractCurrentThemeParams } from '../../../util/themeStyle';
 import { callApi } from '../../../api/gramjs';
 import {
   getMainUsername,
   getWebAppKey,
+  isChatAdmin,
+  isUserBot,
+  isUserRightBanned,
   prepareMessageReplyInfo,
 } from '../../helpers';
 import {
@@ -52,6 +54,7 @@ import { updateTabState } from '../../reducers/tabs';
 import {
   selectBot,
   selectChat,
+  selectChatFullInfo,
   selectChatLastMessageId,
   selectChatMessage,
   selectCurrentChat,
@@ -73,9 +76,12 @@ import { getPeerStarsForMessage } from './messages';
 
 import { getIsWebAppsFullscreenSupported } from '../../../hooks/useAppLayout';
 
-const TOP_PEERS_REQUEST_COOLDOWN = 60; // 1 min
 const runDebouncedForSearch = debounce((cb) => cb(), 500, false);
 let botFatherId: string | null;
+
+function canUseInlineBots<T extends GlobalState>(global: T, chat: ApiChat) {
+  return isChatAdmin(chat) || !isUserRightBanned(chat, 'sendInline', selectChatFullInfo(global, chat.id));
+}
 
 addActionHandler('clickSuggestedMessageButton', (global, actions, payload): ActionReturnType => {
   const {
@@ -126,9 +132,16 @@ addActionHandler('clickBotInlineButton', (global, actions, payload): ActionRetur
       break;
     }
 
-    case 'requestPoll':
-      actions.openPollModal({ isQuiz: button.isQuiz, tabId });
+    case 'requestPoll': {
+      actions.openPollModal({
+        chatId,
+        threadId,
+        messageListType: 'thread',
+        isQuiz: button.isQuiz,
+        tabId,
+      });
       break;
+    }
 
     case 'requestPhone': {
       const user = global.currentUserId ? selectUser(global, global.currentUserId) : undefined;
@@ -278,61 +291,16 @@ addActionHandler('restartBot', async (global, actions, payload): Promise<void> =
   void sendBotCommand(chat, MAIN_THREAD_ID, '/start', undefined, selectSendAs(global, chatId), lastMessageId);
 });
 
-addActionHandler('loadTopInlineBots', async (global): Promise<void> => {
-  const { lastRequestedAt } = global.topInlineBots;
-  if (lastRequestedAt && getServerTime() - lastRequestedAt < TOP_PEERS_REQUEST_COOLDOWN) {
-    return;
-  }
-
-  const result = await callApi('fetchTopInlineBots');
-  if (!result) {
-    return;
-  }
-
-  const { ids } = result;
-
-  global = getGlobal();
-  global = {
-    ...global,
-    topInlineBots: {
-      ...global.topInlineBots,
-      userIds: ids,
-      lastRequestedAt: getServerTime(),
-    },
-  };
-  setGlobal(global);
-});
-
-addActionHandler('loadTopBotApps', async (global): Promise<void> => {
-  const { lastRequestedAt } = global.topBotApps;
-  if (lastRequestedAt && getServerTime() - lastRequestedAt < TOP_PEERS_REQUEST_COOLDOWN) {
-    return;
-  }
-
-  const result = await callApi('fetchTopBotApps');
-  if (!result) {
-    return;
-  }
-
-  const { ids } = result;
-
-  global = getGlobal();
-  global = {
-    ...global,
-    topBotApps: {
-      ...global.topBotApps,
-      userIds: ids,
-      lastRequestedAt: getServerTime(),
-    },
-  };
-  setGlobal(global);
-});
-
 addActionHandler('queryInlineBot', async (global, actions, payload): Promise<void> => {
   const {
     chatId, username, query, offset,
     tabId = getCurrentTabId(),
   } = payload;
+
+  const chat = selectChat(global, chatId);
+  if (!chat || !canUseInlineBots(global, chat)) {
+    return;
+  }
 
   let inlineBotData = selectTabState(global, tabId).inlineBots.byUsername[username];
   if (inlineBotData === false) {
@@ -340,9 +308,9 @@ addActionHandler('queryInlineBot', async (global, actions, payload): Promise<voi
   }
 
   if (inlineBotData === undefined) {
-    const { user: inlineBot, chat } = await callApi('fetchInlineBot', { username }) || {};
+    const { user: inlineBot } = await callApi('getChatByUsername', username) || {};
     global = getGlobal();
-    if (!inlineBot || !chat) {
+    if (!inlineBot || !isUserBot(inlineBot) || !inlineBot.botPlaceholder) {
       global = replaceInlineBotSettings(global, username, false, tabId);
       setGlobal(global);
       return;
@@ -521,10 +489,13 @@ addActionHandler('resetAllInlineBots', (global, actions, payload): ActionReturnT
 });
 
 addActionHandler('startBot', async (global, actions, payload): Promise<void> => {
-  const { botId, param } = payload;
+  const {
+    botId, chatId, param,
+  } = payload;
 
   const bot = selectUser(global, botId);
-  if (!bot) {
+  const chat = chatId ? selectChat(global, chatId) : undefined;
+  if (!bot || (chatId && !chat)) {
     return;
   }
 
@@ -538,8 +509,22 @@ addActionHandler('startBot', async (global, actions, payload): Promise<void> => 
     await callApi('unblockUser', { user: bot });
   }
 
+  if (!chat) {
+    await callApi('startBot', {
+      bot,
+      startParam: param,
+    });
+    return;
+  }
+
+  const missingUsers = await callApi('addBotToChat', chat, bot);
+  if (!missingUsers || missingUsers.length) return;
+
+  if (!param) return;
+
   await callApi('startBot', {
     bot,
+    peer: chat,
     startParam: param,
   });
 });
@@ -703,6 +688,87 @@ addActionHandler('requestWebView', async (global, actions, payload): Promise<voi
   }
 });
 
+addActionHandler('openChatInviteWebView', (global, actions, payload): ActionReturnType => {
+  const {
+    botId, url, queryId, peerId, isFullscreen, isBroadcast,
+    tabId = getCurrentTabId(),
+  } = payload;
+
+  if (checkIfOpenOrActivate(global, botId, tabId, url)) return;
+
+  const bot = selectUser(global, botId);
+  if (!bot) return;
+
+  if (!selectIsTrustedBot(global, botId)) {
+    global = updateTabState(global, {
+      botTrustRequest: {
+        botId,
+        type: 'webApp',
+        onConfirm: {
+          action: 'openChatInviteWebView',
+          payload,
+        },
+      },
+    }, tabId);
+    setGlobal(global);
+    return;
+  }
+
+  const newActiveApp: WebApp = {
+    url,
+    requestUrl: url,
+    appName: bot.firstName,
+    botId,
+    peerId,
+    queryId,
+    isJoinChat: true,
+    isJoinChatBroadcast: isBroadcast,
+    buttonText: '',
+  };
+  global = addWebAppToOpenList(global, newActiveApp, true, true, tabId);
+  setGlobal(global);
+
+  if (isFullscreen && getIsWebAppsFullscreenSupported()) {
+    actions.changeWebAppModalState({ state: 'fullScreen', tabId });
+  }
+});
+
+addActionHandler('requestAgeVerification', async (global, actions, payload): Promise<void> => {
+  const { tabId = getCurrentTabId() } = payload || {};
+  const { verifyAgeBotUsername } = global.appConfig;
+
+  if (!verifyAgeBotUsername) {
+    actions.showNotification({
+      message: { key: 'MiniAppUnavailableError' },
+      tabId,
+    });
+    return;
+  }
+
+  const chat = await fetchChatByUsername(global, verifyAgeBotUsername);
+  global = getGlobal();
+  const bot = chat && selectUser(global, chat.id);
+
+  if (!bot?.hasMainMiniApp) {
+    actions.showNotification({
+      message: { key: 'MiniAppUnavailableError' },
+      tabId,
+    });
+    return;
+  }
+
+  const theme = extractCurrentThemeParams();
+  actions.requestMainWebView({
+    botId: bot.id,
+    peerId: bot.id,
+    theme,
+    shouldMarkBotTrusted: true,
+    tabId,
+  });
+
+  actions.closeAgeVerificationModal({ tabId });
+});
+
 addActionHandler('requestMainWebView', async (global, actions, payload): Promise<void> => {
   const {
     botId, peerId, theme, startParam, mode, shouldMarkBotTrusted,
@@ -717,7 +783,14 @@ addActionHandler('requestMainWebView', async (global, actions, payload): Promise
   if (checkIfOpenOrActivate(global, botId, tabId)) return;
 
   const bot = selectUser(global, botId);
-  if (!bot) return;
+  if (!bot) {
+    actions.showNotification({
+      message: { key: 'MiniAppUnavailableError' },
+      tabId,
+    });
+    return;
+  }
+
   const peer = selectPeer(global, peerId);
   if (!peer) return;
 
@@ -748,6 +821,10 @@ addActionHandler('requestMainWebView', async (global, actions, payload): Promise
     mode,
   });
   if (!result) {
+    actions.showNotification({
+      message: { key: 'MiniAppUnavailableError' },
+      tabId,
+    });
     return;
   }
 
@@ -764,6 +841,7 @@ addActionHandler('requestMainWebView', async (global, actions, payload): Promise
   };
   global = addWebAppToOpenList(global, newActiveApp, true, true, tabId);
   setGlobal(global);
+  actions.bumpTopPeerRating({ category: 'botsApp', peerId: botId });
 
   if (isFullscreen && getIsWebAppsFullscreenSupported()) {
     actions.changeWebAppModalState({ state: 'fullScreen', tabId });
@@ -1536,7 +1614,7 @@ addActionHandler('startBotFatherConversation', async (global, actions, payload):
   }
 
   if (param) {
-    actions.startBot({ botId: botFatherId, param });
+    actions.startBot({ botId: botFatherId, param, tabId });
   }
 
   actions.openChat({ id: botFatherId, tabId });

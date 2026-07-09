@@ -3,9 +3,12 @@ import { addCallback, removeCallback } from '../lib/teact/teactn';
 
 import type {
   ApiAvailableReaction,
+  ApiDocument,
   ApiMessage,
+  ApiPhoto,
+  ApiVideo,
 } from '../api/types';
-import type { MessageList, ThreadId } from '../types';
+import type { MessageList, ThreadId, TopicsInfo } from '../types';
 import type { ActionReturnType, GlobalState, SharedState } from './types';
 import { ApiMessageEntityTypes, MAIN_THREAD_ID } from '../api/types';
 
@@ -252,8 +255,8 @@ function unsafeMigrateCache(cached: GlobalState, initialState: GlobalState) {
   if (!cached.chats.loadingParameters) {
     cached.chats.loadingParameters = initialState.chats.loadingParameters;
   }
-  if (!cached.topBotApps) {
-    cached.topBotApps = initialState.topBotApps;
+  if (!cached.topPeerCategories) {
+    cached.topPeerCategories = initialState.topPeerCategories;
   }
 
   if (!cached.reactions.defaultTags?.[0]?.type) {
@@ -373,6 +376,10 @@ function unsafeMigrateCache(cached: GlobalState, initialState: GlobalState) {
     cached.appConfig.webAppAllowedProtocols = initialState.appConfig.webAppAllowedProtocols;
   }
 
+  if (cached.appConfig.isMessagePrimaryEditedDateEnabled === undefined) {
+    cached.appConfig.isMessagePrimaryEditedDateEnabled = initialState.appConfig.isMessagePrimaryEditedDateEnabled;
+  }
+
   if (untypedCached.sharedState?.settings?.shouldWarnAboutSvg) {
     cached.sharedState.settings.shouldWarnAboutFiles = true;
     untypedCached.sharedState.settings.shouldWarnAboutSvg = undefined;
@@ -418,7 +425,7 @@ export function forceUpdateCache(noEncrypt = false) {
   if (hasPasscode) {
     if (!isScreenLocked && !noEncrypt) {
       const serializedGlobal = serializeGlobal(global);
-      void encryptSession(undefined, serializedGlobal);
+      void encryptSession(undefined, serializedGlobal, serializeShared(global.sharedState));
     }
 
     cacheIsScreenLocked(global);
@@ -443,9 +450,7 @@ function reduceGlobal<T extends GlobalState>(global: T) {
       'attachMenu',
       'currentUserId',
       'contactList',
-      'topPeers',
-      'topInlineBots',
-      'topBotApps',
+      'topPeerCategories',
       'recentEmojis',
       'recentCustomEmojis',
       'push',
@@ -508,6 +513,10 @@ export function serializeGlobal<T extends GlobalState>(global: T) {
   return JSON.stringify(reduceGlobal(global));
 }
 
+export function serializeShared(sharedState: SharedState) {
+  return JSON.stringify(reduceSharedState(sharedState));
+}
+
 function reduceStickers<T extends GlobalState>(global: T): GlobalState['stickers'] {
   const { diceSetIdByEmoji, setsById } = global.stickers;
   return {
@@ -560,6 +569,7 @@ function reduceUsers<T extends GlobalState>(global: T): GlobalState['users'] {
     .filter((id): id is string => Boolean(id) && isUserId(id));
 
   const attachBotIds = Object.keys(global.attachMenu?.bots || {});
+  const topPeerIds = getTopPeerIds(global);
 
   const idsToSave = unique([
     ...currentUserId ? [currentUserId] : [],
@@ -567,7 +577,7 @@ function reduceUsers<T extends GlobalState>(global: T): GlobalState['users'] {
     ...chatStoriesUserIds,
     ...visibleUserIds || [],
     ...attachBotIds,
-    ...global.topPeers.userIds || [],
+    ...topPeerIds.filter(isUserId),
     ...global.recentlyFoundChatIds?.filter(isUserId) || [],
     ...getOrderedIds(ARCHIVED_FOLDER_ID)?.slice(0, GLOBAL_STATE_CACHE_ARCHIVED_CHAT_LIST_LIMIT).filter(isUserId) || [],
     ...getOrderedIds(ALL_FOLDER_ID)?.filter(isUserId) || [],
@@ -608,11 +618,13 @@ function reduceChats<T extends GlobalState>(global: T): GlobalState['chats'] {
       return content.storyData?.peerId || webPage?.story?.peerId || replyPeer;
     });
   }));
+  const topPeerIds = getTopPeerIds(global);
 
   const unlinkedIdsToSave = [
     ...currentUserId ? [currentUserId] : [],
     ...currentChatIds,
     ...messagesChatIds,
+    ...topPeerIds,
     ...global.recentlyFoundChatIds || [],
     ...getOrderedIds(ARCHIVED_FOLDER_ID)?.slice(0, GLOBAL_STATE_CACHE_ARCHIVED_CHAT_LIST_LIMIT) || [],
     ...getOrderedIds(ALL_FOLDER_ID) || [],
@@ -648,8 +660,27 @@ function reduceChats<T extends GlobalState>(global: T): GlobalState['chats'] {
       all: pickTruthy(global.chats.lastMessageIds.all || {}, idsToSave),
       saved: global.chats.lastMessageIds.saved,
     },
-    topicsInfoById: pickTruthy(global.chats.topicsInfoById, currentChatIds),
+    topicsInfoById: reduceTopicsInfo(global.chats.topicsInfoById, currentChatIds),
   };
+}
+
+function reduceTopicsInfo(
+  topicsInfoById: Record<string, TopicsInfo>, chatIds: string[],
+): GlobalState['chats']['topicsInfoById'] {
+  const topicsInfoToSave = pickTruthy(topicsInfoById, chatIds);
+
+  return Object.entries(topicsInfoToSave).reduce((acc, [chatId, topicsInfo]) => {
+    acc[chatId] = {
+      ...topicsInfo,
+      isCache: true,
+    };
+
+    return acc;
+  }, {} as GlobalState['chats']['topicsInfoById']);
+}
+
+function getTopPeerIds<T extends GlobalState>(global: T) {
+  return unique(Object.values(global.topPeerCategories).flatMap((category) => category?.peerIds || []));
 }
 
 function reduceMessages<T extends GlobalState>(global: T): GlobalState['messages'] {
@@ -781,32 +812,40 @@ function omitLocalPaidReactions(message: ApiMessage): ApiMessage {
 
 function omitLocalMedia(message: ApiMessage): ApiMessage {
   const {
-    photo, video, document, sticker,
+    photo, video, document,
   } = message.content;
 
   return {
     ...message,
     content: {
       ...message.content,
-      photo: photo && {
-        ...photo,
-        blobUrl: undefined,
-      },
-      video: video && {
-        ...video,
-        blobUrl: undefined,
-        previewBlobUrl: undefined,
-      },
-      document: document && {
-        ...document,
-        previewBlobUrl: undefined,
-      },
-      sticker: sticker && {
-        ...sticker,
-        isPreloadedGlobally: undefined,
-      },
+      photo: photo && omitLocalPhoto(photo),
+      video: video && omitLocalVideo(video),
+      document: document && omitLocalDocument(document),
     },
     previousLocalId: undefined,
+  };
+}
+
+function omitLocalPhoto(photo: ApiPhoto): ApiPhoto {
+  return {
+    ...photo,
+    blobUrl: undefined,
+  };
+}
+
+function omitLocalVideo(video: ApiVideo): ApiVideo {
+  return {
+    ...video,
+    blobUrl: undefined,
+    previewBlobUrl: undefined,
+  };
+}
+
+function omitLocalDocument(document: ApiDocument): ApiDocument {
+  return {
+    ...document,
+    previewBlobUrl: undefined,
   };
 }
 

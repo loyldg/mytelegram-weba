@@ -436,9 +436,11 @@ export default class MTProtoSender {
     const encryptedData = await this._state.encryptMessageData(data);
 
     postMessage({
-      type: 'sendBeacon',
-      data: encryptedData,
-      url: this._fallbackConnection.href,
+      payloads: [{
+        type: 'sendBeacon',
+        data: encryptedData,
+        url: this._fallbackConnection.href,
+      }],
     });
   }
 
@@ -450,6 +452,8 @@ export default class MTProtoSender {
    * @private
    */
   async _connect(connection: Connection) {
+    const wasReconnecting = this.isReconnecting;
+
     if (!connection.isConnected()) {
       this._log.info('Connecting to {0}...'.replace('{0}', connection._ip));
       await connection.connect();
@@ -459,7 +463,7 @@ export default class MTProtoSender {
     if (!this.authKey.getKey()) {
       const plain = new MtProtoPlainSender(connection, this._log);
       this._log.debug('New auth_key attempt ...');
-      const res = await doAuthentication(plain, this._log);
+      const res = await doAuthentication(plain, this._log, connection._dcId, connection._isTestServer);
       this._log.debug('Generated new auth_key successfully');
       await this.authKey.setKey(res.authKey);
 
@@ -488,6 +492,8 @@ export default class MTProtoSender {
     if (!this._sendLoopHandle) {
       this._log.debug('Starting send loop');
       this._sendLoopHandle = this._sendLoop();
+    } else if (wasReconnecting) {
+      this.retryPendingStates();
     }
 
     if (!this._recvLoopHandle) {
@@ -574,9 +580,7 @@ export default class MTProtoSender {
    * @private
    */
   async _sendLoop() {
-    // Retry previous pending requests
-    this._sendQueue.prepend(this._pendingState.values());
-    this._pendingState.clear();
+    this.retryPendingStates();
 
     while (this._userConnected && !this.isReconnecting) {
       const appendAcks = () => {
@@ -645,11 +649,23 @@ export default class MTProtoSender {
 
       this._log.debug(`Encrypting ${batch.length} message(s) in ${data.length} bytes for sending`);
       this.logWithIndex.debug('Sending', batch.map((m) => m.request.className));
+      const connection = this.getConnection();
 
       data = await this._state.encryptMessageData(data);
 
+      if (this.isReconnecting) {
+        this.logWithIndex.debug('Reconnecting :(');
+        this._sendLoopHandle = undefined;
+        return;
+      }
+
+      if (!connection || connection !== this.getConnection()) {
+        this.retryPendingStates();
+        continue;
+      }
+
       try {
-        await this.getConnection()!.send(data);
+        await connection.send(data);
       } catch (e: any) {
         this.logWithIndex.debug(`Connection closed while sending data ${e}`);
         this._log.info('Connection closed while sending data');
@@ -706,7 +722,7 @@ export default class MTProtoSender {
       }
 
       try {
-        // TODO: Handle `DecryptedDataBlock` in calls like a regular `TLMessage` rather than `Buffer`
+        // TODO: Handle `DecryptedDataBlock` in calls like a regular `TLMessage` rather than `Uint8Array`
         message = (await this._state.decryptMessageData(body)) as TLMessage;
       } catch (e: any) {
         this.logWithIndex.debug(`Error while receiving items from the network ${e.toString()}`);
@@ -878,7 +894,7 @@ export default class MTProtoSender {
       try {
         const reader = new BinaryReader(result.body);
         if (!(reader.tgReadObject() instanceof Api.upload.File)) {
-          throw new TypeNotFoundError(0, Buffer.alloc(0));
+          throw new TypeNotFoundError(0, new Uint8Array(0));
         }
       } catch (e) {
         if (e instanceof TypeNotFoundError) {
@@ -1190,11 +1206,17 @@ export default class MTProtoSender {
     await this.connect(newConnection, true, newFallbackConnection);
 
     this.isReconnecting = false;
-    this._sendQueue.prepend(this._pendingState.values());
-    this._pendingState.clear();
 
     if (this._autoReconnectCallback) {
       await this._autoReconnectCallback();
     }
+  }
+
+  private retryPendingStates() {
+    const pendingStates = this._pendingState.values();
+    if (!pendingStates.length) return;
+
+    this._sendQueue.prepend(pendingStates);
+    this._pendingState.clear();
   }
 }

@@ -1,4 +1,5 @@
 import { type FC, memo } from '@teact';
+import { APP_REVISION } from 'virtual:git-info';
 import { getActions } from '../../global';
 
 import { LeftColumnContent, SettingsScreens } from '../../types';
@@ -68,6 +69,7 @@ const LeftSideMenuDropdown = ({
       positionX={shouldHideSearch && lang.isRtl ? 'right' : 'left'}
       transformOriginX={90}
       transformOriginY={100}
+      withPortal
       onTransitionEnd={lang.isRtl ? handleDropdownMenuTransitionEnd : undefined}
     >
       <LeftSideMenuItems

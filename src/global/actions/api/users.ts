@@ -8,9 +8,7 @@ import { getCurrentTabId } from '../../../util/establishMultitabRole';
 import { buildCollectionByKey, unique } from '../../../util/iteratees';
 import * as langProvider from '../../../util/oldLangProvider';
 import { throttle } from '../../../util/schedulers';
-import { getServerTime } from '../../../util/serverTime';
 import { callApi } from '../../../api/gramjs';
-import { isUserBot } from '../../helpers';
 import { addActionHandler, getGlobal, setGlobal } from '../../index';
 import {
   addUserStatuses,
@@ -43,7 +41,6 @@ import {
 } from '../../selectors';
 
 const PROFILE_PHOTOS_FIRST_LOAD_LIMIT = 10;
-const TOP_PEERS_REQUEST_COOLDOWN = 60; // 1 min
 const runThrottledForSearch = throttle((cb) => cb(), 500, false);
 
 addActionHandler('loadFullUser', async (global, actions, payload): Promise<void> => {
@@ -105,32 +102,6 @@ addActionHandler('loadUser', async (global, actions, payload): Promise<void> => 
   setGlobal(global);
 });
 
-addActionHandler('loadTopUsers', async (global): Promise<void> => {
-  const { topPeers: { lastRequestedAt } } = global;
-
-  if (!(!lastRequestedAt || getServerTime() - lastRequestedAt > TOP_PEERS_REQUEST_COOLDOWN)) {
-    return;
-  }
-
-  const result = await callApi('fetchTopUsers');
-  if (!result) {
-    return;
-  }
-
-  const { ids } = result;
-
-  global = getGlobal();
-  global = {
-    ...global,
-    topPeers: {
-      ...global.topPeers,
-      userIds: ids,
-      lastRequestedAt: getServerTime(),
-    },
-  };
-  setGlobal(global);
-});
-
 addActionHandler('loadContactList', async (global): Promise<void> => {
   const contactList = await callApi('fetchContactList');
   if (!contactList) {
@@ -170,7 +141,7 @@ addActionHandler('loadCommonChats', async (global, actions, payload): Promise<vo
 
   const user = selectUser(global, userId);
   const commonChats = selectUserCommonChats(global, userId);
-  if (!user || isUserBot(user) || commonChats?.isFullyLoaded) {
+  if (!user || commonChats?.isFullyLoaded) {
     return;
   }
 

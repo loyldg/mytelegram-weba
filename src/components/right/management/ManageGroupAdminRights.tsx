@@ -8,8 +8,12 @@ import type {
 } from '../../../api/types';
 import { ManagementScreens } from '../../../types';
 
-import { getUserFullName, isChatBasicGroup, isChatChannel, isUserBot } from '../../../global/helpers';
-import { selectCanEditRank, selectChat, selectChatFullInfo } from '../../../global/selectors';
+import {
+  getUserFullName, isChatBasicGroup, isChatChannel, isChatPublic, isUserBot,
+} from '../../../global/helpers';
+import {
+  selectCanEditRank, selectChat, selectChatFullInfo, selectUser,
+} from '../../../global/selectors';
 
 import useFlag from '../../../hooks/useFlag';
 import useHistoryBack from '../../../hooks/useHistoryBack';
@@ -18,11 +22,13 @@ import useLastCallback from '../../../hooks/useLastCallback';
 
 import PasswordConfirmModal from '../../common/PasswordConfirmModal';
 import PrivateChatInfo from '../../common/PrivateChatInfo';
+import Island, { IslandDescription, IslandTitle } from '../../gili/layout/Island';
 import Checkbox from '../../ui/Checkbox';
 import ConfirmDialog from '../../ui/ConfirmDialog';
 import FloatingActionButton from '../../ui/FloatingActionButton';
 import InputText from '../../ui/InputText';
 import ListItem from '../../ui/ListItem';
+import GuardReplaceBotModal from './GuardReplaceBotModal';
 
 type OwnProps = {
   chatId: string;
@@ -43,9 +49,26 @@ type StateProps = {
   isFormFullyDisabled: boolean;
   defaultRights?: ApiChatAdminRights;
   canEditRank?: boolean;
+  guardBotId?: string;
+  guardBot?: ApiUser;
 };
 
 const CUSTOM_TITLE_MAX_LENGTH = 16;
+
+const GUARD_BOT_DEFAULT_ADMIN_RIGHTS: ApiChatAdminRights = {
+  changeInfo: true,
+  deleteMessages: true,
+  postStories: true,
+  editStories: true,
+  deleteStories: true,
+  banUsers: true,
+  inviteUsers: true,
+  manageRanks: true,
+  pinMessages: true,
+  manageCall: true,
+};
+
+const GUARD_BOT_LOCKED_ADMIN_RIGHTS: (keyof ApiChatAdminRights)[] = ['changeInfo', 'pinMessages'];
 
 const ManageGroupAdminRights = ({
   isActive,
@@ -59,6 +82,8 @@ const ManageGroupAdminRights = ({
   hasFullInfo,
   isFormFullyDisabled,
   canEditRank,
+  guardBotId,
+  guardBot,
   onClose,
   onScreenSelect,
 }: OwnProps & StateProps) => {
@@ -74,11 +99,16 @@ const ManageGroupAdminRights = ({
   const [isTransferDialogOpen, openTransferDialog, closeTransferDialog] = useFlag();
   const [isPasswordModalOpen, openPasswordModal, closePasswordModal] = useFlag();
   const [rank, setRank] = useState('');
+  const [isGuardBotEnabled, setIsGuardBotEnabled] = useState(!isNewAdmin && guardBotId === selectedUserId);
+  const [isGuardConfirmOpen, openGuardConfirm, closeGuardConfirm] = useFlag();
+  const [isReplaceBotOpen, openReplaceBot, closeReplaceBot] = useFlag();
+  const [pendingGuardBotEnabled, setPendingGuardBotEnabled] = useState(false);
   const lang = useLang();
 
   const isChannel = isChatChannel(chat);
   const isForum = chat.isForum;
   const hasDirectMessages = Boolean(chat.linkedMonoforumId);
+  const isAddingGuardBot = Boolean(isNewAdmin && selectedUserId && usersById[selectedUserId]?.isGuardBot);
 
   useHistoryBack({
     isActive,
@@ -97,7 +127,7 @@ const ManageGroupAdminRights = ({
 
       return user ? {
         userId: user.id,
-        adminRights: defaultRights,
+        adminRights: user.isGuardBot ? getGrantableGuardBotRights(chat) : defaultRights,
         rank: lang('ChannelAdmin'),
         isOwner: undefined,
         promotedByUserId: undefined,
@@ -105,7 +135,7 @@ const ManageGroupAdminRights = ({
     }
 
     return selectedAdminMember;
-  }, [selectedAdminMember, defaultRights, isNewAdmin, lang, selectedUserId]);
+  }, [selectedAdminMember, defaultRights, isNewAdmin, lang, selectedUserId, chat]);
 
   useEffect(() => {
     if (hasFullInfo && selectedUserId && !selectedChatMember) {
@@ -119,6 +149,10 @@ const ManageGroupAdminRights = ({
     setIsTouched(Boolean(isNewAdmin));
     setIsLoading(false);
   }, [defaultRights, isNewAdmin, selectedChatMember]);
+
+  useEffect(() => {
+    setIsGuardBotEnabled(!isNewAdmin && guardBotId === selectedUserId);
+  }, [guardBotId, isNewAdmin, selectedUserId]);
 
   const handlePermissionChange = useLastCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const { name } = e.target;
@@ -139,6 +173,7 @@ const ManageGroupAdminRights = ({
       return;
     }
     const hasRankChanged = rank !== selectedAdminMember?.rank;
+    const wasGuardBotEnabled = guardBotId === selectedUserId;
 
     setIsLoading(true);
     updateChatAdmin({
@@ -146,6 +181,7 @@ const ManageGroupAdminRights = ({
       userId: selectedUserId,
       adminRights: permissions,
       rank: hasRankChanged ? rank : undefined,
+      processJoinRequests: isGuardBotEnabled !== wasGuardBotEnabled ? isGuardBotEnabled : undefined,
     });
   });
 
@@ -162,7 +198,37 @@ const ManageGroupAdminRights = ({
     closeDismissConfirmationDialog();
   });
 
+  const handleProcessJoinRequestsChange = useLastCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const isChecked = e.currentTarget.checked;
+    // Keep the checkbox in its current state until the dialog is confirmed
+    e.currentTarget.checked = isGuardBotEnabled;
+    setPendingGuardBotEnabled(isChecked);
+
+    const isReplacingGuardBot = isChecked && Boolean(guardBot) && guardBotId !== selectedUserId;
+    if (isReplacingGuardBot) {
+      openReplaceBot();
+    } else {
+      openGuardConfirm();
+    }
+  });
+
+  const handleConfirmGuardToggle = useLastCallback(() => {
+    closeGuardConfirm();
+    setIsGuardBotEnabled(pendingGuardBotEnabled);
+    setIsTouched(true);
+  });
+
+  const handleConfirmReplaceBot = useLastCallback(() => {
+    closeReplaceBot();
+    setIsGuardBotEnabled(true);
+    setIsTouched(true);
+  });
+
   const getControlIsDisabled = useLastCallback((key: keyof ApiChatAdminRights) => {
+    if (isAddingGuardBot && GUARD_BOT_LOCKED_ADMIN_RIGHTS.includes(key)) {
+      return true;
+    }
+
     if (isChatBasicGroup(chat)) {
       return false;
     }
@@ -249,6 +315,9 @@ const ManageGroupAdminRights = ({
   const canTransferOwnership = Boolean(
     chat.isCreator && selectedUser && !isUserBot(selectedUser) && selectedUserId !== currentUserId,
   );
+  const canManageGuardBot = Boolean(selectedUser?.isGuardBot && !(isChannel && isChatPublic(chat)));
+  const canDismissAdmin = currentUserId !== selectedUserId && !isFormFullyDisabled && !isNewAdmin;
+  const shouldRenderAdminActions = !isChannel || canDismissAdmin;
 
   if (!selectedChatMember) {
     return undefined;
@@ -257,7 +326,7 @@ const ManageGroupAdminRights = ({
   return (
     <div className="Management">
       <div className="panel-content custom-scroll">
-        <div className="section">
+        <Island>
           <ListItem inactive className="chat-item-clickable">
             <PrivateChatInfo
               userId={selectedChatMember.userId}
@@ -266,8 +335,11 @@ const ManageGroupAdminRights = ({
             />
           </ListItem>
 
-          <h3 className="section-heading mt-4" dir="auto">{lang('EditAdminWhatCanDo')}</h3>
+        </Island>
 
+        <IslandTitle dir="auto">{lang('EditAdminWhatCanDo')}</IslandTitle>
+
+        <Island>
           <div className="ListItem">
             <Checkbox
               name="changeInfo"
@@ -398,21 +470,21 @@ const ManageGroupAdminRights = ({
           )}
           <div className="ListItem">
             <Checkbox
-              name="addAdmins"
-              checked={Boolean(permissions.addAdmins)}
-              label={lang('EditAdminAddAdmins')}
-              blocking
-              disabled={getControlIsDisabled('addAdmins')}
-              onChange={handlePermissionChange}
-            />
-          </div>
-          <div className="ListItem">
-            <Checkbox
               name="manageCall"
               checked={Boolean(permissions.manageCall)}
               label={lang('StartVoipChatPermission')}
               blocking
               disabled={getControlIsDisabled('manageCall')}
+              onChange={handlePermissionChange}
+            />
+          </div>
+          <div className="ListItem">
+            <Checkbox
+              name="addAdmins"
+              checked={Boolean(permissions.addAdmins)}
+              label={lang('EditAdminAddAdmins')}
+              blocking
+              disabled={getControlIsDisabled('addAdmins')}
               onChange={handlePermissionChange}
             />
           </div>
@@ -441,35 +513,58 @@ const ManageGroupAdminRights = ({
             </div>
           )}
 
+          {canManageGuardBot && (
+            <div className="ListItem">
+              <Checkbox
+                name="guardBot"
+                checked={isGuardBotEnabled}
+                label={lang('GuardProcessJoinRequests')}
+                blocking
+                disabled={isFormFullyDisabled}
+                onChange={handleProcessJoinRequestsChange}
+              />
+            </div>
+          )}
+
           {isFormFullyDisabled && (
-            <p className="section-info mb-4" dir="auto">
+            <IslandDescription className="mb-4" dir="auto">
               {lang('EditAdminUnavailable')}
-            </p>
+            </IslandDescription>
           )}
+        </Island>
 
-          {!isChannel && (
-            <InputText
-              id="admin-title"
-              label={lang('EditAdminRank')}
-              className="input-admin-title"
-              onChange={handleRankChange}
-              value={rank}
-              disabled={isFormFullyDisabled || !canEditRank}
-              maxLength={CUSTOM_TITLE_MAX_LENGTH}
-            />
-          )}
+        {canManageGuardBot && (
+          <IslandDescription dir="auto">
+            {lang('GuardProcessJoinRequestsInfo')}
+          </IslandDescription>
+        )}
 
-          {canTransferOwnership && currentUserId !== selectedUserId && !isFormFullyDisabled && !isNewAdmin && (
-            <ListItem icon="key" ripple onClick={handleStartTransfer}>
-              {lang(isChannel ? 'EditAdminTransferChannelOwnership' : 'EditAdminTransferGroupOwnership')}
-            </ListItem>
-          )}
-          {currentUserId !== selectedUserId && !isFormFullyDisabled && !isNewAdmin && (
-            <ListItem icon="delete" ripple destructive onClick={openDismissConfirmationDialog}>
-              {lang('EditAdminRemoveAdmin')}
-            </ListItem>
-          )}
-        </div>
+        {shouldRenderAdminActions && (
+          <Island>
+            {!isChannel && (
+              <InputText
+                id="admin-title"
+                label={lang('EditAdminRank')}
+                className="input-admin-title"
+                onChange={handleRankChange}
+                value={rank}
+                disabled={isFormFullyDisabled || !canEditRank}
+                maxLength={CUSTOM_TITLE_MAX_LENGTH}
+              />
+            )}
+
+            {canTransferOwnership && canDismissAdmin && (
+              <ListItem icon="key" ripple onClick={handleStartTransfer}>
+                {lang(isChannel ? 'EditAdminTransferChannelOwnership' : 'EditAdminTransferGroupOwnership')}
+              </ListItem>
+            )}
+            {canDismissAdmin && (
+              <ListItem icon="delete" ripple destructive onClick={openDismissConfirmationDialog}>
+                {lang('EditAdminRemoveAdmin')}
+              </ListItem>
+            )}
+          </Island>
+        )}
       </div>
 
       <FloatingActionButton
@@ -509,9 +604,58 @@ const ManageGroupAdminRights = ({
         onClose={closePasswordModal}
         onSubmit={handleTransferOwnership}
       />
+      <ConfirmDialog
+        isOpen={isGuardConfirmOpen}
+        onClose={closeGuardConfirm}
+        title={lang('GuardApproveNewMembers')}
+        text={lang.withRegular({
+          key: getGuardConfirmTextKey(pendingGuardBotEnabled, isChannel),
+          variables: { bot: selectedUser ? getUserFullName(selectedUser) : '' },
+        })}
+        confirmLabel={lang(pendingGuardBotEnabled ? 'Enable' : 'Disable')}
+        confirmHandler={handleConfirmGuardToggle}
+      />
+      {guardBot && selectedUser && (
+        <GuardReplaceBotModal
+          isOpen={isReplaceBotOpen}
+          currentBot={guardBot}
+          newBot={selectedUser}
+          onConfirm={handleConfirmReplaceBot}
+          onClose={closeReplaceBot}
+        />
+      )}
     </div>
   );
 };
+
+// A non-creator admin can only grant the rights they hold themselves; seed the guard bot defaults
+// with the intersection so the save isn't rejected for rights the current admin can't assign.
+function getGrantableGuardBotRights(chat: ApiChat): ApiChatAdminRights {
+  if (chat.isCreator || isChatBasicGroup(chat)) {
+    return GUARD_BOT_DEFAULT_ADMIN_RIGHTS;
+  }
+
+  const grantable = chat.adminRights;
+  if (!grantable) {
+    return {};
+  }
+
+  const result: ApiChatAdminRights = {};
+  (Object.keys(GUARD_BOT_DEFAULT_ADMIN_RIGHTS) as (keyof ApiChatAdminRights)[]).forEach((key) => {
+    if (grantable[key]) {
+      result[key] = true;
+    }
+  });
+
+  return result;
+}
+
+function getGuardConfirmTextKey(isEnabling: boolean, isChannel: boolean) {
+  if (isChannel) {
+    return isEnabling ? 'GuardProcessJoinRequestsEnableChannel' : 'GuardProcessJoinRequestsDisableChannel';
+  }
+  return isEnabling ? 'GuardProcessJoinRequestsEnableGroup' : 'GuardProcessJoinRequestsDisableGroup';
+}
 
 export default memo(withGlobal<OwnProps>(
   (global, { chatId, isPromotedByCurrentUser, selectedUserId }): Complete<StateProps> => {
@@ -539,6 +683,8 @@ export default memo(withGlobal<OwnProps>(
       hasFullInfo: Boolean(fullInfo),
       selectedAdminMember,
       canEditRank,
+      guardBotId: fullInfo?.guardBotId,
+      guardBot: fullInfo?.guardBotId ? selectUser(global, fullInfo?.guardBotId) : undefined,
     };
   },
   (global, { chatId }) => {

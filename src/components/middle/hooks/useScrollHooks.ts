@@ -19,7 +19,6 @@ import useSyncEffect from '../../../hooks/useSyncEffect';
 
 const FAB_THRESHOLD = 50;
 const NOTCH_THRESHOLD = 1; // Notch has zero height so we at least need a 1px margin to intersect
-const TOP_EXIT_THRESHOLD = 50;
 const CONTAINER_HEIGHT_DEBOUNCE = 200;
 const SCROLL_TOOLS_DEBOUNCE = 100;
 const TOOLS_FREEZE_TIMEOUT = 350; // Approximate message sending animation duration
@@ -32,8 +31,8 @@ export default function useScrollHooks({
   isViewportNewest,
   isUnread,
   isReady,
+  isReplacingHistoryRef,
   onScrollDownToggle,
-  onNotchToggle,
 }: {
   type: MessageListType;
   containerRef: ElementRef<HTMLDivElement>;
@@ -42,8 +41,8 @@ export default function useScrollHooks({
   isViewportNewest: boolean;
   isUnread: boolean;
   isReady: boolean;
+  isReplacingHistoryRef: { current: boolean };
   onScrollDownToggle: BooleanToVoidFunction | undefined;
-  onNotchToggle: AnyToVoidFunction | undefined;
 }) {
   const { loadViewportMessages } = getActions();
 
@@ -60,9 +59,8 @@ export default function useScrollHooks({
   const forwardsTriggerRef = useRef<HTMLDivElement>();
   const fabTriggerRef = useRef<HTMLDivElement>();
 
-  const toggleScrollTools = useLastCallback((scrollDown: boolean, notch: boolean) => {
+  const toggleScrollTools = useLastCallback((scrollDown: boolean) => {
     onScrollDownToggle?.(scrollDown);
-    onNotchToggle?.(notch);
   });
 
   const toggleScrollToolsDebounced = useDebouncedCallback(
@@ -73,13 +71,13 @@ export default function useScrollHooks({
     if (!isReady) return;
 
     if (!messageIds?.length) {
-      toggleScrollTools(false, false);
+      toggleScrollTools(false);
 
       return;
     }
 
     if (!isViewportNewest) {
-      toggleScrollToolsDebounced(true, true);
+      toggleScrollToolsDebounced(true);
 
       return;
     }
@@ -96,7 +94,7 @@ export default function useScrollHooks({
 
     if (scrollHeight === 0) return;
 
-    toggleScrollToolsDebounced(isUnread ? !isAtBottom : !isNearBottom, !isAtBottom);
+    toggleScrollToolsDebounced(isUnread ? !isAtBottom : !isNearBottom);
   });
 
   const {
@@ -106,6 +104,10 @@ export default function useScrollHooks({
     margin: MESSAGE_LIST_SENSITIVE_AREA,
   }, (entries) => {
     if (!loadMoreForwards || !loadMoreBackwards) {
+      return;
+    }
+
+    if (isReplacingHistoryRef.current) {
       return;
     }
 
@@ -151,14 +153,6 @@ export default function useScrollHooks({
 
   useOnIntersect(fabTriggerRef, observeIntersectionForNotch);
 
-  const {
-    observe: observeIntersectionForTopExit,
-  } = useIntersectionObserver({
-    rootRef: containerRef,
-    margin: `-${TOP_EXIT_THRESHOLD}px 0px 0px 0px`,
-    throttleScheduler: requestMeasure,
-  });
-
   useEffect(() => {
     if (isReady) {
       updateScrollTools();
@@ -169,9 +163,11 @@ export default function useScrollHooks({
     const container = containerRef.current;
     if (!container) return;
 
+    container.addEventListener('scroll', updateScrollTools);
     container.addEventListener('scrollend', updateScrollTools);
 
     return () => {
+      container.removeEventListener('scroll', updateScrollTools);
       container.removeEventListener('scrollend', updateScrollTools);
     };
   }, [containerRef]);
@@ -198,6 +194,5 @@ export default function useScrollHooks({
     backwardsTriggerRef,
     forwardsTriggerRef,
     fabTriggerRef,
-    observeIntersectionForTopExit,
   };
 }
