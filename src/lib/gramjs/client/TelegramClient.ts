@@ -1,11 +1,10 @@
-import os from 'os';
-
 import type LocalUpdatePremiumFloodWait from '../../../api/gramjs/updates/UpdatePremiumFloodWait';
 import type { UpdatePts } from '../../../api/gramjs/updates/UpdatePts';
 import type { AuthKey } from '../crypto/AuthKey';
 import type {
   Connection,
-  UpdateServerTimeOffset } from '../network';
+  UpdateServerTimeOffset,
+  UpdateSessionGap } from '../network';
 import type {
   PasswordResult,
   TmpPasswordResult,
@@ -15,6 +14,7 @@ import type { DownloadFileParams, DownloadFileWithDcParams, DownloadMediaParams 
 import type { UploadFileParams } from './uploadFile';
 
 import Deferred from '../../../util/Deferred';
+import { concat } from '../../../util/encoding/buffer';
 import { toJSNumber } from '../../../util/numbers';
 import {
   FloodTestPhoneWaitError,
@@ -80,11 +80,12 @@ type TelegramClientParams = {
   shouldDebugExportedSenders: boolean;
 };
 
-type TimeoutId = ReturnType<typeof setTimeout>;
+type TimeoutId = number;
 
 export type Update = (
     Api.TypeUpdate | Api.TypeUpdates
-    | UpdateServerTimeOffset | UpdateConnectionState | UpdatePts | LocalUpdatePremiumFloodWait
+    | UpdateServerTimeOffset | UpdateConnectionState | UpdateSessionGap
+    | UpdatePts | LocalUpdatePremiumFloodWait
 ) & { _entities?: (Api.TypeUser | Api.TypeChat)[] };
 type EventBuilder = {
   build: (update: Update) => Update;
@@ -95,6 +96,7 @@ const DEFAULT_WEBDOCUMENT_DC_ID = 4;
 const EXPORTED_SENDER_RECONNECT_TIMEOUT = 1000; // 1 sec
 const EXPORTED_SENDER_RELEASE_TIMEOUT = 30000; // 30 sec
 const WEBDOCUMENT_REQUEST_PART_SIZE = 131072; // 128kb
+const STATIC_MAP_REQUEST_PART_SIZE = 524288; // 512kb
 
 const PING_INTERVAL = 3000; // 3 sec
 const PING_TIMEOUT = 5000; // 5 sec
@@ -113,6 +115,10 @@ const PING_DISCONNECT_DELAY = 60000; // 1 min
 // All types, sorted by size
 const sizeTypes = ['u', 'v', 'w', 'y', 'd', 'x', 'c', 'm', 'b', 'a', 's', 'f', 'i', 'j'] as const;
 export type SizeType = typeof sizeTypes[number];
+const sizeTypeRanks: Record<SizeType, number> = sizeTypes.reduce((acc, sizeType, index) => {
+  acc[sizeType] = index;
+  return acc;
+}, {} as Record<SizeType, number>);
 
 class TelegramClient {
   static DEFAULT_OPTIONS: Partial<TelegramClientParams> = {
@@ -261,10 +267,8 @@ class TelegramClient {
         layer: LAYER,
         query: new Api.InitConnection({
           apiId: this.apiId,
-          deviceModel: args.deviceModel || os.type()
-            .toString() || 'Unknown',
-          systemVersion: args.systemVersion || os.release()
-            .toString() || '1.0',
+          deviceModel: args.deviceModel || 'Unknown',
+          systemVersion: args.systemVersion || '1.0',
           appVersion: args.appVersion || '1.0',
           langCode: args.langCode,
           langPack: args.langPack,
@@ -782,7 +786,7 @@ class TelegramClient {
      * @param [args[dcId] {number}]
      * @param [args[workers] {number}]
      * @param [args[isPriority] {boolean}]
-     * @returns {Promise<Buffer>}
+     * @returns {Promise<Uint8Array>}
      */
   downloadFile(inputLocation: Api.TypeInputFileLocation, args: DownloadFileWithDcParams) {
     return downloadFile(this, inputLocation, args, this._shouldDebugExportedSenders);
@@ -835,7 +839,7 @@ class TelegramClient {
     return this.downloadFile(loc, {
       dcId,
       isPriority: true,
-    }) as Promise<Buffer<ArrayBuffer> | undefined>; // Profile photo cannot be larger than 2GB, right?
+    }); // Profile photo cannot be larger than 2GB, right?
   }
 
   downloadStickerSetThumb(stickerSet: Api.StickerSet) {
@@ -855,7 +859,7 @@ class TelegramClient {
           thumbVersion,
         }),
         { dcId: stickerSet.thumbDcId! },
-      ) as Promise<Buffer<ArrayBuffer> | undefined>; // Sticker thumb cannot be larger than 2GB, right?
+      ); // Sticker thumb cannot be larger than 2GB, right?
     }
 
     return this.invoke(new Api.messages.GetCustomEmojiDocuments({
@@ -875,7 +879,7 @@ class TelegramClient {
       {
         fileSize: toJSNumber(doc.size),
         dcId: doc.dcId,
-      }) as Promise<Buffer<ArrayBuffer> | undefined>; // Sticker thumb cannot be larger than 2GB, right?
+      }); // Sticker thumb cannot be larger than 2GB, right?
     });
   }
 
@@ -890,18 +894,33 @@ class TelegramClient {
       return maxSize;
     }
 
-    const indexOfSize = sizeTypes.indexOf(sizeType);
-    let size;
-    for (let i = indexOfSize; i < sizeTypes.length; i++) {
-      size = sizes.find((s) => 'type' in s && s.type === sizeTypes[i]);
-      if (size) {
-        return size;
+    const targetRank = sizeTypeRanks[sizeType];
+    let bestMatchingSize: Api.TypePhotoSize | Api.TypeVideoSize | undefined;
+    let bestMatchingRank = Infinity;
+    let largestAvailableSize: Api.TypePhotoSize | Api.TypeVideoSize | undefined;
+    let largestAvailableRank = -1;
+
+    for (const size of sizes) {
+      if (!('type' in size) || !(size.type in sizeTypeRanks)) {
+        continue;
+      }
+
+      const sizeRank = sizeTypeRanks[size.type as SizeType];
+      if (sizeRank >= targetRank && sizeRank < bestMatchingRank) {
+        bestMatchingSize = size;
+        bestMatchingRank = sizeRank;
+      }
+
+      if (sizeRank > largestAvailableRank) {
+        largestAvailableSize = size;
+        largestAvailableRank = sizeRank;
       }
     }
-    return undefined;
+
+    return bestMatchingSize || largestAvailableSize;
   }
 
-  _downloadCachedPhotoSize(size: Api.PhotoCachedSize | Api.PhotoStrippedSize): Buffer<ArrayBuffer> {
+  _downloadCachedPhotoSize(size: Api.PhotoCachedSize | Api.PhotoStrippedSize): Uint8Array {
     // No need to download anything, simply write the bytes
     let data;
     if (size instanceof Api.PhotoStrippedSize) {
@@ -1004,7 +1023,7 @@ class TelegramClient {
   async _downloadWebDocument(media: Api.TypeWebDocument) {
     if (media instanceof Api.WebDocumentNoProxy) {
       const arrayBuff = await fetch(media.url).then((res) => res.arrayBuffer());
-      return Buffer.from(arrayBuff);
+      return new Uint8Array(arrayBuff);
     }
 
     try {
@@ -1039,11 +1058,11 @@ class TelegramClient {
           break;
         }
       }
-      return Buffer.concat(buff);
+      return concat(...buff);
     } catch (err: unknown) {
       // the file is no longer saved in telegram's cache.
       if (err instanceof RPCError && err.errorMessage === 'WEBFILE_NOT_AVAILABLE') {
-        return Buffer.alloc(0);
+        return new Uint8Array(0);
       } else {
         throw err;
       }
@@ -1063,35 +1082,42 @@ class TelegramClient {
     try {
       const buff = [];
       let offset = 0;
+      let size: number | undefined;
 
-      while (true) {
-        try {
-          const downloaded = new Api.upload.GetWebFile({
-            location: new Api.InputWebFileGeoPointLocation({
-              geoPoint: new Api.InputGeoPoint({
-                lat,
-                long,
-                accuracyRadius,
-              }),
-              accessHash,
-              w,
-              h,
-              zoom,
-              scale,
+      while (size === undefined || offset < size) {
+        const downloaded = new Api.upload.GetWebFile({
+          location: new Api.InputWebFileGeoPointLocation({
+            geoPoint: new Api.InputGeoPoint({
+              lat,
+              long,
+              accuracyRadius,
             }),
-            offset,
-            limit: WEBDOCUMENT_REQUEST_PART_SIZE,
-          });
-          const sender = await this._borrowExportedSender(DEFAULT_WEBDOCUMENT_DC_ID);
+            accessHash,
+            w,
+            h,
+            zoom,
+            scale,
+          }),
+          offset,
+          limit: STATIC_MAP_REQUEST_PART_SIZE,
+        });
+
+        let sender: MTProtoSender | undefined;
+        try {
+          sender = await this._borrowExportedSender(
+            this._config?.webfileDcId || DEFAULT_WEBDOCUMENT_DC_ID,
+          );
           if (!sender) {
             throw new Error('Failed to obtain sender');
           }
           const res = (await sender.send(downloaded))!;
           this.releaseExportedSender(sender);
-          offset += WEBDOCUMENT_REQUEST_PART_SIZE;
+          sender = undefined;
+          size = res.size;
+          offset += res.bytes.length;
           if (res.bytes.length) {
             buff.push(res.bytes);
-            if (res.bytes.length < WEBDOCUMENT_REQUEST_PART_SIZE) {
+            if (offset >= size || res.bytes.length < STATIC_MAP_REQUEST_PART_SIZE) {
               break;
             }
           } else {
@@ -1104,12 +1130,18 @@ class TelegramClient {
             await sleep(err.seconds * 1000);
             continue;
           }
+
+          throw err;
+        } finally {
+          if (sender) {
+            this.releaseExportedSender(sender);
+          }
         }
       }
-      return Buffer.concat(buff);
+      return concat(...buff);
     } catch (err: unknown) {
       if (err instanceof RPCError && err.errorMessage === 'WEBFILE_NOT_AVAILABLE') {
-        return Buffer.alloc(0);
+        return new Uint8Array(0);
       } else {
         throw err;
       }

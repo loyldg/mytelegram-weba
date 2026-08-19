@@ -5,19 +5,21 @@ import {
 } from '../../../lib/teact/teact';
 import { getActions, getGlobal, withGlobal } from '../../../global';
 
-import type { ApiChat } from '../../../api/types';
+import type { ApiChat, ApiUser } from '../../../api/types';
 import { ManagementProgress } from '../../../types';
 
 import { PURCHASE_USERNAME, TME_LINK_PREFIX, USERNAME_PURCHASE_ERROR } from '../../../config';
-import { isChatChannel, isChatPublic } from '../../../global/helpers';
+import { getMainUsername, isChatChannel, isChatPublic } from '../../../global/helpers';
 import {
   selectChat, selectChatFullInfo,
-  selectManagement, selectTabState,
+  selectManagement, selectTabState, selectUser,
 } from '../../../global/selectors';
 import { selectCurrentLimit } from '../../../global/selectors/limits';
 
 import useFlag from '../../../hooks/useFlag';
 import useHistoryBack from '../../../hooks/useHistoryBack';
+import useLang from '../../../hooks/useLang';
+import useLastCallback from '../../../hooks/useLastCallback';
 import useOldLang from '../../../hooks/useOldLang';
 import usePreviousDeprecated from '../../../hooks/usePreviousDeprecated';
 
@@ -25,10 +27,14 @@ import LinkField from '../../common/LinkField';
 import ManageUsernames from '../../common/ManageUsernames';
 import SafeLink from '../../common/SafeLink';
 import UsernameInput from '../../common/UsernameInput';
+import Island, { IslandDescription, IslandTitle } from '../../gili/layout/Island';
+import SwitchField from '../../gili/templates/SwitchField';
+import Button from '../../ui/Button';
 import ConfirmDialog from '../../ui/ConfirmDialog';
 import FloatingActionButton from '../../ui/FloatingActionButton';
 import ListItem from '../../ui/ListItem';
 import Loading from '../../ui/Loading';
+import Modal from '../../ui/Modal';
 import RadioGroup from '../../ui/RadioGroup';
 
 type PrivacyType = 'private' | 'public';
@@ -47,6 +53,10 @@ type StateProps = {
   checkedUsername?: string;
   error?: string;
   isProtected?: boolean;
+  isJoinRequest?: boolean;
+  guardBot?: ApiUser;
+  invitesCount?: number;
+  areInvitesLoaded?: boolean;
   maxPublicLinks: number;
   privateInviteLink?: string;
 };
@@ -60,6 +70,10 @@ const ManageChatPrivacyType: FC<OwnProps & StateProps> = ({
   checkedUsername,
   error,
   isProtected,
+  isJoinRequest,
+  guardBot,
+  invitesCount,
+  areInvitesLoaded,
   maxPublicLinks,
   privateInviteLink,
   onClose,
@@ -68,6 +82,8 @@ const ManageChatPrivacyType: FC<OwnProps & StateProps> = ({
     updatePublicLink,
     updatePrivateLink,
     toggleIsProtected,
+    toggleJoinRequest,
+    loadExportedChatInvites,
     openLimitReachedModal,
     resetManagementError,
   } = getActions();
@@ -81,6 +97,9 @@ const ManageChatPrivacyType: FC<OwnProps & StateProps> = ({
   const [editableUsername, setEditableUsername] = useState<string>();
   const [isRevokeConfirmDialogOpen, openRevokeConfirmDialog, closeRevokeConfirmDialog] = useFlag();
   const [isUsernameLostDialogOpen, openUsernameLostDialog, closeUsernameLostDialog] = useFlag();
+  const [isApplyToInvitesDialogOpen, openApplyToInvitesDialog, closeApplyToInvitesDialog] = useFlag();
+  const [isJoinRequestEnabled, setIsJoinRequestEnabled] = useState(Boolean(isJoinRequest));
+  const [pendingJoinRequest, setPendingJoinRequest] = useState<boolean>();
 
   const previousIsUsernameAvailable = usePreviousDeprecated(isUsernameAvailable);
   const renderingIsUsernameAvailable = isUsernameAvailable ?? previousIsUsernameAvailable;
@@ -100,6 +119,16 @@ const ManageChatPrivacyType: FC<OwnProps & StateProps> = ({
   useEffect(() => {
     setIsProfileFieldsTouched(false);
   }, [currentUsername]);
+
+  useEffect(() => {
+    setIsJoinRequestEnabled(Boolean(isJoinRequest));
+  }, [isJoinRequest]);
+
+  useEffect(() => {
+    if (!areInvitesLoaded) {
+      loadExportedChatInvites({ chatId: chat.id });
+    }
+  }, [chat.id, areInvitesLoaded]);
 
   useEffect(() => {
     if (privacyType && !privateInviteLink) {
@@ -142,6 +171,33 @@ const ManageChatPrivacyType: FC<OwnProps & StateProps> = ({
     });
   }, [chat.id, toggleIsProtected]);
 
+  const commitJoinRequest = useLastCallback((isEnabled: boolean, shouldApplyToInvites: boolean) => {
+    setIsJoinRequestEnabled(isEnabled);
+    toggleJoinRequest({
+      chatId: chat.id, isEnabled, shouldApplyToInvites, guardBotId: guardBot?.id,
+    });
+  });
+
+  const handleApproveNewSubscribersChange = useLastCallback((isChecked: boolean) => {
+    if (invitesCount && !isPublic) {
+      setPendingJoinRequest(isChecked);
+      openApplyToInvitesDialog();
+      return;
+    }
+
+    commitJoinRequest(isChecked, false);
+  });
+
+  const handleApplyToInvites = useLastCallback(() => {
+    closeApplyToInvitesDialog();
+    commitJoinRequest(pendingJoinRequest!, true);
+  });
+
+  const handleDontApplyToInvites = useLastCallback(() => {
+    closeApplyToInvitesDialog();
+    commitJoinRequest(pendingJoinRequest!, false);
+  });
+
   const handleSave = useCallback(() => {
     if (isPublic && privacyType === 'private') {
       openUsernameLostDialog();
@@ -160,21 +216,28 @@ const ManageChatPrivacyType: FC<OwnProps & StateProps> = ({
     updatePrivateLink();
   }, [closeRevokeConfirmDialog, updatePrivateLink]);
 
-  const lang = useOldLang();
+  const oldLang = useOldLang();
+  const lang = useLang();
   const langPrefix1 = isChannel ? 'Channel' : 'Mega';
   const langPrefix2 = isChannel ? 'Channel' : 'Group';
 
+  const guardBotUsername = guardBot && getMainUsername(guardBot);
+  const guardBotLink = guardBotUsername
+    ? <SafeLink url={`${TME_LINK_PREFIX}${guardBotUsername}`} text={`@${guardBotUsername}`} />
+    : guardBot?.firstName;
+  const approvalInfo = lang(getApprovalInfoKey(isChannel, Boolean(isPublic)));
+
   const options = [
-    { value: 'private', label: lang(`${langPrefix1}Private`), subLabel: lang(`${langPrefix1}PrivateInfo`) },
-    { value: 'public', label: lang(`${langPrefix1}Public`), subLabel: lang(`${langPrefix1}PublicInfo`) },
+    { value: 'private', label: oldLang(`${langPrefix1}Private`), subLabel: oldLang(`${langPrefix1}PrivateInfo`) },
+    { value: 'public', label: oldLang(`${langPrefix1}Public`), subLabel: oldLang(`${langPrefix1}PublicInfo`) },
   ];
 
   const forwardingOptions = [{
     value: 'allowed',
-    label: lang('ChannelVisibility.Forwarding.Enabled'),
+    label: oldLang('ChannelVisibility.Forwarding.Enabled'),
   }, {
     value: 'protected',
-    label: lang('ChannelVisibility.Forwarding.Disabled'),
+    label: oldLang('ChannelVisibility.Forwarding.Disabled'),
   }];
 
   const isLoading = progress === ManagementProgress.InProgress;
@@ -184,71 +247,77 @@ const ManageChatPrivacyType: FC<OwnProps & StateProps> = ({
     const purchaseInfoLink = `${TME_LINK_PREFIX}${PURCHASE_USERNAME}`;
 
     return (
-      <p className="section-info" dir="auto">
-        {(lang('lng_username_purchase_available'))
+      <IslandDescription dir="auto">
+        {(oldLang('lng_username_purchase_available'))
           .replace('{link}', '%PURCHASE_LINK%')
           .split('%')
           .map((s) => {
             return (s === 'PURCHASE_LINK' ? <SafeLink url={purchaseInfoLink} text={`@${PURCHASE_USERNAME}`} /> : s);
           })}
-      </p>
+      </IslandDescription>
     );
   }
 
   return (
     <div className="Management">
       <div className="panel-content custom-scroll">
-        <div className="section" dir={lang.isRtl ? 'rtl' : undefined}>
-          <h3 className="section-heading">{lang(`${langPrefix2}Type`)}</h3>
+        <IslandTitle dir={oldLang.isRtl ? 'rtl' : undefined}>{oldLang(`${langPrefix2}Type`)}</IslandTitle>
+        <Island dir={oldLang.isRtl ? 'rtl' : undefined}>
           <RadioGroup
             selected={privacyType}
             name="channel-type"
             options={options}
             onChange={handleOptionChange}
           />
-        </div>
+        </Island>
         {privacyType === 'private' ? (
-          <div className="section" dir={lang.isRtl ? 'rtl' : undefined}>
-            {privateInviteLink ? (
-              <>
-                <LinkField link={privateInviteLink} className="invite-link" />
-                <p className="section-info" dir={lang.isRtl ? 'rtl' : undefined}>
-                  {lang(`${langPrefix1}PrivateLinkHelp`)}
-                </p>
-
-                <ListItem icon="delete" ripple destructive onClick={openRevokeConfirmDialog}>
-                  {lang('RevokeLink')}
-                </ListItem>
-                <ConfirmDialog
-                  isOpen={isRevokeConfirmDialogOpen}
-                  onClose={closeRevokeConfirmDialog}
-                  text={lang('RevokeAlert')}
-                  confirmLabel={lang('RevokeButton')}
-                  confirmHandler={handleRevokePrivateLink}
-                  confirmIsDestructive
-                />
-              </>
-            ) : (
-              <Loading />
-            )}
-          </div>
+          <>
+            <IslandTitle dir={oldLang.isRtl ? 'rtl' : undefined}>
+              {oldLang('InviteLink.InviteLink')}
+            </IslandTitle>
+            <Island dir={oldLang.isRtl ? 'rtl' : undefined}>
+              {privateInviteLink ? (
+                <>
+                  <LinkField link={privateInviteLink} className="invite-link" noTitle />
+                  <ListItem icon="delete" ripple destructive onClick={openRevokeConfirmDialog}>
+                    {oldLang('RevokeLink')}
+                  </ListItem>
+                  <ConfirmDialog
+                    isOpen={isRevokeConfirmDialogOpen}
+                    onClose={closeRevokeConfirmDialog}
+                    text={oldLang('RevokeAlert')}
+                    confirmLabel={oldLang('RevokeButton')}
+                    confirmHandler={handleRevokePrivateLink}
+                    confirmIsDestructive
+                  />
+                </>
+              ) : (
+                <Loading />
+              )}
+            </Island>
+            <IslandDescription dir={oldLang.isRtl ? 'rtl' : undefined}>
+              {oldLang(`${langPrefix1}PrivateLinkHelp`)}
+            </IslandDescription>
+          </>
         ) : (
-          <div className="section no-border">
-            <div className="settings-input">
-              <UsernameInput
-                asLink
-                currentUsername={currentUsername}
-                isLoading={isLoading}
-                isUsernameAvailable={isUsernameAvailable}
-                checkedUsername={checkedUsername}
-                onChange={handleUsernameChange}
-              />
-            </div>
+          <>
+            <Island>
+              <div className="settings-input">
+                <UsernameInput
+                  asLink
+                  currentUsername={currentUsername}
+                  isLoading={isLoading}
+                  isUsernameAvailable={isUsernameAvailable}
+                  checkedUsername={checkedUsername}
+                  onChange={handleUsernameChange}
+                />
+              </div>
+            </Island>
             {error === USERNAME_PURCHASE_ERROR && renderPurchaseLink()}
-            <p className="section-info" dir="auto">
-              {lang(`${langPrefix2}.Username.CreatePublicLinkHelp`)}
-            </p>
-          </div>
+            <IslandDescription dir="auto">
+              {oldLang(`${langPrefix2}.Username.CreatePublicLinkHelp`)}
+            </IslandDescription>
+          </>
         )}
         {shouldRenderUsernamesManage && (
           <ManageUsernames
@@ -257,27 +326,50 @@ const ManageChatPrivacyType: FC<OwnProps & StateProps> = ({
             onEditUsername={handleUsernameChange}
           />
         )}
-        <div className="section" dir={lang.isRtl ? 'rtl' : undefined}>
-          <h3 className="section-heading">
-            {lang(isChannel ? 'ChannelVisibility.Forwarding.ChannelTitle' : 'ChannelVisibility.Forwarding.GroupTitle')}
-          </h3>
+        {!(isChannel && isPublic) && (
+          <>
+            <IslandTitle dir={oldLang.isRtl ? 'rtl' : undefined}>
+              {oldLang('MemberRequests')}
+            </IslandTitle>
+            <Island dir={oldLang.isRtl ? 'rtl' : undefined}>
+              <SwitchField
+                checked={isJoinRequestEnabled}
+                onChange={handleApproveNewSubscribersChange}
+                label={lang('GuardApproveNewMembers')}
+                teactExperimentControlled
+              />
+            </Island>
+            <IslandDescription dir={oldLang.isRtl ? 'rtl' : undefined}>
+              {guardBot
+                ? lang('GuardManagedByDescription', {
+                  approvalInfo,
+                  managedBy: lang('GuardManagedBy', { bot: guardBotLink }, { withNodes: true }),
+                }, { withNodes: true })
+                : approvalInfo}
+            </IslandDescription>
+          </>
+        )}
+        <IslandTitle dir={oldLang.isRtl ? 'rtl' : undefined}>
+          {oldLang(isChannel ? 'ChannelVisibility.Forwarding.ChannelTitle' : 'ChannelVisibility.Forwarding.GroupTitle')}
+        </IslandTitle>
+        <Island dir={oldLang.isRtl ? 'rtl' : undefined}>
           <RadioGroup
             selected={isProtected ? 'protected' : 'allowed'}
             name="forwarding-type"
             options={forwardingOptions}
             onChange={handleForwardingOptionChange}
           />
-          <p className="section-info section-info_push">
-            {isChannel
-              ? lang('ChannelVisibility.Forwarding.ChannelInfo')
-              : lang('ChannelVisibility.Forwarding.GroupInfo')}
-          </p>
-        </div>
+        </Island>
+        <IslandDescription>
+          {isChannel
+            ? oldLang('ChannelVisibility.Forwarding.ChannelInfo')
+            : oldLang('ChannelVisibility.Forwarding.GroupInfo')}
+        </IslandDescription>
       </div>
       <FloatingActionButton
         isShown={canUpdate}
         disabled={isLoading}
-        ariaLabel={lang('Save')}
+        ariaLabel={oldLang('Save')}
         onClick={handleSave}
         iconName="check"
         isLoading={isLoading}
@@ -285,18 +377,58 @@ const ManageChatPrivacyType: FC<OwnProps & StateProps> = ({
       <ConfirmDialog
         isOpen={isUsernameLostDialogOpen}
         onClose={closeUsernameLostDialog}
-        text={lang('ChannelVisibility.Confirm.MakePrivate.Channel', currentUsername)}
+        text={oldLang('ChannelVisibility.Confirm.MakePrivate.Channel', currentUsername)}
         confirmHandler={handleMakeChannelPrivateConfirm}
         confirmIsDestructive
       />
+      <Modal
+        className="confirm"
+        title={lang('GuardApplyToInvitesTitle')}
+        isOpen={isApplyToInvitesDialogOpen}
+        onClose={closeApplyToInvitesDialog}
+        isNativeDialog
+        noTitleAutoFocus
+      >
+        <div tabIndex={-1} autoFocus>
+          {lang(
+            getApplyToInvitesKey(Boolean(pendingJoinRequest), isChannel),
+            { count: invitesCount ?? 0 },
+            { pluralValue: invitesCount ?? 0, withNodes: true, withMarkdown: true },
+          )}
+        </div>
+        <div className="dialog-buttons mt-2">
+          <Button isText inline className="confirm-dialog-button" onClick={handleApplyToInvites}>
+            {lang('GuardApplyToInvitesApply')}
+          </Button>
+          <Button isText className="confirm-dialog-button" onClick={handleDontApplyToInvites}>
+            {lang('GuardApplyToInvitesDontApply')}
+          </Button>
+        </div>
+      </Modal>
     </div>
   );
 };
+
+function getApplyToInvitesKey(isEnabling: boolean, isChannel: boolean) {
+  if (isEnabling) {
+    return isChannel ? 'GuardApplyToInvitesChannel' : 'GuardApplyToInvitesGroup';
+  }
+  return isChannel ? 'GuardDisableInvitesChannel' : 'GuardDisableInvitesGroup';
+}
+
+function getApprovalInfoKey(isChannel: boolean, isPublic: boolean) {
+  if (isChannel) {
+    return 'GuardApproveNewChannelSubscribersInfo';
+  }
+  return isPublic ? 'GuardApproveNewPublicGroupMembersInfo' : 'GuardApproveNewPrivateGroupMembersInfo';
+}
 
 export default memo(withGlobal<OwnProps>(
   (global, { chatId }): Complete<StateProps> => {
     const chat = selectChat(global, chatId)!;
     const { isUsernameAvailable, checkedUsername, error } = selectManagement(global, chatId);
+    const fullInfo = selectChatFullInfo(global, chatId);
+    const guardBotId = fullInfo?.guardBotId;
 
     return {
       chat,
@@ -306,8 +438,12 @@ export default memo(withGlobal<OwnProps>(
       isUsernameAvailable,
       checkedUsername,
       isProtected: chat?.isProtected,
+      isJoinRequest: chat?.isJoinRequest,
+      guardBot: guardBotId ? selectUser(global, guardBotId) : undefined,
+      invitesCount: selectTabState(global).management.byChatId[chatId]?.invites?.length,
+      areInvitesLoaded: selectTabState(global).management.byChatId[chatId]?.invites !== undefined,
       maxPublicLinks: selectCurrentLimit(global, 'channelsPublic'),
-      privateInviteLink: selectChatFullInfo(global, chatId)?.inviteLink,
+      privateInviteLink: fullInfo?.inviteLink,
     };
   },
   (global, { chatId }) => {

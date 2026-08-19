@@ -18,6 +18,7 @@ import useSelector, { useShallowSelector } from '../../../hooks/data/useSelector
 import useDerivedState from '../../../hooks/useDerivedState';
 import useLang from '../../../hooks/useLang';
 import useLastCallback from '../../../hooks/useLastCallback';
+import useShowTransitionSwap from '../../../hooks/useShowTransitionSwap';
 
 import AnimatedCounter from '../../common/AnimatedCounter';
 import Icon from '../../common/icons/Icon';
@@ -36,6 +37,8 @@ type OwnProps = {
   shouldShowOnlyMostImportant?: boolean;
   hasMiniApp?: boolean;
   forceHidden?: boolean | Signal<boolean>;
+  // Overrides the chat's own read state, e.g. with a community's aggregated count
+  forceUnreadCount?: number;
   isSelected?: boolean;
   isOnAvatar?: boolean;
   transitionClassName?: string;
@@ -50,6 +53,7 @@ const ChatBadge = ({
   shouldShowOnlyMostImportant,
   wasTopicOpened,
   forceHidden,
+  forceUnreadCount,
   isSavedDialog,
   hasMiniApp,
   isSelected,
@@ -116,7 +120,7 @@ const ChatBadge = ({
     return allTopicIds.length ? [...new Set(allTopicIds)] : [];
   }, [isForum, topicsWithUnreadIds, topicsWithUnreadPollVotesIds, topicsWithUnreadReactionsIds]);
 
-  const unreadCount = isForum ? topicsWithUnreadIds?.length : stateUnreadCount;
+  const unreadCount = forceUnreadCount ?? (isForum ? topicsWithUnreadIds?.length : stateUnreadCount);
   const unreadMentionsCount = isForum ? topicsWithUnreadMentionsIds?.length : stateUnreadMentionsCount;
   const unreadPollVotesCount = isForum ? topicsWithUnreadPollVotesIds?.length : stateUnreadPollVotesCount;
   const unreadReactionsCount = isForum ? topicsWithUnreadReactionsIds?.length : stateUnreadReactionsCount;
@@ -152,6 +156,12 @@ const ChatBadge = ({
     unreadCount || unreadMentionsCount || unreadPollVotesCount || hasUnreadMark || isPinned || unreadReactionsCount
     || isTopicUnopened || hasMiniApp,
   );
+
+  const contentCategory = (isUnread || unreadMentionsCount || unreadReactionsCount
+    || unreadPollVotesCount || isTopicUnopened)
+    ? 'active'
+    : (hasMiniApp ? 'miniapp' : (isPinned ? 'pinned' : 'none'));
+  const effectiveIsOpen = useShowTransitionSwap(isShown, contentCategory);
 
   const handleOpenApp = useLastCallback((e: React.MouseEvent<HTMLButtonElement, MouseEvent>) => {
     e.stopPropagation();
@@ -263,7 +273,7 @@ const ChatBadge = ({
         isOnAvatar && styles.onAvatar,
         transitionClassName,
       )}
-      isOpen={isShown}
+      isOpen={effectiveIsOpen}
     >
       {renderContent()}
     </ShowTransition>

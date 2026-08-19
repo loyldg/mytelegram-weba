@@ -16,10 +16,10 @@ import { buildCustomEmojiHtmlFromEntity } from '../../middle/composer/helpers/cu
 import renderText from './renderText';
 
 import MentionLink from '../../middle/message/MentionLink';
-import Blockquote from '../Blockquote';
 import CodeBlock from '../code/CodeBlock';
 import CustomEmoji from '../CustomEmoji';
 import FormattedDate from '../FormattedDate';
+import Blockquote from '../quote/Blockquote';
 import SafeLink from '../SafeLink';
 import Spoiler from '../spoiler/Spoiler';
 
@@ -301,12 +301,6 @@ function renderMessagePart({
   }
 
   return renderText(content, filters, params);
-}
-
-export function insertTextEntities(entities: ApiMessageEntity[], newEntities: ApiMessageEntity[]) {
-  return newEntities.reduce((acc, newEntity) => {
-    return insertTextEntity(acc, newEntity);
-  }, entities);
 }
 
 export function insertTextEntity(entities: ApiMessageEntity[], newEntity: ApiMessageEntity) {
@@ -738,9 +732,13 @@ function processEntityAsHtml(
       return `<u>${renderedContent}</u>`;
     case ApiMessageEntityTypes.Code:
       return `<code class="text-entity-code">${renderedContent}</code>`;
-    case ApiMessageEntityTypes.Pre:
-      // eslint-disable-next-line @stylistic/max-len
-      return `\`\`\`${renderText(entity.language || '', ['escape_html'])[0] as string}<br/>${renderedContent}<br/>\`\`\`<br/>`;
+    case ApiMessageEntityTypes.Pre: {
+      const languageClass = entity.language
+        ? ` class="language-${escapeHtmlAttribute(entity.language)}"`
+        : '';
+      const code = (renderText(content, ['escape_html']) as string[]).join('');
+      return `<pre><code${languageClass}>${code}</code></pre>`;
+    }
     case ApiMessageEntityTypes.Strike:
       return `<del>${renderedContent}</del>`;
     case ApiMessageEntityTypes.MentionName:

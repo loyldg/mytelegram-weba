@@ -1,5 +1,3 @@
-import type { FC } from '../../lib/teact/teact';
-import type React from '../../lib/teact/teact';
 import { getActions, getGlobal, withGlobal } from '../../global';
 
 import type { TabState } from '../../global/types';
@@ -21,9 +19,6 @@ import useEffectOnce from '../../hooks/useEffectOnce';
 import useFlag from '../../hooks/useFlag';
 import useShowTransitionDeprecated from '../../hooks/useShowTransitionDeprecated';
 
-// Workaround for incorrect bundling by Webpack: force including in the main chunk
-import '../ui/Modal.scss';
-import './Avatar.scss';
 import appStyles from '../App.module.scss';
 import styles from './UiLoader.module.scss';
 
@@ -58,6 +53,18 @@ const MAX_PRELOAD_DELAY = 700;
 const SECOND_STATE_DELAY = 1000;
 const AVATARS_TO_PRELOAD = 10;
 
+function loadRequiredBundle(page?: UiLoaderPage) {
+  if (page === 'main' || page === 'lock') {
+    return loadModule(Bundles.Main);
+  }
+
+  if (page === 'authCode' || page === 'authPassword') {
+    return loadModule(Bundles.Auth);
+  }
+
+  return Promise.resolve();
+}
+
 function preloadAvatars() {
   const { listIds, byId } = getGlobal().chats;
   if (!listIds.active) {
@@ -81,8 +88,7 @@ function preloadAvatars() {
 
 const preloadTasks = {
   main: () => Promise.all([
-    loadModule(Bundles.Main)
-      .then(preloadFonts),
+    preloadFonts(),
     preloadAvatars(),
     preloadImage(spoilerMaskPath),
     preloadImage(starIconPath),
@@ -103,14 +109,14 @@ const preloadTasks = {
   },
 };
 
-const UiLoader: FC<OwnProps & StateProps> = ({
+const UiLoader = ({
   page,
   children,
   isRightColumnShown,
   shouldSkipHistoryAnimations,
   leftColumnWidth,
   isFoldersSidebarShown,
-}) => {
+}: OwnProps & StateProps) => {
   const { setIsUiReady } = getActions();
 
   const [isReady, markReady] = useFlag();
@@ -121,17 +127,20 @@ const UiLoader: FC<OwnProps & StateProps> = ({
   useEffectOnce(() => {
     let timeout: number | undefined;
 
-    const safePreload = async () => {
+    const safePreload = async (currentPage: UiLoaderPage) => {
       try {
-        await preloadTasks[page!]();
+        await preloadTasks[currentPage]();
       } catch (err) {
         // Do nothing
       }
     };
 
-    Promise.race([
-      pause(MAX_PRELOAD_DELAY),
-      page ? safePreload() : Promise.resolve(),
+    Promise.all([
+      loadRequiredBundle(page),
+      Promise.race([
+        pause(MAX_PRELOAD_DELAY),
+        page ? safePreload(page) : Promise.resolve(),
+      ]),
     ]).then(() => {
       markReady();
       setIsUiReady({ uiReadyState: 1 });
@@ -163,7 +172,7 @@ const UiLoader: FC<OwnProps & StateProps> = ({
                 className={styles.left}
                 style={leftColumnWidth ? `width: ${leftColumnWidth}px` : undefined}
               />
-              <div className={buildClassName(styles.middle, appStyles.bg)} />
+              <div className={styles.middle} />
               {isRightColumnShown && <div className={styles.right} />}
             </div>
           ) : (page === 'inactive' || page === 'lock') ? (

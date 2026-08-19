@@ -23,7 +23,7 @@ import { buildApiInputPrivacyRules } from '../../helpers';
 import { addActionHandler, getGlobal, getPromiseActions, setGlobal } from '../../index';
 import {
   addBlockedUser, addNotifyExceptions, deletePeerPhoto,
-  removeBlockedUser, replaceSettings, updateChat,
+  removeBlockedUser, replacePersonalChannelIds, replaceSettings, updateChat,
   updateNotifyDefaults, updateSharedSettings, updateUser, updateUserFullInfo,
 } from '../../reducers';
 import { updateTabState } from '../../reducers/tabs';
@@ -35,7 +35,7 @@ import { selectSharedSettings } from '../../selectors/sharedState';
 
 addActionHandler('updateProfile', async (global, actions, payload): Promise<void> => {
   const {
-    photo, firstName, lastName, bio: about, username,
+    photo, firstName, lastName, bio: about, username, personalChannelId,
     tabId = getCurrentTabId(),
   } = payload;
 
@@ -91,6 +91,23 @@ addActionHandler('updateProfile', async (global, actions, payload): Promise<void
     }
   }
 
+  let isPersonalChannelUpdated = false;
+  if (personalChannelId !== undefined) {
+    global = getGlobal();
+    const personalChannel = personalChannelId ? selectChat(global, personalChannelId)! : undefined;
+    const result = await callApi('updatePersonalChannel', personalChannel);
+    if (result) {
+      global = getGlobal();
+      global = updateUserFullInfo(global, currentUserId, {
+        personalChannelId: personalChannelId || undefined,
+        personalChannelMessageId: undefined,
+      });
+      setGlobal(global);
+
+      isPersonalChannelUpdated = true;
+    }
+  }
+
   global = getGlobal();
   global = updateTabState(global, {
     profileEdit: {
@@ -99,9 +116,18 @@ addActionHandler('updateProfile', async (global, actions, payload): Promise<void
   }, tabId);
   setGlobal(global);
 
-  if (photo) {
-    actions.loadFullUser({ userId: currentUserId, withPhotos: true });
+  if (photo || isPersonalChannelUpdated) {
+    actions.loadFullUser({ userId: currentUserId, withPhotos: photo ? true : undefined });
   }
+});
+
+addActionHandler('loadPersonalChannels', async (global): Promise<void> => {
+  const personalChannelIds = await callApi('fetchAdminedPersonalChannelIds');
+  if (!personalChannelIds) return;
+
+  global = getGlobal();
+  global = replacePersonalChannelIds(global, personalChannelIds);
+  setGlobal(global);
 });
 
 addActionHandler('updateBirthday', async (global, actions, payload): Promise<void> => {
@@ -237,7 +263,7 @@ addActionHandler('uploadWallpaper', async (global, actions, payload): Promise<vo
   }
 
   const firstWallpaper = global.settings.loadedWallpapers[0];
-  if (!firstWallpaper || firstWallpaper.slug !== UPLOADING_WALLPAPER_SLUG) {
+  if (!firstWallpaper || firstWallpaper.slug !== UPLOADING_WALLPAPER_SLUG || !wallpaper.document) {
     return;
   }
 
@@ -769,6 +795,25 @@ addActionHandler('loadGlobalPrivacySettings', async (global): Promise<void> => {
 
   global = getGlobal();
   global = replaceSettings(global, { ...globalSettings });
+  setGlobal(global);
+});
+
+addActionHandler('loadDefaultHistoryTtl', async (global): Promise<void> => {
+  const defaultHistoryTtl = await callApi('fetchDefaultHistoryTtl');
+  if (defaultHistoryTtl === undefined) return;
+
+  global = getGlobal();
+  global = replaceSettings(global, { defaultHistoryTtl });
+  setGlobal(global);
+});
+
+addActionHandler('setDefaultHistoryTtl', async (global, _actions, payload): Promise<void> => {
+  const { period } = payload;
+  const result = await callApi('setDefaultHistoryTtl', { period });
+  if (!result) return;
+
+  global = getGlobal();
+  global = replaceSettings(global, { defaultHistoryTtl: period });
   setGlobal(global);
 });
 

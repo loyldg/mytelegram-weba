@@ -19,12 +19,14 @@ import MenuItem from '../../ui/MenuItem';
 type OwnProps = {
   currentScreen: SettingsScreens;
   editedFolderId?: number;
+  hasProfileBackground?: boolean;
   onReset: () => void;
 };
 
 const SettingsHeader: FC<OwnProps> = ({
   currentScreen,
   editedFolderId,
+  hasProfileBackground,
   onReset,
 }) => {
   const {
@@ -93,6 +95,8 @@ const SettingsHeader: FC<OwnProps> = ({
         return <h3>{oldLang('DataSettings')}</h3>;
       case SettingsScreens.Privacy:
         return <h3>{oldLang('PrivacySettings')}</h3>;
+      case SettingsScreens.AutoDeleteMessages:
+        return <h3>{lang('AutoDeleteMessages')}</h3>;
       case SettingsScreens.Language:
         return <h3>{oldLang('Language')}</h3>;
       case SettingsScreens.DoNotTranslate:
@@ -286,7 +290,9 @@ const SettingsHeader: FC<OwnProps> = ({
   }
 
   return (
-    <div className="left-header">
+    <div className={hasProfileBackground && currentScreen === SettingsScreens.Main
+      ? 'left-header' : 'left-header secondary'}
+    >
       <Button
         round
         size="smaller"

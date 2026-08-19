@@ -1,5 +1,5 @@
 import type { MouseEvent as ReactMouseEvent } from 'react';
-import type { TeactNode } from '../../lib/teact/teact';
+import type { ElementRef, TeactNode } from '../../lib/teact/teact';
 import { memo, useMemo, useRef } from '../../lib/teact/teact';
 import { getActions } from '../../global';
 
@@ -20,6 +20,7 @@ import {
   getVideoProfilePhotoMediaHash,
   getWebDocumentHash,
   isAnonymousForwardsChat,
+  isChatCommunity,
   isChatWithRepliesBot,
   isDeletedUser,
 } from '../../global/helpers';
@@ -65,6 +66,7 @@ cn.media = cn('media');
 cn.icon = cn('icon');
 
 type OwnProps = {
+  containerRef?: ElementRef<HTMLDivElement>;
   className?: string;
   style?: string;
   size?: AvatarSize;
@@ -79,6 +81,7 @@ type OwnProps = {
   withStory?: boolean;
   forPremiumPromo?: boolean;
   withStoryGap?: boolean;
+  storyGapPercent?: number;
   withStorySolid?: boolean;
   storyColors?: string[];
   forceFriendStorySolid?: boolean;
@@ -93,9 +96,11 @@ type OwnProps = {
   onClick?: (e: ReactMouseEvent<HTMLDivElement, MouseEvent>, hasMedia: boolean) => void;
   onContextMenu?: (e: React.MouseEvent) => void;
   onMouseMove?: (e: React.MouseEvent) => void;
+  onLoad?: NoneToVoidFunction;
 };
 
 const Avatar = ({
+  containerRef,
   className,
   style,
   size = 'large',
@@ -110,6 +115,7 @@ const Avatar = ({
   withStory,
   forPremiumPromo,
   withStoryGap,
+  storyGapPercent,
   withStorySolid,
   storyColors,
   forceFriendStorySolid,
@@ -123,10 +129,10 @@ const Avatar = ({
   onClick,
   onContextMenu,
   onMouseMove,
+  onLoad,
 }: OwnProps) => {
   const { openStoryViewer } = getActions();
 
-  const ref = useRef<HTMLDivElement>();
   const videoLoopCountRef = useRef(0);
   const isCustomPeer = peer && 'isCustomPeer' in peer;
   const realPeer = peer && !isCustomPeer ? peer : undefined;
@@ -136,6 +142,7 @@ const Avatar = ({
   const isReplies = realPeer && isChatWithRepliesBot(realPeer.id);
   const isAnonymousForwards = realPeer && isAnonymousForwardsChat(realPeer.id);
   const isForum = chat?.isForum;
+  const isCommunity = Boolean(chat && isChatCommunity(chat));
 
   const peerColorKey = getPeerColorKey(peer, true);
   const peerColorClass = peerColorKey !== undefined ? getPeerColorClass(peerColorKey) : undefined;
@@ -232,6 +239,7 @@ const Avatar = ({
           alt={author}
           decoding="async"
           draggable={false}
+          onLoad={onLoad}
         />
         {shouldPlayVideo && (
           <OptimizedVideo
@@ -263,6 +271,7 @@ const Avatar = ({
   }
 
   const isRoundedRect = (isCustomPeer && peer.isAvatarSquare)
+    || isCommunity
     || (isForum && !((withStory || withStorySolid) && realPeer?.hasStories));
   const isPremiumGradient = isCustomPeer && peer.withPremiumGradient;
   const customColor = isCustomPeer && peer.customPeerAvatarColor;
@@ -279,6 +288,7 @@ const Avatar = ({
     isReplies && 'replies-bot-account',
     isPremiumGradient && 'premium-gradient-bg',
     isRoundedRect && 'forum',
+    isCommunity && 'community',
     asMessageBubble && 'message-bubble',
     (photo || webPhoto) && 'force-fit',
     ((withStory && realPeer?.hasStories) || forPremiumPromo) && 'with-story-circle',
@@ -316,7 +326,7 @@ const Avatar = ({
 
   return (
     <div
-      ref={ref}
+      ref={containerRef}
       className={fullClassName}
       id={realPeer?.id && withStory ? getPeerStoryHtmlId(realPeer.id) : undefined}
       data-peer-id={realPeer?.id}
@@ -338,6 +348,7 @@ const Avatar = ({
           peerId={realPeer.id}
           size={pxSize}
           withExtraGap={withStoryGap}
+          extraGapPercent={storyGapPercent}
           colors={storyColors}
           style={storyCircleStyle}
         />

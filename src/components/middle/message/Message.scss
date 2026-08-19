@@ -154,6 +154,10 @@
       padding-left: 0;
     }
 
+    &.has-guest-avatar {
+      padding-left: 2.5rem;
+    }
+
     &.first-in-group:not(.last-in-group) {
       --border-bottom-left-radius: var(--border-radius-messages-small);
     }
@@ -181,6 +185,10 @@
       .no-avatars &,
       &.is-thread-top {
         padding-left: 0.25rem;
+      }
+
+      &.has-guest-avatar {
+        padding-left: 2.875rem;
       }
     }
   }
@@ -468,7 +476,6 @@
   }
 
   .album-item-select-wrapper {
-    position: absolute;
     .Message.own & {
       background: var(--color-background-own);
     }
@@ -511,6 +518,8 @@
 
   &.is-in-document-group {
     .message-content.document {
+      --surface-breakout-margin: -0.5rem;
+
       padding: 0.25rem 0.5rem !important;
     }
 
@@ -745,7 +754,7 @@
 
   .message-action-button-sticky {
     position: sticky;
-    top: 0.5rem;
+    top: calc(var(--middle-header-gap) + var(--message-list-top-inset, var(--middle-header-panes-height)));
   }
 
   .message-action-buttons {
@@ -801,17 +810,6 @@
     visibility: hidden;
   }
 
-  .top-marker {
-    position: absolute;
-    top: 0;
-    left: 0;
-
-    width: 1px;
-    height: 1px;
-
-    visibility: hidden;
-  }
-
   .giveaway-result-content {
     min-width: 17rem;
   }
@@ -828,11 +826,7 @@
 // Border-radius styles
 .message-content,
 .Album,
-.media-inner,
-.message-content.media .media-inner img,
-.message-content.media .media-inner video,
-.message-content.custom-shape .media-inner img,
-.message-content.custom-shape .media-inner video {
+.media-inner {
   border-top-left-radius: var(--border-top-left-radius);
   border-top-right-radius: var(--border-top-right-radius);
   border-bottom-right-radius: var(--border-bottom-right-radius);

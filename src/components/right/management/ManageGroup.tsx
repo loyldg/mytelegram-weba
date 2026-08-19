@@ -17,7 +17,9 @@ import {
   isChatBasicGroup,
   isChatPublic,
 } from '../../../global/helpers';
-import { selectChat, selectChatFullInfo, selectIsChatRestricted, selectTabState } from '../../../global/selectors';
+import {
+  selectCanBanUsers, selectChat, selectChatFullInfo, selectIsChatRestricted, selectTabState,
+} from '../../../global/selectors';
 import { debounce } from '../../../util/schedulers';
 import { formatInteger } from '../../../util/textFormat';
 import renderText from '../../common/helpers/renderText';
@@ -28,13 +30,14 @@ import useLastCallback from '../../../hooks/useLastCallback';
 import useMedia from '../../../hooks/useMedia';
 import useOldLang from '../../../hooks/useOldLang';
 
+import Island, { IslandDescription } from '../../gili/layout/Island';
+import Switch from '../../gili/primitives/Switch';
 import AvatarEditable from '../../ui/AvatarEditable';
 import Checkbox from '../../ui/Checkbox';
 import ConfirmDialog from '../../ui/ConfirmDialog';
 import FloatingActionButton from '../../ui/FloatingActionButton';
 import InputText from '../../ui/InputText';
 import ListItem from '../../ui/ListItem';
-import Switcher from '../../ui/Switcher';
 import TextArea from '../../ui/TextArea';
 
 import './Management.scss';
@@ -320,13 +323,13 @@ const ManageGroup: FC<OwnProps & StateProps> = ({
   return (
     <div className="Management">
       <div className="panel-content custom-scroll">
-        <div className="section">
-          <AvatarEditable
-            isForForum={isForumEnabled}
-            currentAvatarBlobUrl={currentAvatarBlobUrl}
-            onChange={handleSetPhoto}
-            disabled={!canChangeInfo}
-          />
+        <AvatarEditable
+          isForForum={isForumEnabled}
+          currentAvatarBlobUrl={currentAvatarBlobUrl}
+          onChange={handleSetPhoto}
+          disabled={!canChangeInfo}
+        />
+        <Island>
           <div className="settings-edit">
             <InputText
               id="group-title"
@@ -424,18 +427,16 @@ const ManageGroup: FC<OwnProps & StateProps> = ({
             <>
               <ListItem icon="forums" ripple onClick={handleForumToggle}>
                 <span>{lang('ChannelTopics')}</span>
-                <Switcher
+                <Switch
                   id="group-notifications"
-                  label={lang('ChannelTopics')}
-                  checked={isForumEnabled}
-                  inactive
+                  checked={Boolean(isForumEnabled)}
                 />
               </ListItem>
-              <div className="section-info section-info_push">{lang('ForumToggleDescription')}</div>
+              <IslandDescription>{lang('ForumToggleDescription')}</IslandDescription>
             </>
           )}
-        </div>
-        <div className="section">
+        </Island>
+        <Island>
           <ListItem icon="group" multiline onClick={handleClickMembers}>
             <span className="title">{lang('GroupMembers')}</span>
             <span className="subtitle">{formatInteger(chat.membersCount ?? 0)}</span>
@@ -455,12 +456,12 @@ const ManageGroup: FC<OwnProps & StateProps> = ({
               />
             </div>
           )}
-        </div>
-        <div className="section">
+        </Island>
+        <Island>
           <ListItem icon="delete" ripple destructive onClick={openDeleteDialog}>
             {lang('DeleteMega')}
           </ListItem>
-        </div>
+        </Island>
       </div>
       <FloatingActionButton
         isShown={isProfileFieldsTouched}
@@ -498,7 +499,7 @@ export default memo(withGlobal<OwnProps>(
     const { invites } = management.byChatId[chatId] || {};
     const canEditForum = !hasLinkedChannel && (getHasAdminRight(chat, 'changeInfo') || chat.isCreator);
     const canChangeInfo = chat.isCreator || getHasAdminRight(chat, 'changeInfo');
-    const canBanUsers = chat.isCreator || getHasAdminRight(chat, 'banUsers');
+    const canBanUsers = selectCanBanUsers(global, chatId);
     const canInvite = chat.isCreator || getHasAdminRight(chat, 'inviteUsers');
 
     return {

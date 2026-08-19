@@ -8,13 +8,14 @@ import type { ApiSession } from '../../../api/types';
 import type { GlobalState } from '../../../global/types';
 
 import { formatPastTimeShort } from '../../../util/dates/oldDateFormat';
-import getSessionIcon from './helpers/getSessionIcon';
+import getSessionIcon, { DEVICE_BACKDROP } from './helpers/getSessionIcon';
 
 import useFlag from '../../../hooks/useFlag';
 import useHistoryBack from '../../../hooks/useHistoryBack';
 import useLang from '../../../hooks/useLang';
 import useOldLang from '../../../hooks/useOldLang';
 
+import Island, { IslandTitle } from '../../gili/layout/Island';
 import ConfirmDialog from '../../ui/ConfirmDialog';
 import ListItem from '../../ui/ListItem';
 import RadioGroup from '../../ui/RadioGroup';
@@ -140,82 +141,93 @@ const SettingsActiveSessions: FC<OwnProps & StateProps> = ({
   });
 
   function renderCurrentSession(session: ApiSession) {
+    const { icon, color } = DEVICE_BACKDROP[getSessionIcon(session)];
+
     return (
-      <div className="settings-item">
-        <h4 className="settings-item-header" dir={lang.isRtl ? 'rtl' : undefined}>
+      <>
+        <IslandTitle dir={lang.isRtl ? 'rtl' : undefined}>
           {lang('AuthSessionsCurrentSession')}
-        </h4>
-
-        <ListItem narrow inactive icon={`device-${getSessionIcon(session)}`} iconClassName="icon-device">
-          <div className="multiline-item full-size" dir="auto">
-            <span className="title" dir="auto">{session.deviceModel}</span>
-            <span className="subtitle black tight">
-              {session.appName}
-              {' '}
-              {session.appVersion}
-              ,
-              {' '}
-              {session.platform}
-              {' '}
-              {session.systemVersion}
-            </span>
-            <span className="subtitle">
-              {session.ip}
-              {' '}
-              -
-              {' '}
-              {getLocation(session)}
-            </span>
-          </div>
-        </ListItem>
-
-        {hasOtherSessions && (
+        </IslandTitle>
+        <Island>
           <ListItem
-            className="destructive mb-0 no-icon"
-            icon="stop"
-            ripple
             narrow
-            onClick={openConfirmTerminateAllDialog}
+            inactive
+            icon={icon}
+            iconBg={color}
           >
-            {lang('TerminateAllSessions')}
+            <div className="multiline-item full-size" dir="auto">
+              <span className="title" dir="auto">{session.deviceModel}</span>
+              <span className="subtitle black tight">
+                {session.appName}
+                {' '}
+                {session.appVersion}
+                ,
+                {' '}
+                {session.platform}
+                {' '}
+                {session.systemVersion}
+              </span>
+              <span className="subtitle">
+                {session.ip}
+                {' '}
+                -
+                {' '}
+                {getLocation(session)}
+              </span>
+            </div>
           </ListItem>
-        )}
-      </div>
+
+          {hasOtherSessions && (
+            <ListItem
+              className="destructive mb-0 no-icon"
+              icon="stop"
+              ripple
+              narrow
+              onClick={openConfirmTerminateAllDialog}
+            >
+              {lang('TerminateAllSessions')}
+            </ListItem>
+          )}
+        </Island>
+      </>
     );
   }
 
   function renderOtherSessions(sessionHashes: string[]) {
     return (
-      <div className="settings-item">
-        <h4 className="settings-item-header" dir={lang.isRtl ? 'rtl' : undefined}>
+      <>
+        <IslandTitle dir={lang.isRtl ? 'rtl' : undefined}>
           {lang('OtherSessions')}
-        </h4>
-
-        {sessionHashes.map(renderSession)}
-      </div>
+        </IslandTitle>
+        <Island>
+          {sessionHashes.map(renderSession)}
+        </Island>
+      </>
     );
   }
 
   function renderAutoTerminate() {
     return (
-      <div className="settings-item">
-        <h4 className="settings-item-header" dir={lang.isRtl ? 'rtl' : undefined}>
+      <>
+        <IslandTitle dir={lang.isRtl ? 'rtl' : undefined}>
           {lang('TerminateOldSessionHeader')}
-        </h4>
-
-        <p className="settings-item-description-larger">{lang('IfInactiveFor')}</p>
-        <RadioGroup
-          name="session_ttl"
-          options={AUTO_TERMINATE_OPTIONS}
-          selected={autoTerminateValue}
-          onChange={handleChangeSessionTtl}
-        />
-      </div>
+        </IslandTitle>
+        <Island>
+          <p className="settings-item-description-larger">{lang('IfInactiveFor')}</p>
+          <RadioGroup
+            name="session_ttl"
+            options={AUTO_TERMINATE_OPTIONS}
+            selected={autoTerminateValue}
+            onChange={handleChangeSessionTtl}
+          />
+        </Island>
+      </>
     );
   }
 
   function renderSession(sessionHash: string) {
     const session = byHash[sessionHash];
+    const { icon, color } = DEVICE_BACKDROP[getSessionIcon(session)];
 
     return (
       <ListItem
@@ -230,13 +242,15 @@ const SettingsActiveSessions: FC<OwnProps & StateProps> = ({
             handleTerminateSessionClick(session.hash);
           },
         }]}
-        icon={`device-${getSessionIcon(session)}`}
-        iconClassName="icon-device"
+        icon={icon}
+        iconBg={color}
         onClick={() => { handleOpenSessionModal(session.hash); }}
       >
         <div className="multiline-item full-size" dir="auto">
-          <span className="date">{formatPastTimeShort(oldLang, session.dateActive * 1000)}</span>
-          <span className="title">{session.deviceModel}</span>
+          <span className="title title-with-date">
+            {session.deviceModel}
+            <span className="date">{formatPastTimeShort(oldLang, session.dateActive * 1000)}</span>
+          </span>
           <span className="subtitle black tight">
             {session.appName}
             {' '}

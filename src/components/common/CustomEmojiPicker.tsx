@@ -60,6 +60,7 @@ type OwnProps = {
   chatId?: string;
   className?: string;
   pickerListClassName?: string;
+  pickerListStyle?: string;
   isHidden?: boolean;
   loadAndPlay: boolean;
   idPrefix?: string;
@@ -68,6 +69,7 @@ type OwnProps = {
   isStatusPicker?: boolean;
   isReactionPicker?: boolean;
   isTranslucent?: boolean;
+  noAddButton?: boolean;
   onCustomEmojiSelect: (sticker: ApiSticker) => void;
   onReactionSelect?: (reaction: ApiReactionWithPaid) => void;
   onReactionContext?: (reaction: ApiReactionWithPaid) => void;
@@ -111,6 +113,7 @@ const STICKER_SET_IDS_WITH_COVER = new Set([
 const CustomEmojiPicker: FC<OwnProps & StateProps> = ({
   className,
   pickerListClassName,
+  pickerListStyle,
   isHidden,
   loadAndPlay,
   addedCustomEmojiIds,
@@ -130,6 +133,7 @@ const CustomEmojiPicker: FC<OwnProps & StateProps> = ({
   isReactionPicker,
   isStatusPicker,
   isTranslucent,
+  noAddButton,
   isSavedMessages,
   isCurrentUserPremium,
   withDefaultTopicIcons,
@@ -431,6 +435,7 @@ const CustomEmojiPicker: FC<OwnProps & StateProps> = ({
             ref={containerRef}
             onScroll={handleContentScroll}
             className={listClassName}
+            style={pickerListStyle}
           >
             {allSets.map((stickerSet, i) => {
               const shouldHideHeader = stickerSet.id === TOP_SYMBOL_SET_ID
@@ -451,6 +456,7 @@ const CustomEmojiPicker: FC<OwnProps & StateProps> = ({
                   isSavedMessages={isSavedMessages}
                   isStatusPicker={isStatusPicker}
                   isReactionPicker={isReactionPicker}
+                  noAddButton={noAddButton}
                   shouldHideHeader={shouldHideHeader}
                   withDefaultTopicIcon={withDefaultTopicIcons && stickerSet.id === RECENT_SYMBOL_SET_ID}
                   withDefaultStatusIcon={isStatusPicker && stickerSet.id === RECENT_SYMBOL_SET_ID}

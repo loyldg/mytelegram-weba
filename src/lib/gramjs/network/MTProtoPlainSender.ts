@@ -2,16 +2,20 @@
  *  This module contains the class used to communicate with Telegram's servers
  *  in plain text, when no authorization key has been created yet.
  */
-
 import type { Logger } from '../extensions';
 import type { Api } from '../tl';
 import type { Connection } from './connection';
 
+import { concat, writeInt32LE } from '../../../util/encoding/buffer';
 import { BinaryReader } from '../extensions';
 
 import { InvalidBufferError } from '../errors/Common';
 import { toSignedLittleBuffer } from '../Helpers';
 import MTProtoState from './MTProtoState';
+
+const MAX_PLAIN_MESSAGE_BODY_LENGTH = 64 * 1024;
+const PLAIN_MESSAGE_HEADER_LENGTH = 20;
+const TL_ALIGNMENT = 4;
 
 /**
  * MTProto Mobile Protocol plain sender (https://core.telegram.org/mtproto/description#unencrypted-messages)
@@ -40,14 +44,17 @@ export default class MTProtoPlainSender {
     let body = request.getBytes();
     let msgId = this._state._getNewMsgId();
     const m = toSignedLittleBuffer(msgId, 8);
-    const b = Buffer.alloc(4);
-    b.writeInt32LE(body.length, 0);
+    const b = new Uint8Array(4);
+    writeInt32LE(b, body.length);
 
-    const res = Buffer.concat([Buffer.concat([Buffer.alloc(8), m, b]), body]);
+    const res = concat(new Uint8Array(8), m, b, body);
 
     await this._connection.send(res);
-    body = await this._connection.recv();
-    if (body.length < 8) {
+    body = new Uint8Array(await this._connection.recv());
+    if (
+      body.length < PLAIN_MESSAGE_HEADER_LENGTH
+      || body.length > PLAIN_MESSAGE_HEADER_LENGTH + MAX_PLAIN_MESSAGE_BODY_LENGTH
+    ) {
       throw new InvalidBufferError(body);
     }
     const reader = new BinaryReader(body);
@@ -66,14 +73,21 @@ export default class MTProtoPlainSender {
          */
 
     const length = reader.readInt();
-    if (length <= 0) {
+    // Plain auth responses must exactly match their declared aligned body
+    // https://core.telegram.org/mtproto/description#unencrypted-messages
+    if (
+      length <= 0
+      || length % TL_ALIGNMENT !== 0
+      || length > MAX_PLAIN_MESSAGE_BODY_LENGTH
+      || body.length !== PLAIN_MESSAGE_HEADER_LENGTH + length
+    ) {
       throw new Error('Bad length');
     }
-    /**
-         * We could read length bytes and use those in a new reader to read
-         * the next TLObject without including the padding, but since the
-         * reader isn't used for anything else after this, it's unnecessary.
-         */
-    return reader.tgReadObject();
+
+    const messageReader = new BinaryReader(reader.read(length));
+    const response = messageReader.tgReadObject();
+    if (messageReader.tellPosition() !== length) throw new Error('Bad length');
+
+    return response;
   }
 }

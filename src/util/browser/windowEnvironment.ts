@@ -1,4 +1,6 @@
-import { IS_TEST, PRODUCTION_HOSTNAME } from '../../config';
+import {
+  IS_TEST, PRODUCTION_HOSTNAME, SVG_NAMESPACE, VIDEO_RECORDING_MIME_TYPE,
+} from '../../config';
 import { IS_TAURI } from './globalEnvironment';
 
 export function getPlatform() {
@@ -62,6 +64,15 @@ export const IS_VOICE_RECORDING_SUPPORTED = Boolean(
     window.AudioContext || (window as any).webkitAudioContext
   ),
 );
+export const IS_VIDEO_RECORDING_SUPPORTED = Boolean(
+  window.navigator.mediaDevices && 'getUserMedia' in window.navigator.mediaDevices
+  && typeof MediaRecorder !== 'undefined'
+  && 'captureStream' in HTMLCanvasElement.prototype
+  // WebKit (Safari and all iOS browsers) canvas.captureStream produces invalid frames / can hang on stop
+  && !IS_SAFARI && !IS_IOS
+  && (MediaRecorder.isTypeSupported(VIDEO_RECORDING_MIME_TYPE)
+    || MediaRecorder.isTypeSupported('video/mp4')),
+);
 export const IS_EMOJI_SUPPORTED = PLATFORM_ENV && (IS_MAC_OS || IS_IOS) && isLastEmojiVersionSupported();
 
 export const IS_SERVICE_WORKER_SUPPORTED = 'serviceWorker' in navigator;
@@ -73,11 +84,13 @@ export const IS_CANVAS_FILTER_SUPPORTED = (
   !IS_TEST && 'filter' in (document.createElement('canvas').getContext('2d') || {})
 );
 export const IS_REQUEST_FULLSCREEN_SUPPORTED = 'requestFullscreen' in document.createElement('div');
-export const ARE_CALLS_SUPPORTED = true;
+export const ARE_CALLS_SUPPORTED = !IS_FIREFOX;
 
 export const IS_WAVE_TRANSFORM_SUPPORTED = !IS_MOBILE
   && !IS_FIREFOX // https://bugzilla.mozilla.org/show_bug.cgi?id=1961378
   && !IS_SAFARI; // https://bugs.webkit.org/show_bug.cgi?id=245510
+export const IS_TUCK_SUPPORTED = !IS_MOBILE && !IS_SAFARI;
+export const IS_SVG_CALC_SUPPORTED = checkSvgFilterCalcSupport();
 export const IS_SNAP_EFFECT_SUPPORTED = !IS_MOBILE
   && !IS_FIREFOX // https://bugzilla.mozilla.org/show_bug.cgi?id=1896504
   && !IS_SAFARI;
@@ -144,6 +157,29 @@ function isLastEmojiVersionSupported() {
   document.body.removeChild(inlineEl);
 
   return Math.abs(newEmojiWidth - legacyEmojiWidth) < ALLOWABLE_CALCULATION_ERROR_SIZE;
+}
+
+function checkSvgFilterCalcSupport() {
+  const SVG_FILTER_CALC_TEST_VALUE = 'calc(100% - 1px)';
+
+  const svg = document.createElementNS(SVG_NAMESPACE, 'svg');
+  const filter = document.createElementNS(SVG_NAMESPACE, 'filter');
+  const testPrimitive = document.createElementNS(SVG_NAMESPACE, 'feFlood');
+
+  svg.setAttribute('width', '0');
+  svg.setAttribute('height', '0');
+  testPrimitive.setAttribute('y', SVG_FILTER_CALC_TEST_VALUE);
+  filter.appendChild(testPrimitive);
+  svg.appendChild(filter);
+
+  try {
+    document.body.appendChild(svg);
+    return testPrimitive.y.baseVal.valueAsString === SVG_FILTER_CALC_TEST_VALUE;
+  } catch {
+    return false;
+  } finally {
+    svg.remove();
+  }
 }
 
 export const IS_GEOLOCATION_SUPPORTED = 'geolocation' in navigator;

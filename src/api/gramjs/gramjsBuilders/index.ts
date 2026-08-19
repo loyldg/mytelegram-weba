@@ -2,6 +2,8 @@ import { Api as GramJs } from '../../../lib/gramjs';
 import { generateRandomBigInt, generateRandomBytes, readBigIntFromBuffer } from '../../../lib/gramjs/Helpers';
 
 import type {
+  ApiAudio,
+  ApiBirthday,
   ApiBotApp,
   ApiChatAdminRights,
   ApiChatBannedRights,
@@ -12,6 +14,7 @@ import type {
   ApiEmojiStatusType,
   ApiFormattedText,
   ApiGroupCall,
+  ApiInputAiComposeTone,
   ApiInputPrivacyRules,
   ApiInputReplyInfo,
   ApiInputStorePaymentPurpose,
@@ -44,9 +47,13 @@ import {
 } from '../../types';
 
 import { CHANNEL_ID_BASE, DEFAULT_STATUS_ICON_ID, STARS_CURRENCY_CODE } from '../../../config';
+import { writeUint32LE } from '../../../util/encoding/buffer';
 import { pick } from '../../../util/iteratees';
+import { getMtpEphemeralMessageId } from '../../../util/keys/messageKey';
 import { deserializeBytes } from '../helpers/misc';
 import localDb from '../localDb';
+
+export { buildInputRichMessage } from './richContent';
 
 export const DEFAULT_PRIMITIVES = {
   INT: 0,
@@ -186,7 +193,7 @@ export function buildInputStickerSetShortName(shortName: string) {
   });
 }
 
-export function buildInputDocument(media: ApiSticker | ApiVideo | ApiDocument) {
+export function buildInputDocument(media: ApiAudio | ApiSticker | ApiVideo | ApiDocument) {
   if (!media.id) {
     return undefined;
   }
@@ -235,18 +242,26 @@ export function buildInputPoll(
       });
     }),
     quiz: poll.isQuiz,
+    closeDate: poll.closeDate,
+    closePeriod: poll.closePeriod,
+    hideResultsUntilClose: poll.shouldHideResultsUntilClose,
+    revotingDisabled: poll.isRevoteDisabled,
+    shuffleAnswers: poll.shouldShuffleAnswers,
+    subscribersOnly: poll.isRestrictedToSubscribers,
+    countriesIso2: poll.allowedCountryCodes,
+    openAnswers: poll.canAddAnswers,
     multipleChoice: poll.isMultipleChoice,
     hash: DEFAULT_PRIMITIVES.BIGINT,
   });
 
-  const inputSolutionEntities = solutionEntities?.map(buildMtpMessageEntity);
+  const inputSolutionEntities = solutionEntities?.map(buildMtpMessageEntity) || [];
 
   return new GramJs.InputMediaPoll({
     poll: inputPoll,
     correctAnswers,
     attachedMedia: media?.attachedMedia,
     solution,
-    solutionEntities: inputSolutionEntities,
+    solutionEntities: solution !== undefined ? inputSolutionEntities : undefined,
     solutionMedia: media?.solutionMedia,
   });
 }
@@ -269,6 +284,8 @@ export function buildInputPollFromExisting(poll: ApiMessagePoll, shouldClose = f
       closePeriod: poll.summary.closePeriod,
       closed: shouldClose ? true : poll.summary.isClosed,
       creator: poll.summary.isCreator,
+      subscribersOnly: poll.summary.isRestrictedToSubscribers,
+      countriesIso2: poll.summary.allowedCountryCodes,
       revotingDisabled: poll.summary.isRevoteDisabled,
       shuffleAnswers: poll.summary.shouldShuffleAnswers,
       hideResultsUntilClose: poll.summary.shouldHideResultsUntilClose,
@@ -451,8 +468,8 @@ export function buildInputStory(story: ApiStory | ApiStorySkipped) {
 export function generateRandomTimestampedBigInt() {
   // 32 bits for timestamp, 32 bits are random
   const buffer = generateRandomBytes(8);
-  const timestampBuffer = Buffer.allocUnsafe(4);
-  timestampBuffer.writeUInt32LE(Math.floor(Date.now() / 1000), 0);
+  const timestampBuffer = new Uint8Array(4);
+  writeUint32LE(timestampBuffer, Math.floor(Date.now() / 1000));
   buffer.set(timestampBuffer, 4);
   return readBigIntFromBuffer(buffer, true, true);
 }
@@ -492,7 +509,11 @@ export function buildMtpMessageEntity(entity: ApiMessageEntity): GramJs.TypeMess
     case ApiMessageEntityTypes.Pre:
       return new GramJs.MessageEntityPre({ offset, length, language: entity.language || '' });
     case ApiMessageEntityTypes.Blockquote:
-      return new GramJs.MessageEntityBlockquote({ offset, length });
+      return new GramJs.MessageEntityBlockquote({
+        collapsed: entity.canCollapse ? true : undefined,
+        offset,
+        length,
+      });
     case ApiMessageEntityTypes.TextUrl:
       return new GramJs.MessageEntityTextUrl({ offset, length, url: entity.url });
     case ApiMessageEntityTypes.Url:
@@ -551,6 +572,14 @@ export function buildInputPhoto(photo: ApiPhoto) {
     'accessHash',
     'fileReference',
   ]));
+}
+
+export function buildInputBirthday(birthday: ApiBirthday) {
+  return new GramJs.Birthday({
+    day: birthday.day,
+    month: birthday.month,
+    year: birthday.year,
+  });
 }
 
 export function buildInputContact({
@@ -675,6 +704,8 @@ export function buildSendMessageAction(action: ApiSendMessageAction) {
       return new GramJs.SendMessageTypingAction();
     case 'recordAudio':
       return new GramJs.SendMessageRecordAudioAction();
+    case 'recordRound':
+      return new GramJs.SendMessageRecordRoundAction();
     case 'chooseSticker':
       return new GramJs.SendMessageChooseStickerAction();
     case 'playingGame':
@@ -977,6 +1008,17 @@ export function buildInputEmojiStatus(emojiStatus: ApiEmojiStatusType) {
   });
 }
 
+export function buildInputAiComposeTone(tone: ApiInputAiComposeTone): GramJs.TypeInputAiComposeTone {
+  switch (tone.type) {
+    case 'default':
+      return new GramJs.InputAiComposeToneDefault({ tone: tone.tone });
+    case 'id':
+      return new GramJs.InputAiComposeToneID({ id: BigInt(tone.id), accessHash: BigInt(tone.accessHash) });
+    case 'slug':
+      return new GramJs.InputAiComposeToneSlug({ slug: tone.slug });
+  }
+}
+
 export function buildInputTextWithEntities(formatted: ApiFormattedText) {
   return new GramJs.TextWithEntities({
     text: formatted.text,
@@ -996,6 +1038,12 @@ export function buildInputReplyTo(replyInfo: ApiInputReplyInfo) {
     return new GramJs.InputReplyToStory({
       peer: buildInputPeerFromLocalDb(replyInfo.peerId)!,
       storyId: replyInfo.storyId,
+    });
+  }
+
+  if (replyInfo.type === 'ephemeral') {
+    return new GramJs.InputReplyToEphemeralMessage({
+      id: getMtpEphemeralMessageId(replyInfo.replyToMsgId),
     });
   }
 

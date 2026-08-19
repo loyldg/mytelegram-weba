@@ -7,23 +7,25 @@ import type {
 } from './types';
 
 export const APP_CODE_NAME = 'A';
-export const APP_NAME = process.env.APP_NAME || `Telegram Web ${APP_CODE_NAME}`;
+export const APP_ENV = import.meta.env.TG_APP_ENV;
+export const APP_NAME = import.meta.env.TG_APP_NAME || `Telegram Web ${APP_CODE_NAME}`;
 
 export const PRODUCTION_HOSTNAME = 'web.telegram.org';
 export const PRODUCTION_URL = 'https://web.telegram.org/a';
 export const WEB_VERSION_BASE = 'https://web.telegram.org/'; // Used to redirect to other versions
-export const BASE_URL = process.env.BASE_URL;
+export const BASE_URL = import.meta.env.TG_PUBLIC_URL;
 export const ACCOUNT_QUERY = 'account';
 
-export const IS_MOCKED_CLIENT = process.env.APP_MOCKED_CLIENT === '1';
-export const IS_TEST = process.env.APP_ENV === 'test';
-export const IS_PERF = process.env.APP_ENV === 'perf';
-export const IS_BETA = process.env.APP_ENV === 'staging';
+export const IS_MOCKED_CLIENT = import.meta.env.TG_APP_MOCKED_CLIENT === '1';
+export const IS_TEST = APP_ENV === 'test';
+export const IS_PERF = APP_ENV === 'perf';
+export const IS_BETA = APP_ENV === 'staging';
 
 export const PAID_MESSAGES_PURPOSE = 'paid_messages';
 
-export const DEBUG = process.env.APP_ENV !== 'production';
+export const DEBUG = APP_ENV !== 'production';
 export const DEBUG_MORE = false;
+export const DEBUG_CALLS = false;
 export const DEBUG_LOG_FILENAME = 'tt-log.json';
 export const STRICTERDOM_ENABLED = DEBUG;
 export const FORCE_FALLBACK_LANG = DEBUG;
@@ -33,15 +35,17 @@ export const BETA_CHANGELOG_URL = 'https://telegra.ph/WebA-Beta-03-20';
 export const DEBUG_ALERT_MSG = 'Shoot!\nSomething went wrong, please see the error details in Dev Tools Console.';
 export const DEBUG_GRAMJS = false;
 
-export const PAGE_TITLE = process.env.APP_TITLE!;
+export const PAGE_TITLE = import.meta.env.TG_APP_TITLE;
 export const PAGE_TITLE_TAURI = 'Telegram Air';
 export const INACTIVE_MARKER = '[Inactive]';
+export const TELEGRAM_API_ID = Number(import.meta.env.TG_TELEGRAM_API_ID);
+export const TELEGRAM_API_HASH = import.meta.env.TG_TELEGRAM_API_HASH;
+export const TEST_SESSION = import.meta.env.TG_TEST_SESSION;
 
 export const DEBUG_PAYMENT_SMART_GLOCAL = false;
 
 export const SESSION_LEGACY_USER_KEY = 'user_auth';
 export const SESSION_ACCOUNT_PREFIX = 'account';
-export const LEGACY_PASSCODE_CACHE_NAME = 'tt-passcode';
 
 export const MULTIACCOUNT_MAX_SLOTS = 6;
 export const GLOBAL_STATE_CACHE_DISABLED = false;
@@ -141,6 +145,10 @@ export const ANIMATION_LEVEL_DEFAULT = ANIMATION_LEVEL_MED;
 export const DEFAULT_MESSAGE_TEXT_SIZE_PX = 16;
 export const IOS_DEFAULT_MESSAGE_TEXT_SIZE_PX = 17;
 export const MACOS_DEFAULT_MESSAGE_TEXT_SIZE_PX = 15;
+export const INSTANT_VIEW_FONT_SIZE_ADJUST_DEFAULT = 1;
+export const INSTANT_VIEW_FONT_SIZE_ADJUST_MIN = 0.5;
+export const INSTANT_VIEW_FONT_SIZE_ADJUST_MAX = 1.5;
+export const INSTANT_VIEW_FONT_SIZE_ADJUST_STEP = 0.1;
 
 export const NBSP = '\u00A0';
 export const NNBSP = '\u202F';
@@ -153,9 +161,18 @@ export const PREVIEW_AVATAR_COUNT = 3;
 
 export const DRAFT_DEBOUNCE = 10000; // 10s
 export const SEND_MESSAGE_ACTION_INTERVAL = 3000; // 3s
-// 10000s from https://corefork.telegram.org/api/url-authorization#automatic-authorization
+// 10000s from https://core.telegram.org/api/url-authorization#automatic-authorization
 export const APP_CONFIG_REFETCH_INTERVAL = 10000 * 1000;
 export const GENERAL_REFETCH_INTERVAL = 60 * 60 * 1000; // 1h
+
+// Round video message recording
+export const ROUND_VIDEO_RECORDING_SIZE = 400; // px, square output
+export const MAX_ROUND_VIDEO_RECORDING_DURATION = 60 * 1000; // ms
+export const MIN_ROUND_VIDEO_RECORDING_TIME = 1000; // ms, recordings shorter than this are discarded
+export const VIDEO_RECORDING_FILENAME = 'video.mp4';
+export const VIDEO_RECORDING_MIME_TYPE = 'video/mp4;codecs=avc1.42E01E,mp4a.40.2';
+export const ROUND_VIDEO_BITRATE = 1_200_000; // bps
+export const ROUND_AUDIO_BITRATE = 64_000; // bps
 
 export const EDITABLE_INPUT_ID = 'editable-message-text';
 export const EDITABLE_INPUT_MODAL_ID = 'editable-message-text-modal';
@@ -195,7 +212,6 @@ export const UNMUTE_TIMESTAMP = 0;
 export const ANIMATION_END_DELAY = 100;
 export const ANIMATION_WAVE_MIN_INTERVAL = 200;
 export const MESSAGE_APPEARANCE_DELAY = 10;
-export const PAID_SEND_DELAY = 5000;
 
 export const SCROLL_MIN_DURATION = 300;
 export const SCROLL_MAX_DURATION = 600;
@@ -251,8 +267,7 @@ export const DEFAULT_TOPIC_ICON_STICKER_ID = 'topic-default-icon';
 export const DEFAULT_STATUS_ICON_ID = 'status-default-icon';
 export const EMOJI_IMG_REGEX = /<img[^>]+alt="([^"]+)"(?![^>]*data-document-id)[^>]*>/gm;
 
-export const FALLBACK_LANG_CODE = 'en';
-export const BASE_EMOJI_KEYWORD_LANG = FALLBACK_LANG_CODE;
+export const BASE_EMOJI_KEYWORD_LANG = 'en';
 
 export const MENU_TRANSITION_DURATION = 200;
 export const SLIDE_TRANSITION_DURATION = 450;
@@ -320,7 +335,7 @@ export const SUPPORTED_TRANSLATION_LANGUAGES = [
 export const RE_LINK_TEMPLATE = '((ftp|https?):\\/\\/)?((www\\.)?[-a-zA-Z0-9@:%._+~#=]{1,256}\\.[a-zA-Z][-a-zA-Z0-9]{1,62})\\b([-a-zA-Z0-9()@:%_+.,~#?&/=]*)';
 export const RE_MENTION_TEMPLATE = '(@[\\w\\d_-]+)';
 export const RE_TG_LINK = /^tg:(\/\/)?/i;
-export const RE_TME_LINK = /^(https?:\/\/)?([-a-zA-Z0-9@:%_+~#=]{1,32}\.)?t\.me(?=[:/?#]|$)/i;
+export const RE_TME_LINK = /^(https?:\/\/)?(?:([-a-zA-Z0-9@:%_+~#=]{1,32}\.)?t\.me|telegram\.(?:me|dog))(?=[:/?#]|$)/i;
 export const RE_TELEGRAM_LINK = /^(https?:\/\/)?telegram\.org\//i;
 export const TME_LINK_PREFIX = 'https://t.me/';
 export const BOT_FATHER_USERNAME = 'botfather';
@@ -328,7 +343,9 @@ export const USERNAME_PURCHASE_ERROR = 'USERNAME_PURCHASE_AVAILABLE';
 export const MESSAGE_ID_REQUIRED_ERROR = 'MESSAGE_ID_REQUIRED';
 export const PURCHASE_USERNAME = 'auction';
 export const ACCEPTABLE_USERNAME_ERRORS = new Set([USERNAME_PURCHASE_ERROR, 'USERNAME_INVALID']);
-export const TME_WEB_DOMAINS = new Set(['t.me', 'web.t.me', 'a.t.me', 'k.t.me', 'z.t.me']);
+export const TME_WEB_DOMAINS = new Set([
+  't.me', 'telegram.me', 'telegram.dog', 'web.t.me', 'a.t.me', 'k.t.me', 'z.t.me',
+]);
 export const WEB_APP_PLATFORM = 'weba';
 export const LANG_PACK = 'weba';
 
@@ -367,7 +384,6 @@ export const FEEDBACK_URL = 'https://bugs.telegram.org/?tag_ids=41&sort=time';
 export const FAQ_URL = 'https://telegram.org/faq';
 export const PRIVACY_URL = 'https://telegram.org/privacy';
 export const MINI_APP_TOS_URL = 'https://telegram.org/tos/mini-apps';
-export const FRAGMENT_ADS_URL = 'https://fragment.com/ads';
 export const GENERAL_TOPIC_ID = 1;
 export const FRESH_AUTH_PERIOD = 86400; // 1 day
 export const GIVEAWAY_BOOST_PER_PREMIUM = 4;
@@ -378,10 +394,10 @@ export const FRAGMENT_PHONE_CODE = '888';
 export const FRAGMENT_PHONE_LENGTH = 11;
 export const BOT_VERIFICATION_PEERS_LIMIT = 20;
 
+export const CALL_PROTOCOL_LIBRARY_VERSIONS = ['13.0.0'];
+
 export const LIGHT_THEME_BG_COLOR = '#99BA92';
 export const DARK_THEME_BG_COLOR = '#000000';
-export const DEFAULT_PATTERN_COLOR = '#4A8E3A8C';
-export const DARK_THEME_PATTERN_COLOR = '#48576166';
 export const PEER_COLOR_BG_OPACITY = '1a';
 export const PEER_COLOR_BG_ACTIVE_OPACITY = '2b';
 export const PEER_COLOR_GRADIENT_STEP = 5; // px
@@ -396,6 +412,7 @@ export const GROUP_CALL_VOLUME_MULTIPLIER = 100;
 export const GROUP_CALL_DEFAULT_VOLUME = 100 * GROUP_CALL_VOLUME_MULTIPLIER;
 
 export const ONE_TIME_MEDIA_TTL_SECONDS = 2147483647;
+export const EPHEMERAL_MESSAGE_TTL_SECONDS = 48 * 60 * 60;
 
 // Premium
 export const PREMIUM_FEATURE_SECTIONS = [
@@ -418,6 +435,7 @@ export const PREMIUM_FEATURE_SECTIONS = [
   'message_privacy',
   'effects',
   'ai_compose',
+  'rich_formatting',
   'todo',
   'pm_noforwards',
 ] as const;

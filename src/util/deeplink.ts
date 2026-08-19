@@ -1,6 +1,8 @@
 import { getActions } from '../global';
 
-import type { ApiChatType, ApiFormattedText, LinkContext } from '../api/types';
+import type {
+  ApiChatType, ApiFormattedText, LinkContext,
+} from '../api/types';
 import type { DeepLinkMethod } from './deepLinkParser';
 import { LeftColumnContent, SettingsScreens } from '../types';
 
@@ -41,6 +43,7 @@ export const processDeepLink = (url: string, linkContext?: LinkContext): boolean
         actions.openChatByUsername({
           username: parsedLink.username,
           startParam: parsedLink.start,
+          startGroup: parsedLink.startGroup,
           ref: parsedLink.ref,
           text: parsedLink.text,
           startApp: parsedLink.startApp,
@@ -220,6 +223,12 @@ export const processDeepLink = (url: string, linkContext?: LinkContext): boolean
           shortName: set,
         },
       });
+      break;
+    }
+    case 'addstyle': {
+      const { set } = params;
+      if (!set) return false;
+      actions.openAiTonePreview({ slug: set });
       break;
     }
     case 'share':

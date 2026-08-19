@@ -1,4 +1,3 @@
-import type { FC } from '../../../lib/teact/teact';
 import {
   memo, useCallback,
 } from '../../../lib/teact/teact';
@@ -18,7 +17,10 @@ import { getSystemTheme } from '../../../util/systemTheme';
 import useAppLayout from '../../../hooks/useAppLayout';
 import useHistoryBack from '../../../hooks/useHistoryBack';
 import useLang from '../../../hooks/useLang';
+import useLastCallback from '../../../hooks/useLastCallback';
 
+import Island, { IslandTitle } from '../../gili/layout/Island';
+import Checkbox from '../../ui/Checkbox';
 import ListItem from '../../ui/ListItem';
 import RadioGroup from '../../ui/RadioGroup';
 import RangeSlider from '../../ui/RangeSlider';
@@ -32,20 +34,22 @@ type StateProps =
   Pick<SharedSettings, (
     'messageTextSize' |
     'messageSendKeyCombo' |
+    'shouldReplaceTextShortcuts' |
     'timeFormat' |
     'theme' |
     'shouldUseSystemTheme'
   )>;
 
-const SettingsGeneral: FC<OwnProps & StateProps> = ({
+const SettingsGeneral = ({
   isActive,
   messageTextSize,
   messageSendKeyCombo,
+  shouldReplaceTextShortcuts,
   timeFormat,
   theme,
   shouldUseSystemTheme,
   onReset,
-}) => {
+}: OwnProps & StateProps) => {
   const {
     setSharedSettingOption, openSettingsScreen,
   } = getActions();
@@ -87,7 +91,7 @@ const SettingsGeneral: FC<OwnProps & StateProps> = ({
     document.documentElement.style.setProperty(
       '--composer-text-size', `${Math.max(newSize, IS_IOS ? 16 : 15)}px`,
     );
-    document.documentElement.style.setProperty('--message-meta-height', `${Math.floor(newSize * 1.3125)}px`);
+    document.documentElement.style.setProperty('--message-meta-height', `${Math.floor(newSize * 1.25)}px`);
     document.documentElement.style.setProperty('--message-text-size', `${newSize}px`);
     document.documentElement.setAttribute('data-message-text-size', newSize.toString());
 
@@ -110,6 +114,10 @@ const SettingsGeneral: FC<OwnProps & StateProps> = ({
     setSharedSettingOption({ messageSendKeyCombo: newCombo as SharedSettings['messageSendKeyCombo'] });
   }, []);
 
+  const handleTextShortcutReplacementChange = useLastCallback((shouldReplace: boolean) => {
+    setSharedSettingOption({ shouldReplaceTextShortcuts: shouldReplace });
+  });
+
   useHistoryBack({
     isActive,
     onBack: onReset,
@@ -117,9 +125,8 @@ const SettingsGeneral: FC<OwnProps & StateProps> = ({
 
   return (
     <div className="settings-content custom-scroll">
-      <div className="settings-item">
-        <h4 className="settings-item-header" dir={lang.isRtl ? 'rtl' : undefined}>{lang('Settings')}</h4>
-
+      <IslandTitle dir={lang.isRtl ? 'rtl' : undefined}>{lang('Settings')}</IslandTitle>
+      <Island>
         <RangeSlider
           label={lang('TextSize')}
           min={12}
@@ -127,53 +134,52 @@ const SettingsGeneral: FC<OwnProps & StateProps> = ({
           value={messageTextSize}
           onChange={handleMessageTextSizeChange}
         />
-
         <ListItem
           icon="photo"
           narrow
-
           onClick={() => openSettingsScreen({ screen: SettingsScreens.GeneralChatBackground })}
         >
           {lang('ChatBackground')}
         </ListItem>
-      </div>
+      </Island>
 
-      <div className="settings-item">
-        <h4 className="settings-item-header" dir={lang.isRtl ? 'rtl' : undefined}>
-          {lang('Theme')}
-        </h4>
+      <IslandTitle dir={lang.isRtl ? 'rtl' : undefined}>{lang('Theme')}</IslandTitle>
+      <Island>
         <RadioGroup
           name="theme"
           options={appearanceThemeOptions}
           selected={shouldUseSystemTheme ? 'auto' : theme}
           onChange={handleAppearanceThemeChange}
         />
-      </div>
+      </Island>
 
-      <div className="settings-item">
-        <h4 className="settings-item-header" dir={lang.isRtl ? 'rtl' : undefined}>
-          {lang('SettingsTimeFormat')}
-        </h4>
+      <IslandTitle dir={lang.isRtl ? 'rtl' : undefined}>{lang('SettingsTimeFormat')}</IslandTitle>
+      <Island>
         <RadioGroup
           name="timeformat"
           options={timeFormatOptions}
           selected={timeFormat}
           onChange={handleTimeFormatChange}
         />
-      </div>
+      </Island>
 
-      {keyboardSendOptions && (
-        <div className="settings-item">
-          <h4 className="settings-item-header" dir={lang.isRtl ? 'rtl' : undefined}>{lang('SettingsKeyboard')}</h4>
-
+      <IslandTitle dir={lang.isRtl ? 'rtl' : undefined}>{lang('SettingsKeyboard')}</IslandTitle>
+      <Island>
+        {keyboardSendOptions && (
           <RadioGroup
             name="keyboard-send-settings"
             options={keyboardSendOptions}
             onChange={handleMessageSendComboChange}
             selected={messageSendKeyCombo}
           />
-        </div>
-      )}
+        )}
+        <Checkbox
+          label={lang('SettingsAutomaticTextReplacements')}
+          subLabel={lang('SettingsAutomaticTextReplacementsInfo')}
+          checked={shouldReplaceTextShortcuts}
+          onCheck={handleTextShortcutReplacementChange}
+        />
+      </Island>
     </div>
   );
 };
@@ -184,12 +190,14 @@ export default memo(withGlobal<OwnProps>(
       theme,
       shouldUseSystemTheme,
       messageSendKeyCombo,
+      shouldReplaceTextShortcuts,
       messageTextSize,
       timeFormat,
     } = selectSharedSettings(global);
 
     return {
       messageSendKeyCombo,
+      shouldReplaceTextShortcuts,
       messageTextSize,
       timeFormat,
       theme,

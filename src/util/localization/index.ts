@@ -23,7 +23,7 @@ import {
   type RegularLangFnParameters,
 } from './types';
 
-import { DEBUG, FALLBACK_LANG_CODE, FORCE_FALLBACK_LANG, LANG_PACK } from '../../config';
+import { DEBUG, FORCE_FALLBACK_LANG, LANG_PACK } from '../../config';
 import { callApi } from '../../api/gramjs';
 import renderText, { type TextFilter } from '../../components/common/helpers/renderText';
 import { IS_INTL_LIST_FORMAT_SUPPORTED } from '../browser/globalEnvironment';
@@ -43,6 +43,7 @@ import LimitedMap from '../primitives/LimitedMap';
 
 import initialStrings from '../../assets/localization/initialStrings';
 
+const FALLBACK_LANG_CODE = 'en';
 const LANGPACK_STORE_PREFIX = 'langpack-';
 const FORMATTERS_FALLBACK_LANG = FALLBACK_LANG_CODE;
 
@@ -311,7 +312,7 @@ export async function changeLanguage(newLanguage: ApiLanguage) {
 function createTranslationFn(): LangFn {
   const fn: LangFn = ((
     key: LangKey,
-    variables: Record<string, unknown> | undefined,
+    variables: LangFnParameters['variables'],
     options: LangFnOptions | AdvancedLangFnOptions | undefined,
   ) => {
     if (options && areAdvancedLangFnOptions(options)) {
@@ -341,7 +342,7 @@ function createTranslationFn(): LangFn {
   fn.number = (value: number) => formatters?.number.format(value) || String(value);
   fn.preciseNumber = (value: number) => formatters?.preciseNumber.format(value) || String(value);
   fn.internalFormatters = formatters!;
-  fn.languageInfo = language!;
+  fn.languageInfo = language;
   return fn;
 }
 

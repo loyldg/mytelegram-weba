@@ -5,6 +5,7 @@ import { getActions, withGlobal } from '../../../global';
 
 import type { ApiChannelMonetizationStatistics } from '../../../api/types';
 
+import ensureLovelyChart from '../../../lib/lovelyChartWithStyles';
 import { selectChat, selectChatFullInfo, selectTabState } from '../../../global/selectors';
 import buildClassName from '../../../util/buildClassName';
 import { convertTonFromNanos } from '../../../util/formatCurrency';
@@ -18,8 +19,10 @@ import useLastCallback from '../../../hooks/useLastCallback';
 import useOldLang from '../../../hooks/useOldLang';
 
 import AboutMonetizationModal from '../../common/AboutMonetizationModal.async';
+import GramIcon from '../../common/icons/GramIcon';
 import Icon from '../../common/icons/Icon';
 import SafeLink from '../../common/SafeLink';
+import Island, { IslandDescription } from '../../gili/layout/Island';
 import Button from '../../ui/Button';
 import ConfirmDialog from '../../ui/ConfirmDialog';
 import Link from '../../ui/Link';
@@ -27,19 +30,6 @@ import Loading from '../../ui/Loading';
 import StatisticsOverview from './StatisticsOverview';
 
 import styles from './MonetizationStatistics.module.scss';
-
-type ILovelyChart = { create: (el: HTMLElement, params: AnyLiteral) => void };
-let lovelyChartPromise: Promise<ILovelyChart> | undefined;
-let LovelyChart: ILovelyChart;
-
-async function ensureLovelyChart() {
-  if (!lovelyChartPromise) {
-    lovelyChartPromise = import('../../../lib/lovely-chart/LovelyChart') as Promise<ILovelyChart>;
-    LovelyChart = await lovelyChartPromise;
-  }
-
-  return lovelyChartPromise;
-}
 
 const MONETIZATION_GRAPHS_TITLES = {
   topHoursGraph: 'ChannelStats.Graph.ViewsByHours',
@@ -90,7 +80,7 @@ const MonetizationStatistics = ({
 
   useEffect(() => {
     (async () => {
-      await ensureLovelyChart();
+      const LovelyChart = await ensureLovelyChart();
 
       if (!isReady) {
         setIsReady(true);
@@ -130,9 +120,9 @@ const MonetizationStatistics = ({
           return;
         }
 
-        LovelyChart.create(containerRef.current!.children[index] as HTMLElement, {
-          title: oldLang((MONETIZATION_GRAPHS_TITLES as Record<string, string>)[name]),
+        new LovelyChart(containerRef.current!.children[index] as HTMLElement, {
           ...graph,
+          title: oldLang((MONETIZATION_GRAPHS_TITLES as Record<string, string>)[name]),
         });
 
         loadedChartsRef.current.add(name);
@@ -153,7 +143,7 @@ const MonetizationStatistics = ({
     return (
       <div className={styles.availableReward}>
         <div className={styles.toncoin}>
-          <Icon className={styles.toncoinIcon} name="toncoin" />
+          <GramIcon className={styles.toncoinIcon} />
           <b className={styles.rewardValue}>
             {integerTonPart}
             {decimalTonPart ? (
@@ -230,29 +220,31 @@ const MonetizationStatistics = ({
   }
 
   return (
-    <div className={buildClassName(styles.root, 'custom-scroll', isReady && styles.ready)}>
-      <div className={buildClassName(styles.section, styles.topText)}>{topText}</div>
+    <div className={buildClassName(styles.root, 'panel-content custom-scroll', isReady && styles.ready)}>
+      <IslandDescription>{topText}</IslandDescription>
 
-      <StatisticsOverview
-        statistics={statistics}
-        isToncoin
-        type="monetization"
-        title={oldLang('MonetizationOverview')}
-        subtitle={
-          <div className={styles.textBottom}>{oldLang('MonetizationProceedsTONInfo')}</div>
-        }
-      />
+      <Island>
+        <StatisticsOverview
+          statistics={statistics}
+          isToncoin
+          type="monetization"
+          title={oldLang('MonetizationOverview')}
+        />
+      </Island>
+      <IslandDescription>{oldLang('MonetizationProceedsTONInfo')}</IslandDescription>
 
       {!loadedChartsRef.current.size && <Loading />}
 
-      <div ref={containerRef} className={styles.section}>
-        {MONETIZATION_GRAPHS.filter(Boolean).map((graph) => (
-          <div key={graph} className={buildClassName(styles.graph, styles.hidden)} />
-        ))}
-      </div>
+      <Island>
+        <div ref={containerRef} data-stricterdom-ignore className={styles.charts}>
+          {MONETIZATION_GRAPHS.filter(Boolean).map((graph) => (
+            <div key={graph} className={buildClassName(styles.graph, styles.hidden)} />
+          ))}
+        </div>
+      </Island>
 
-      <div className={styles.section}>
-        {oldLang('lng_channel_earn_balance_title')}
+      <Island className={styles.balanceSection}>
+        <h4 className={styles.balanceTitle}>{oldLang('lng_channel_earn_balance_title')}</h4>
 
         {renderAvailableReward()}
 
@@ -264,8 +256,8 @@ const MonetizationStatistics = ({
           {oldLang('MonetizationWithdraw')}
         </Button>
 
-        <div className={styles.textBottom}>{rewardsText}</div>
-      </div>
+      </Island>
+      <IslandDescription>{rewardsText}</IslandDescription>
 
       <AboutMonetizationModal
         isOpen={isAboutMonetizationModalOpen}

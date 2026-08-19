@@ -1,5 +1,4 @@
 import type {
-  ApiFormattedText,
   ApiMessage, ApiMessagePoll, ApiPollResult, ApiPollResults, ApiQuickReply, ApiSponsoredMessage,
   ApiWebPage,
   ApiWebPageFull,
@@ -116,7 +115,7 @@ export function updateMessageStore<T extends GlobalState>(
   global: T, chatId: string, update: Partial<MessageStoreSections>,
 ): T {
   const current = global.messages.byChatId[chatId]
-    || { byId: {}, threadsById: {}, summaryById: {} };
+    || { byId: {}, ephemeralById: {}, threadsById: {}, summaryById: {} };
 
   return {
     ...global,
@@ -131,6 +130,30 @@ export function updateMessageStore<T extends GlobalState>(
       },
     },
   };
+}
+
+export function updateEphemeralMessage<T extends GlobalState>(
+  global: T, message: ApiMessage,
+): T {
+  const ephemeralById = global.messages.byChatId[message.chatId]?.ephemeralById || {};
+
+  return updateMessageStore(global, message.chatId, {
+    ephemeralById: {
+      ...ephemeralById,
+      [message.id]: message,
+    },
+  });
+}
+
+export function deleteEphemeralMessages<T extends GlobalState>(
+  global: T, chatId: string, messageIds: number[],
+): T {
+  const ephemeralById = global.messages.byChatId[chatId]?.ephemeralById;
+  if (!ephemeralById || !messageIds.some((id) => ephemeralById[id])) return global;
+
+  return updateMessageStore(global, chatId, {
+    ephemeralById: omit(ephemeralById, messageIds),
+  });
 }
 
 export function addMessages<T extends GlobalState>(
@@ -314,12 +337,16 @@ export function deleteChatMessages<T extends GlobalState>(
   global: T,
   chatId: string,
   messageIds: number[],
+  options?: {
+    shouldPreserveMedia?: boolean;
+  },
 ): T {
   const byId = selectChatMessages(global, chatId);
   if (!byId) {
     return global;
   }
 
+  const shouldPreserveMedia = options?.shouldPreserveMedia;
   orderHistoryIds(messageIds);
   const updatedThreads = new Map<ThreadId, number[]>();
   updatedThreads.set(MAIN_THREAD_ID, messageIds);
@@ -328,12 +355,14 @@ export function deleteChatMessages<T extends GlobalState>(
   messageIds.forEach((messageId) => {
     const message = byId[messageId];
     if (!message) return;
-    const statefulContent = getMessageStatefulContent(global, message);
-    const hashes = getAllMessageMediaHashes(message, statefulContent);
-    hashes.forEach((hash) => {
-      unload(hash);
-    });
-    if (isMediaLoadableInViewer(message)) {
+    if (!shouldPreserveMedia) {
+      const statefulContent = getMessageStatefulContent(global, message);
+      const hashes = getAllMessageMediaHashes(message, statefulContent);
+      hashes.forEach((hash) => {
+        unload(hash);
+      });
+    }
+    if (!shouldPreserveMedia && isMediaLoadableInViewer(message)) {
       mediaIdsToRemove.push(messageId);
     }
     const threadId = selectThreadIdFromMessage(global, message);
@@ -382,11 +411,13 @@ export function deleteChatMessages<T extends GlobalState>(
         ([, { originChatId, originMessageId }]) => originChatId === chatId && originMessageId,
       );
 
-      activeDownloadsInChat.forEach(([mediaHash, context]) => {
-        if (messageIds.includes(context.originMessageId!)) {
-          global = cancelMessageMediaDownload(global, [mediaHash], tabId);
-        }
-      });
+      if (!shouldPreserveMedia) {
+        activeDownloadsInChat.forEach(([mediaHash, context]) => {
+          if (messageIds.includes(context.originMessageId!)) {
+            global = cancelMessageMediaDownload(global, [mediaHash], tabId);
+          }
+        });
+      }
 
       mediaIdsToRemove.forEach((mediaId) => {
         global = removeIdFromSearchResults(global, chatId, threadId, mediaId, tabId);
@@ -734,7 +765,7 @@ export function toggleMessageSelection<T extends GlobalState>(
     newMessageIds = [...messageIds, ...newSelectedMessageIds];
   }
 
-  if (!newMessageIds.length) {
+  if (!newMessageIds.length && !oldSelectedMessages.reportContext) {
     return exitMessageSelectMode(global, tabId);
   }
 
@@ -996,25 +1027,4 @@ export function updatePollVote<T extends GlobalState>(
       resultByOption: newResultByOption,
     },
   });
-}
-
-export function updateTypingDraft<T extends GlobalState>(
-  global: T,
-  chatId: string,
-  threadId: ThreadId | undefined = MAIN_THREAD_ID,
-  randomId: string,
-  text: ApiFormattedText,
-) {
-  const typingDraftStore = selectThreadLocalStateParam(global, chatId, threadId, 'typingDraftIdByRandomId');
-  const messageId = typingDraftStore?.[randomId];
-  if (!messageId) {
-    return global;
-  }
-
-  global = updateChatMessage(global, chatId, messageId, {
-    content: {
-      text,
-    },
-  });
-  return global;
 }

@@ -15,6 +15,7 @@ import {
   getMessageRoundVideo,
   getMessageSticker,
   getMessageVideo,
+  isChatCommunity,
 } from '../../../../global/helpers';
 import { getMessageSenderName } from '../../../../global/helpers/peers';
 import { waitStartingTransitionsEnd } from '../../../../util/animations/waitTransitionEnd';
@@ -35,6 +36,12 @@ import Icon from '../../../common/icons/Icon';
 import MessageSummary from '../../../common/MessageSummary';
 import TypingStatus from '../../../common/TypingStatus';
 
+export type CommunityMember = {
+  id: string;
+  title: string;
+  isUnread?: boolean;
+};
+
 function getLatestTypingStatusTimestamp(typingStatusByPeerId?: Record<string, ApiTypingStatus>) {
   if (!typingStatusByPeerId) {
     return undefined;
@@ -49,6 +56,7 @@ export default function useChatListEntry({
   chat,
   topicIds,
   lastMessage,
+  communityMembers,
   statefulMediaContent,
   chatId,
   typingStatusByPeerId,
@@ -70,6 +78,7 @@ export default function useChatListEntry({
   chat?: ApiChat;
   topicIds?: number[];
   lastMessage?: ApiMessage;
+  communityMembers?: CommunityMember[];
   statefulMediaContent: StatefulMediaContent | undefined;
   chatId: string;
   typingStatusByPeerId?: Record<string, ApiTypingStatus>;
@@ -169,6 +178,21 @@ export default function useChatListEntry({
   ]);
 
   function renderSubtitle() {
+    if (chat && isChatCommunity(chat)) {
+      return (
+        <p className="last-message" dir={lang.isRtl ? 'auto' : 'ltr'}>
+          <span className="last-message-summary" dir="auto">
+            {communityMembers?.map((member, i) => (
+              <span key={member.id} className={member.isUnread ? 'community-member-unread' : undefined}>
+                {member.title}
+                {i < communityMembers.length - 1 ? ', ' : ''}
+              </span>
+            ))}
+          </span>
+        </p>
+      );
+    }
+
     const shouldRenderAsForum = chat?.isForum && !isTopic && !shouldForceNonForumView;
     if (shouldRenderAsForum) {
       return (
@@ -195,9 +219,15 @@ export default function useChatListEntry({
 
     let isCancelled = false;
 
+    // Clear stale transitions before setting the compensating transform
+    element.classList.remove('animate-opacity', 'animate-transform');
+    element.style.opacity = '';
+    element.style.transform = '';
+
     const notifyAnimationEnd = () => {
       if (isCancelled) return;
       requestMutation(() => {
+        if (isCancelled) return;
         element.classList.remove('animate-opacity', 'animate-transform');
         element.style.opacity = '';
         element.style.transform = '';
@@ -210,6 +240,7 @@ export default function useChatListEntry({
       element.style.opacity = '0';
 
       requestMutation(() => {
+        if (isCancelled) return;
         element.classList.add('animate-opacity');
         element.style.opacity = '1';
 
@@ -221,6 +252,7 @@ export default function useChatListEntry({
       element.style.transform = `translate3d(0, ${-orderDiff * CHAT_HEIGHT_PX - shiftDiff}px, 0)`;
 
       requestMutation(() => {
+        if (isCancelled) return;
         element.classList.add('animate-transform');
         element.style.transform = '';
 
@@ -232,6 +264,7 @@ export default function useChatListEntry({
       element.style.transform = `translate3d(0, ${-shiftDiff}px, 0)`;
 
       requestMutation(() => {
+        if (isCancelled) return;
         element.classList.add('animate-transform');
         element.style.transform = '';
 

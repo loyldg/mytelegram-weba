@@ -152,18 +152,6 @@ export function selectChatFolder<T extends GlobalState>(global: T, folderId: num
   return global.chatFolders.byId[folderId];
 }
 
-export function selectTotalChatCount<T extends GlobalState>(global: T, listType: 'active' | 'archived'): number {
-  const { totalCount } = global.chats;
-  const allChatsCount = totalCount.all;
-  const archivedChatsCount = totalCount.archived || 0;
-
-  if (listType === 'archived') {
-    return archivedChatsCount;
-  }
-
-  return allChatsCount ? allChatsCount - archivedChatsCount : 0;
-}
-
 export function selectIsChatPinned<T extends GlobalState>(
   global: T, chatId: string, folderId = ALL_FOLDER_ID,
 ): boolean {
@@ -252,6 +240,13 @@ export function selectCanInviteToChat<T extends GlobalState>(global: T, chatId: 
     chat.isCreator || getHasAdminRight(chat, 'inviteUsers')
     || (isChatPublic(chat) && !chat.isJoinRequest)
   ) : (chat.isCreator || getHasAdminRight(chat, 'inviteUsers'))));
+}
+
+export function selectCanBanUsers<T extends GlobalState>(global: T, chatId: string) {
+  const chat = selectChat(global, chatId);
+  if (!chat || chat.isMonoforum) return false;
+
+  return Boolean(chat.isCreator || getHasAdminRight(chat, 'banUsers'));
 }
 
 export function selectCanShareFolder<T extends GlobalState>(global: T, folderId: number) {

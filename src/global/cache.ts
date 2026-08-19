@@ -3,9 +3,14 @@ import { addCallback, removeCallback } from '../lib/teact/teactn';
 
 import type {
   ApiAvailableReaction,
+  ApiDocument,
   ApiMessage,
+  ApiPhoto,
+  ApiVideo,
 } from '../api/types';
-import type { MessageList, ThreadId } from '../types';
+import type {
+  IThemeSettings, MessageList, ThemeKey, ThreadId, TopicsInfo,
+} from '../types';
 import type { ActionReturnType, GlobalState, SharedState } from './types';
 import { ApiMessageEntityTypes, MAIN_THREAD_ID } from '../api/types';
 
@@ -13,12 +18,14 @@ import {
   ALL_FOLDER_ID, ANIMATION_LEVEL_DEFAULT,
   ARCHIVED_FOLDER_ID,
   DEBUG,
+  EPHEMERAL_MESSAGE_TTL_SECONDS,
   FOLDERS_POSITION_DEFAULT,
   GLOBAL_STATE_CACHE_ARCHIVED_CHAT_LIST_LIMIT,
   GLOBAL_STATE_CACHE_CHAT_LIST_LIMIT,
   GLOBAL_STATE_CACHE_CUSTOM_EMOJI_LIMIT,
   GLOBAL_STATE_CACHE_DISABLED,
   GLOBAL_STATE_CACHE_USER_LIST_LIMIT,
+  INSTANT_VIEW_FONT_SIZE_ADJUST_DEFAULT,
   IS_SCREEN_LOCKED_CACHE_KEY,
   SAVED_FOLDER_ID,
   SHARED_STATE_CACHE_KEY,
@@ -32,10 +39,17 @@ import {
 import { GLOBAL_STATE_CACHE_KEY } from '../util/multiaccount';
 import { encryptSession } from '../util/passcode';
 import { onBeforeUnload, throttle } from '../util/schedulers';
+import { getServerTime } from '../util/serverTime';
 import { hasStoredSession } from '../util/sessions';
+import { getSystemTheme } from '../util/systemTheme';
+import { getDefaultPatternColor } from '../util/wallpaper';
+import { migrateLegacyWallpaperBlobs, prefetchWallpaperUrl } from '../util/wallpaperStorage';
+import { selectSharedSettings } from './selectors/sharedState';
 import { selectThreadInfo } from './selectors/threads';
 import { addActionHandler, getGlobal } from './index';
-import { INITIAL_GLOBAL_STATE, INITIAL_PERFORMANCE_STATE_MED } from './initialState';
+import {
+  INITIAL_GLOBAL_STATE, INITIAL_PERFORMANCE_STATE_MED, SHARED_STATE_CACHE_VERSION,
+} from './initialState';
 import { clearGlobalForLockScreen, clearSharedStateForLockScreen } from './reducers';
 import {
   selectChatLastMessageId,
@@ -52,6 +66,10 @@ import { getIsMobile } from '../hooks/useAppLayout';
 
 const UPDATE_THROTTLE = 5000;
 
+// `patternColor` values the cache migration recognizes as defaults and replaces with the
+// wallpaper-derived ones
+const LEGACY_DEFAULT_PATTERN_COLOR = '#4A8E3A8C';
+const LEGACY_DARK_THEME_PATTERN_COLOR = '#48576166';
 const updateCacheThrottled = throttle(() => onFullyIdle(() => updateCache()), UPDATE_THROTTLE, false);
 const updateCacheForced = () => updateCache(true);
 
@@ -95,8 +113,8 @@ export function initCache() {
 
   const resetCache = () => {
     isRemovingCache = true;
+    localStorage.removeItem(IS_SCREEN_LOCKED_CACHE_KEY);
     removeGlobalFromCache().finally(() => {
-      localStorage.removeItem(IS_SCREEN_LOCKED_CACHE_KEY);
       isRemovingCache = false;
       if (!isCaching) {
         return;
@@ -127,6 +145,8 @@ export async function loadCache(initialState: GlobalState): Promise<GlobalState 
 
   if (cache.passcode.hasPasscode || hasStoredSession()) {
     setupCaching();
+    // Start resolving the wallpaper early without delaying the initial render
+    void prefetchCurrentWallpaperUrl(cache);
 
     return cache;
   } else {
@@ -164,14 +184,11 @@ async function readCache(initialState: GlobalState): Promise<GlobalState> {
 
   let cached = cachedFromLocalStorage || await loadCachedGlobal();
   const cachedSharedState = await loadCachedSharedState();
-  const sharedState = cachedSharedState || initialState.sharedState;
-
-  if (cached) {
-    cached = {
-      ...cached,
-      sharedState,
-    };
-  }
+  const cachedAccountThemes = (cached as any)?.settings?.themes as (
+    Partial<Record<ThemeKey, IThemeSettings>> | undefined
+  );
+  const cachedSharedThemes = cachedSharedState?.settings?.themes;
+  const shouldMigrateAccountThemes = Boolean(cachedAccountThemes && !cachedSharedThemes);
 
   if (DEBUG) {
     // eslint-disable-next-line no-console
@@ -182,29 +199,100 @@ async function readCache(initialState: GlobalState): Promise<GlobalState> {
     migrateCache(cached, initialState);
   }
 
+  const sharedState = migrateSharedCache(
+    cachedSharedState,
+    cached?.sharedState.settings.themes,
+    initialState.sharedState,
+  );
+
+  if (cached) {
+    cached = {
+      ...cached,
+      sharedState,
+    };
+  }
+
+  if (shouldMigrateAccountThemes) {
+    await migrateLegacyWallpaperBlobs(cachedAccountThemes!);
+  }
+
   const newState: GlobalState = {
     ...initialState,
     ...cached,
     sharedState: {
+      ...initialState.sharedState,
       ...sharedState,
       ...cached?.sharedState, // Allow migration to override shared state
+      settings: {
+        ...initialState.sharedState.settings,
+        ...sharedState.settings,
+        ...cached?.sharedState.settings,
+      },
     },
   };
 
   return newState;
 }
 
+function migrateSharedCache(
+  cached: SharedState | undefined,
+  fallbackThemes: Partial<Record<ThemeKey, IThemeSettings>> | undefined,
+  initialState: SharedState,
+): SharedState {
+  const cacheVersion = cached?.cacheVersion ?? 0;
+  const cachedSettings = cached?.settings;
+  const settings = cachedSettings || initialState.settings;
+  let migrated = cached || initialState;
+
+  if (cacheVersion < SHARED_STATE_CACHE_VERSION) {
+    migrated = {
+      ...migrated,
+      cacheVersion: SHARED_STATE_CACHE_VERSION,
+      settings: {
+        ...settings,
+        themes: cachedSettings?.themes
+          || (fallbackThemes ? cloneThemeSettings(fallbackThemes) : initialState.settings.themes),
+      },
+    };
+  }
+
+  return migrated;
+}
+
+function prefetchCurrentWallpaperUrl(global: GlobalState) {
+  const { theme, themes, shouldUseSystemTheme } = selectSharedSettings(global);
+  const currentTheme = shouldUseSystemTheme ? getSystemTheme() : theme;
+  return prefetchWallpaperUrl(themes[currentTheme]?.background);
+}
+
 export function migrateCache(cached: GlobalState, initialState: GlobalState) {
   try {
     unsafeMigrateCache(cached, initialState);
+    pruneExpiredEphemeralMessages(cached);
+    clearCachedDraftLocalFlags(cached);
   } catch (err) {
     // eslint-disable-next-line no-console
     console.error(err);
   }
 }
 
+function pruneExpiredEphemeralMessages(cached: GlobalState) {
+  const serverTime = getServerTime();
+  Object.values(cached.messages.byChatId).forEach(({ ephemeralById }) => {
+    Object.values(ephemeralById).forEach((message) => {
+      if (message.date + EPHEMERAL_MESSAGE_TTL_SECONDS <= serverTime) {
+        delete ephemeralById[message.id];
+      }
+    });
+  });
+}
+
 function unsafeMigrateCache(cached: GlobalState, initialState: GlobalState) {
   const untypedCached = cached as any;
+  Object.values(cached.messages.byChatId).forEach((messageStore) => {
+    messageStore.ephemeralById ||= {};
+  });
+
   // Pre-fill settings with defaults
   cached.settings.byKey = {
     ...initialState.settings.byKey,
@@ -252,8 +340,8 @@ function unsafeMigrateCache(cached: GlobalState, initialState: GlobalState) {
   if (!cached.chats.loadingParameters) {
     cached.chats.loadingParameters = initialState.chats.loadingParameters;
   }
-  if (!cached.topBotApps) {
-    cached.topBotApps = initialState.topBotApps;
+  if (!cached.topPeerCategories) {
+    cached.topPeerCategories = initialState.topPeerCategories;
   }
 
   if (!cached.reactions.defaultTags?.[0]?.type) {
@@ -286,10 +374,13 @@ function unsafeMigrateCache(cached: GlobalState, initialState: GlobalState) {
   }
 
   if (!cached.cacheVersion) {
-    cached.cacheVersion = initialState.cacheVersion;
-    // Reset because of the new action message structure
+    // Reset because of the new action message structure (the same reset the version 3 migration
+    // below performs)
     cached.messages = initialState.messages;
     cached.chats.listIds = initialState.chats.listIds;
+    // Treat unversioned caches as version 3, so every later migration still runs — stamping the
+    // current version would skip them all
+    cached.cacheVersion = 3;
   }
 
   if (!cached.messages.playbackByChatId) {
@@ -297,12 +388,12 @@ function unsafeMigrateCache(cached: GlobalState, initialState: GlobalState) {
   }
 
   if (cached.cacheVersion < 2) {
-    if (untypedCached.settings.themes.dark) {
-      untypedCached.settings.themes.dark.patternColor = (initialState as any).settings.themes.dark!.patternColor;
+    if (untypedCached.settings.themes?.dark) {
+      untypedCached.settings.themes.dark.patternColor = initialState.sharedState.settings.themes.dark!.patternColor;
     }
 
-    if (untypedCached.settings.themes.light) {
-      untypedCached.settings.themes.light.patternColor = (initialState as any).settings.themes.light!.patternColor;
+    if (untypedCached.settings.themes?.light) {
+      untypedCached.settings.themes.light.patternColor = initialState.sharedState.settings.themes.light!.patternColor;
     }
 
     cached.cacheVersion = 2;
@@ -319,9 +410,14 @@ function unsafeMigrateCache(cached: GlobalState, initialState: GlobalState) {
       animationLevel: untypedCached.settings.byKey.animationLevel,
       foldersPosition: FOLDERS_POSITION_DEFAULT,
       messageSendKeyCombo: untypedCached.settings.byKey.messageSendKeyCombo,
+      shouldReplaceTextShortcuts: true,
       messageTextSize: untypedCached.settings.byKey.messageTextSize,
+      instantViewFontSizeAdjust: INSTANT_VIEW_FONT_SIZE_ADJUST_DEFAULT,
       performance: untypedCached.settings.performance,
       theme: untypedCached.settings.byKey.theme,
+      themes: untypedCached.settings.themes
+        ? cloneThemeSettings(untypedCached.settings.themes)
+        : initialState.sharedState.settings.themes,
       timeFormat: untypedCached.settings.byKey.timeFormat,
       wasTimeFormatSetManually: untypedCached.settings.byKey.wasTimeFormatSetManually,
       shouldUseSystemTheme: untypedCached.settings.byKey.shouldUseSystemTheme,
@@ -329,9 +425,9 @@ function unsafeMigrateCache(cached: GlobalState, initialState: GlobalState) {
       shouldForceHttpTransport: untypedCached.settings.byKey.shouldForceHttpTransport,
       language: untypedCached.settings.byKey.language,
       languages: untypedCached.settings.languages,
-      shouldSkipWebAppCloseConfirmation: untypedCached.settings.byKey.shouldSkipWebAppCloseConfirmation,
-      miniAppsCachedPosition: untypedCached.settings.miniAppsCachedPosition,
-      miniAppsCachedSize: untypedCached.settings.miniAppsCachedSize,
+      shouldSkipBrowserCloseConfirmation: Boolean(untypedCached.settings.byKey.shouldSkipBrowserCloseConfirmation),
+      browserCachedPosition: untypedCached.settings.browserCachedPosition,
+      browserCachedSize: untypedCached.settings.browserCachedSize,
       shouldAllowHttpTransport: untypedCached.settings.byKey.shouldAllowHttpTransport,
       shouldCollectDebugLogs: untypedCached.settings.byKey.shouldCollectDebugLogs,
       shouldDebugExportedSenders: untypedCached.settings.byKey.shouldDebugExportedSenders,
@@ -339,15 +435,15 @@ function unsafeMigrateCache(cached: GlobalState, initialState: GlobalState) {
     };
   }
 
-  if (!cached.settings.themes) {
-    cached.settings.themes = initialState.settings.themes;
-  }
-
   if (!cached.messages.webPageById) {
     cached.messages.webPageById = initialState.messages.webPageById;
   }
 
   const cachedSharedSettings = cached.sharedState.settings;
+  if (cachedSharedSettings.instantViewFontSizeAdjust === undefined) {
+    cachedSharedSettings.instantViewFontSizeAdjust = INSTANT_VIEW_FONT_SIZE_ADJUST_DEFAULT;
+  }
+
   if (!cachedSharedSettings.wasAnimationLevelSetManually) {
     cachedSharedSettings.animationLevel = ANIMATION_LEVEL_DEFAULT;
     cachedSharedSettings.performance = INITIAL_PERFORMANCE_STATE_MED;
@@ -365,12 +461,28 @@ function unsafeMigrateCache(cached: GlobalState, initialState: GlobalState) {
     cachedSharedSettings.foldersPosition = FOLDERS_POSITION_DEFAULT;
   }
 
+  if (cachedSharedSettings.shouldReplaceTextShortcuts === undefined) {
+    cachedSharedSettings.shouldReplaceTextShortcuts = true;
+  }
+
   if (!cached.appConfig) {
     cached.appConfig = initialState.appConfig;
   }
 
   if (cached.appConfig.webAppAllowedProtocols === undefined) {
     cached.appConfig.webAppAllowedProtocols = initialState.appConfig.webAppAllowedProtocols;
+  }
+
+  if (cached.appConfig.isMessagePrimaryEditedDateEnabled === undefined) {
+    cached.appConfig.isMessagePrimaryEditedDateEnabled = initialState.appConfig.isMessagePrimaryEditedDateEnabled;
+  }
+
+  if (cached.appConfig.richMessageLengthLimit === undefined) {
+    cached.appConfig.richMessageLengthLimit = initialState.appConfig.richMessageLengthLimit;
+    cached.appConfig.richMessageMaxBlocks = initialState.appConfig.richMessageMaxBlocks;
+    cached.appConfig.richMessageMaxDepth = initialState.appConfig.richMessageMaxDepth;
+    cached.appConfig.richMessageMaxMedia = initialState.appConfig.richMessageMaxMedia;
+    cached.appConfig.richMessageMaxTableColumns = initialState.appConfig.richMessageMaxTableColumns;
   }
 
   if (untypedCached.sharedState?.settings?.shouldWarnAboutSvg) {
@@ -384,6 +496,30 @@ function unsafeMigrateCache(cached: GlobalState, initialState: GlobalState) {
     cached.chats.listIds = initialState.chats.listIds;
   }
 
+  if (cached.cacheVersion < 4) {
+    // The default `patternColor` is now derived from the default wallpapers (`getDefaultPatternColor`).
+    // Replace the old constant defaults so chips and wallpaper-aware surfaces agree, but keep any
+    // wallpaper-derived color the user's own selection produced.
+    if (untypedCached.settings.themes?.light?.patternColor === LEGACY_DEFAULT_PATTERN_COLOR) {
+      untypedCached.settings.themes.light.patternColor = getDefaultPatternColor('light');
+    }
+
+    if (untypedCached.settings.themes?.dark?.patternColor === LEGACY_DARK_THEME_PATTERN_COLOR) {
+      untypedCached.settings.themes.dark.patternColor = getDefaultPatternColor('dark');
+    }
+
+    cached.cacheVersion = 4;
+  }
+
+  if (cached.cacheVersion < 5) {
+    // The account cache contains the authoritative themes until this migration moves them to shared state
+    cachedSharedSettings.themes = untypedCached.settings.themes
+      || cachedSharedSettings.themes
+      || initialState.sharedState.settings.themes;
+    delete untypedCached.settings.themes;
+    cached.cacheVersion = 5;
+  }
+
   if (!cached.auth) {
     cached.auth = initialState.auth;
     cached.auth.rememberMe = untypedCached.rememberMe;
@@ -392,6 +528,24 @@ function unsafeMigrateCache(cached: GlobalState, initialState: GlobalState) {
   if (cached.audioPlayer.volume === undefined) {
     cached.audioPlayer.volume = initialState.audioPlayer.volume;
   }
+}
+
+function cloneThemeSettings(themes: Partial<Record<ThemeKey, IThemeSettings>>) {
+  return {
+    light: themes.light ? { ...themes.light } : undefined,
+    dark: themes.dark ? { ...themes.dark } : undefined,
+  };
+}
+
+function clearCachedDraftLocalFlags(cached: GlobalState) {
+  Object.values(cached.messages.byChatId).forEach(({ threadsById }) => {
+    Object.values(threadsById).forEach(({ localState }) => {
+      const { draft } = localState;
+      if (!draft) return;
+
+      draft.isLocal = undefined;
+    });
+  });
 }
 
 function updateCache(force?: boolean) {
@@ -418,7 +572,7 @@ export function forceUpdateCache(noEncrypt = false) {
   if (hasPasscode) {
     if (!isScreenLocked && !noEncrypt) {
       const serializedGlobal = serializeGlobal(global);
-      void encryptSession(undefined, serializedGlobal);
+      void encryptSession(undefined, serializedGlobal, serializeShared(global.sharedState));
     }
 
     cacheIsScreenLocked(global);
@@ -443,9 +597,7 @@ function reduceGlobal<T extends GlobalState>(global: T) {
       'attachMenu',
       'currentUserId',
       'contactList',
-      'topPeers',
-      'topInlineBots',
-      'topBotApps',
+      'topPeerCategories',
       'recentEmojis',
       'recentCustomEmojis',
       'push',
@@ -508,6 +660,10 @@ export function serializeGlobal<T extends GlobalState>(global: T) {
   return JSON.stringify(reduceGlobal(global));
 }
 
+export function serializeShared(sharedState: SharedState) {
+  return JSON.stringify(reduceSharedState(sharedState));
+}
+
 function reduceStickers<T extends GlobalState>(global: T): GlobalState['stickers'] {
   const { diceSetIdByEmoji, setsById } = global.stickers;
   return {
@@ -560,6 +716,7 @@ function reduceUsers<T extends GlobalState>(global: T): GlobalState['users'] {
     .filter((id): id is string => Boolean(id) && isUserId(id));
 
   const attachBotIds = Object.keys(global.attachMenu?.bots || {});
+  const topPeerIds = getTopPeerIds(global);
 
   const idsToSave = unique([
     ...currentUserId ? [currentUserId] : [],
@@ -567,7 +724,7 @@ function reduceUsers<T extends GlobalState>(global: T): GlobalState['users'] {
     ...chatStoriesUserIds,
     ...visibleUserIds || [],
     ...attachBotIds,
-    ...global.topPeers.userIds || [],
+    ...topPeerIds.filter(isUserId),
     ...global.recentlyFoundChatIds?.filter(isUserId) || [],
     ...getOrderedIds(ARCHIVED_FOLDER_ID)?.slice(0, GLOBAL_STATE_CACHE_ARCHIVED_CHAT_LIST_LIMIT).filter(isUserId) || [],
     ...getOrderedIds(ALL_FOLDER_ID)?.filter(isUserId) || [],
@@ -608,11 +765,13 @@ function reduceChats<T extends GlobalState>(global: T): GlobalState['chats'] {
       return content.storyData?.peerId || webPage?.story?.peerId || replyPeer;
     });
   }));
+  const topPeerIds = getTopPeerIds(global);
 
   const unlinkedIdsToSave = [
     ...currentUserId ? [currentUserId] : [],
     ...currentChatIds,
     ...messagesChatIds,
+    ...topPeerIds,
     ...global.recentlyFoundChatIds || [],
     ...getOrderedIds(ARCHIVED_FOLDER_ID)?.slice(0, GLOBAL_STATE_CACHE_ARCHIVED_CHAT_LIST_LIMIT) || [],
     ...getOrderedIds(ALL_FOLDER_ID) || [],
@@ -648,13 +807,33 @@ function reduceChats<T extends GlobalState>(global: T): GlobalState['chats'] {
       all: pickTruthy(global.chats.lastMessageIds.all || {}, idsToSave),
       saved: global.chats.lastMessageIds.saved,
     },
-    topicsInfoById: pickTruthy(global.chats.topicsInfoById, currentChatIds),
+    topicsInfoById: reduceTopicsInfo(global.chats.topicsInfoById, currentChatIds),
   };
+}
+
+function reduceTopicsInfo(
+  topicsInfoById: Record<string, TopicsInfo>, chatIds: string[],
+): GlobalState['chats']['topicsInfoById'] {
+  const topicsInfoToSave = pickTruthy(topicsInfoById, chatIds);
+
+  return Object.entries(topicsInfoToSave).reduce((acc, [chatId, topicsInfo]) => {
+    acc[chatId] = {
+      ...topicsInfo,
+      isCache: true,
+    };
+
+    return acc;
+  }, {} as GlobalState['chats']['topicsInfoById']);
+}
+
+function getTopPeerIds<T extends GlobalState>(global: T) {
+  return unique(Object.values(global.topPeerCategories).flatMap((category) => category?.peerIds || []));
 }
 
 function reduceMessages<T extends GlobalState>(global: T): GlobalState['messages'] {
   const { currentUserId } = global;
   const byChatId: GlobalState['messages']['byChatId'] = {};
+  const serverTime = getServerTime();
   const currentChatIds = compact(
     Object.values(global.byTabId)
       .map(({ id: tabId }) => selectCurrentMessageList(global, tabId)),
@@ -669,6 +848,9 @@ function reduceMessages<T extends GlobalState>(global: T): GlobalState['messages
     ...forumPanelChatIds,
     ...getOrderedIds(ALL_FOLDER_ID) || [],
     ...getOrderedIds(ARCHIVED_FOLDER_ID)?.slice(0, GLOBAL_STATE_CACHE_ARCHIVED_CHAT_LIST_LIMIT) || [],
+    ...Object.entries(global.messages.byChatId)
+      .filter(([, { ephemeralById }]) => Object.keys(ephemeralById).length)
+      .map(([chatId]) => chatId),
   ]);
 
   const openedChatThreadIds = Object.values(global.byTabId).reduce((acc, { id: tabId }) => {
@@ -720,6 +902,7 @@ function reduceMessages<T extends GlobalState>(global: T): GlobalState['messages
         localState: {
           ...thread.localState,
           listedIds: thread.localState?.lastViewportIds,
+          draft: thread.localState?.draft,
           typingStatusByPeerId: undefined,
         },
       };
@@ -743,9 +926,26 @@ function reduceMessages<T extends GlobalState>(global: T): GlobalState['messages
 
       return acc;
     }, {} as Record<number, ApiMessage>);
+    const ephemeralById = Object.values(current.ephemeralById).reduce((acc, message) => {
+      if (
+        message.sendingState
+        || message.date + EPHEMERAL_MESSAGE_TTL_SECONDS <= serverTime
+      ) {
+        return acc;
+      }
+
+      acc[message.id] = omitLocalMedia(message);
+
+      if (message.content.webPage) {
+        webPageIdsToSave.push(message.content.webPage.id);
+      }
+
+      return acc;
+    }, {} as Record<number, ApiMessage>);
 
     byChatId[chatId] = {
       byId: cleanedById,
+      ephemeralById,
       threadsById,
       summaryById: {},
     };
@@ -781,38 +981,46 @@ function omitLocalPaidReactions(message: ApiMessage): ApiMessage {
 
 function omitLocalMedia(message: ApiMessage): ApiMessage {
   const {
-    photo, video, document, sticker,
+    photo, video, document,
   } = message.content;
 
   return {
     ...message,
     content: {
       ...message.content,
-      photo: photo && {
-        ...photo,
-        blobUrl: undefined,
-      },
-      video: video && {
-        ...video,
-        blobUrl: undefined,
-        previewBlobUrl: undefined,
-      },
-      document: document && {
-        ...document,
-        previewBlobUrl: undefined,
-      },
-      sticker: sticker && {
-        ...sticker,
-        isPreloadedGlobally: undefined,
-      },
+      photo: photo && omitLocalPhoto(photo),
+      video: video && omitLocalVideo(video),
+      document: document && omitLocalDocument(document),
     },
     previousLocalId: undefined,
   };
 }
 
+function omitLocalPhoto(photo: ApiPhoto): ApiPhoto {
+  return {
+    ...photo,
+    blobUrl: undefined,
+  };
+}
+
+function omitLocalVideo(video: ApiVideo): ApiVideo {
+  return {
+    ...video,
+    blobUrl: undefined,
+    previewBlobUrl: undefined,
+  };
+}
+
+function omitLocalDocument(document: ApiDocument): ApiDocument {
+  return {
+    ...document,
+    previewBlobUrl: undefined,
+  };
+}
+
 function reduceSettings<T extends GlobalState>(global: T): GlobalState['settings'] {
   const {
-    byKey, botVerificationShownPeerIds, notifyDefaults, lastPremiumBandwithNotificationDate, themes, accountDaysTtl,
+    byKey, botVerificationShownPeerIds, notifyDefaults, lastPremiumBandwithNotificationDate, accountDaysTtl,
   } = global.settings;
 
   return {
@@ -821,7 +1029,6 @@ function reduceSettings<T extends GlobalState>(global: T): GlobalState['settings
     botVerificationShownPeerIds,
     lastPremiumBandwithNotificationDate,
     notifyDefaults,
-    themes,
     accountDaysTtl,
   };
 }

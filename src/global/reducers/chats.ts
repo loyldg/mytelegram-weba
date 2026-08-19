@@ -16,6 +16,16 @@ import { addUnreadCount, removeUnreadCount } from './unreadCounters';
 
 const DEFAULT_CHAT_LISTS: ChatListType[] = ['active', 'archived'];
 
+export function replacePersonalChannelIds<T extends GlobalState>(global: T, personalChannelIds: string[]): T {
+  return {
+    ...global,
+    chats: {
+      ...global.chats,
+      personalChannelIds,
+    },
+  };
+}
+
 export function replaceChatListIds<T extends GlobalState>(
   global: T,
   type: ChatListType,
@@ -299,7 +309,7 @@ function getUpdatedChat<T extends GlobalState>(
   const updatedChat: ApiChat = {
     ...chat,
     ...omit(chatUpdate, omitProps),
-  } as ApiChat;
+  };
 
   if (!updatedChat.id || !updatedChat.type) {
     return undefined;

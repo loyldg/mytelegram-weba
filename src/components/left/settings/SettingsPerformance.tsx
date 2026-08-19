@@ -1,4 +1,3 @@
-import type React from '../../../lib/teact/teact';
 import {
   memo, useCallback, useMemo, useState,
 } from '../../../lib/teact/teact';
@@ -22,6 +21,7 @@ import { IS_BACKDROP_BLUR_SUPPORTED, IS_SNAP_EFFECT_SUPPORTED } from '../../../u
 import useHistoryBack from '../../../hooks/useHistoryBack';
 import useLang from '../../../hooks/useLang';
 
+import Island, { IslandDescription, IslandTitle } from '../../gili/layout/Island';
 import Checkbox from '../../ui/Checkbox';
 import RangeSlider from '../../ui/RangeSlider';
 
@@ -168,24 +168,22 @@ function SettingsPerformance({
 
   return (
     <div className="settings-content custom-scroll">
-      <div className="settings-item">
-        <h4 className="settings-item-header" dir={lang.isRtl ? 'rtl' : undefined}>
-          {lang('SettingsPerformanceSliderTitle')}
-        </h4>
-        <p className="settings-item-description" dir={lang.isRtl ? 'rtl' : undefined}>
-          {lang('SettingsPerformanceSliderSubtitle')}
-        </p>
-
+      <IslandTitle dir={lang.isRtl ? 'rtl' : undefined}>
+        {lang('SettingsPerformanceSliderTitle')}
+      </IslandTitle>
+      <Island>
         <RangeSlider
           options={animationLevelOptions}
           value={animationLevelState === ANIMATION_LEVEL_CUSTOM ? ANIMATION_LEVEL_MED : animationLevelState}
           onChange={handleAnimationLevelChange}
         />
-      </div>
+      </Island>
+      <IslandDescription dir={lang.isRtl ? 'rtl' : undefined}>
+        {lang('SettingsPerformanceSliderSubtitle')}
+      </IslandDescription>
 
-      <div className="settings-item-simple settings-item__with-shifted-dropdown">
-        <h3 className="settings-item-header" dir="auto">{lang('SettingsPerformanceGranularTitle')}</h3>
-
+      <IslandTitle dir="auto">{lang('SettingsPerformanceGranularTitle')}</IslandTitle>
+      <Island>
         {PERFORMANCE_OPTIONS.map(([sectionName, options], index) => {
           return (
             <div
@@ -223,7 +221,7 @@ function SettingsPerformance({
             </div>
           );
         })}
-      </div>
+      </Island>
     </div>
   );
 }

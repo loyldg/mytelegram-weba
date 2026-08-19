@@ -1,4 +1,9 @@
-import { LANG_CACHE_NAME, MEDIA_CACHE_NAME, MEDIA_CACHE_NAME_AVATARS, MEDIA_PROGRESSIVE_CACHE_NAME } from '../config';
+import {
+  LANG_CACHE_NAME,
+  MEDIA_CACHE_NAME,
+  MEDIA_CACHE_NAME_AVATARS,
+  MEDIA_PROGRESSIVE_CACHE_NAME,
+} from '../config';
 import { yieldToMain } from './browser/scheduler';
 import { ACCOUNT_SLOT } from './multiaccount';
 
@@ -10,6 +15,7 @@ const ACCESS_THROTTLE = 24 * 60 * 60 * 1000; // 1 day
 const CLEANUP_INTERVAL = 1 * 60 * 60 * 1000; // 1 hour
 
 const CLEARABLE_CACHE_NAMES = [MEDIA_CACHE_NAME, MEDIA_CACHE_NAME_AVATARS, MEDIA_PROGRESSIVE_CACHE_NAME];
+const CACHE_KEY_BASE = `${self.location.origin}/`;
 
 cleanup(CLEARABLE_CACHE_NAMES);
 setInterval(() => {
@@ -35,6 +41,10 @@ export enum Type {
 function getCacheName(cacheName: string) {
   if (cacheName === LANG_CACHE_NAME) return cacheName;
 
+  return getAccountScopedCacheName(cacheName);
+}
+
+function getAccountScopedCacheName(cacheName: string) {
   const suffix = ACCOUNT_SLOT ? `_${ACCOUNT_SLOT}` : '';
   return `${cacheName}${suffix}`;
 }
@@ -42,14 +52,43 @@ function getCacheName(cacheName: string) {
 export async function fetch(
   cacheName: string, key: string, type: Type, isHtmlAllowed = false,
 ) {
+  return fetchFromCache(getCacheName(cacheName), key, type, isHtmlAllowed);
+}
+
+export async function fetchShared(
+  cacheName: string, key: string, type: Type, isHtmlAllowed = false,
+) {
+  return fetchFromCache(cacheName, key, type, isHtmlAllowed);
+}
+
+export async function fetchFromAccountScopes(
+  cacheName: string, key: string, type: Type, isHtmlAllowed = false,
+) {
+  const accountCacheNames = await getAccountScopedCacheNames(cacheName);
+  for (const accountCacheName of accountCacheNames) {
+    const result = await fetchFromCache(accountCacheName, key, type, isHtmlAllowed);
+    if (result !== undefined) return result;
+  }
+
+  return undefined;
+}
+
+export async function fetchFromCurrentAccountScope(
+  cacheName: string, key: string, type: Type, isHtmlAllowed = false,
+) {
+  return fetchFromCache(getAccountScopedCacheName(cacheName), key, type, isHtmlAllowed);
+}
+
+async function fetchFromCache(
+  resolvedCacheName: string, key: string, type: Type, isHtmlAllowed: boolean,
+) {
   if (!cacheApi) {
     return undefined;
   }
 
   try {
-    // To avoid the error "Request scheme 'webdocument' is unsupported"
-    const request = new Request(key.replace(/:/g, '_'));
-    const cache = await cacheApi.open(getCacheName(cacheName));
+    const request = buildCacheRequest(key);
+    const cache = await cacheApi.open(resolvedCacheName);
     const response = await cache.match(request);
     if (!response) {
       return undefined;
@@ -111,8 +150,7 @@ export async function save(cacheName: string, key: string, data: AnyLiteral | Bl
     const cacheData = typeof data === 'string' || data instanceof Blob || data instanceof ArrayBuffer
       ? data
       : JSON.stringify(data);
-    // To avoid the error "Request scheme 'webdocument' is unsupported"
-    const request = new Request(key.replace(/:/g, '_'));
+    const request = buildCacheRequest(key);
     const response = new Response(cacheData);
     response.headers.set(LAST_ACCESS_HEADER, Date.now().toString());
     const cache = await cacheApi.open(getCacheName(cacheName));
@@ -127,13 +165,26 @@ export async function save(cacheName: string, key: string, data: AnyLiteral | Bl
 }
 
 export async function remove(cacheName: string, key: string) {
+  return removeFromCache(getCacheName(cacheName), key);
+}
+
+export async function removeShared(cacheName: string, key: string) {
+  return removeFromCache(cacheName, key);
+}
+
+export async function removeFromAccountScopes(cacheName: string, key: string) {
+  const accountCacheNames = await getAccountScopedCacheNames(cacheName);
+  return Promise.all(accountCacheNames.map((accountCacheName) => removeFromCache(accountCacheName, key)));
+}
+
+async function removeFromCache(resolvedCacheName: string, key: string) {
   try {
     if (!cacheApi) {
       return undefined;
     }
 
-    const cache = await cacheApi.open(getCacheName(cacheName));
-    return await cache.delete(key);
+    const cache = await cacheApi.open(resolvedCacheName);
+    return await cache.delete(buildCacheRequest(key));
   } catch (err) {
     // eslint-disable-next-line no-console
     console.warn(err);
@@ -142,12 +193,25 @@ export async function remove(cacheName: string, key: string) {
 }
 
 export async function clear(cacheName: string) {
+  return clearCache(getCacheName(cacheName));
+}
+
+export async function clearShared(cacheName: string) {
+  return clearCache(cacheName);
+}
+
+export async function clearAccountScopes(cacheName: string) {
+  const accountCacheNames = await getAccountScopedCacheNames(cacheName);
+  return Promise.all(accountCacheNames.map(clearCache));
+}
+
+async function clearCache(resolvedCacheName: string) {
   try {
     if (!cacheApi) {
       return undefined;
     }
 
-    return await cacheApi.delete(getCacheName(cacheName));
+    return await cacheApi.delete(resolvedCacheName);
   } catch (err) {
     // eslint-disable-next-line no-console
     console.warn(err);
@@ -183,6 +247,24 @@ export async function cleanup(cacheNames: string[]) {
 
 export function purgeClearableCache() {
   CLEARABLE_CACHE_NAMES.forEach((cacheName) => clear(cacheName));
+}
+
+async function getAccountScopedCacheNames(cacheName: string) {
+  if (!cacheApi) return [];
+
+  try {
+    return (await cacheApi.keys()).filter((name) => name.startsWith(`${cacheName}_`));
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.warn(err);
+    return [];
+  }
+}
+
+function buildCacheRequest(key: string) {
+  // To avoid the error "Request scheme 'webdocument' is unsupported"
+  const normalizedKey = key.replace(/:/g, '_');
+  return new Request(new URL(normalizedKey, CACHE_KEY_BASE));
 }
 
 async function updateAccessTime(cache: Cache, request: Request, response: Response) {

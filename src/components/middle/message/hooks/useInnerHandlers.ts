@@ -1,6 +1,6 @@
 import { getActions } from '../../../../global';
 
-import type { ApiMessage, ApiPeer, ApiStory, ApiTopic, ApiUser, ApiWebPage } from '../../../../api/types';
+import type { ApiMessage, ApiPeer, ApiStory, ApiTopic, ApiWebPage } from '../../../../api/types';
 import type { OldLangFn } from '../../../../hooks/useOldLang';
 import type { IAlbum, ThreadId } from '../../../../types';
 import { MAIN_THREAD_ID } from '../../../../api/types';
@@ -25,6 +25,7 @@ export default function useInnerHandlers({
   album,
   senderPeer,
   botSender,
+  guestFromSender,
   messageTopic,
   isTranslatingChat,
   story,
@@ -45,7 +46,8 @@ export default function useInnerHandlers({
   album?: IAlbum;
   avatarPeer?: ApiPeer;
   senderPeer?: ApiPeer;
-  botSender?: ApiUser;
+  botSender?: ApiPeer;
+  guestFromSender?: ApiPeer;
   messageTopic?: ApiTopic;
   isTranslatingChat?: boolean;
   story?: ApiStory;
@@ -83,7 +85,8 @@ export default function useInnerHandlers({
   });
 
   const handleViaBotClick = useLastCallback(() => {
-    if (!botSender) {
+    const username = botSender && getMainUsername(botSender);
+    if (!username) {
       return;
     }
 
@@ -91,9 +94,17 @@ export default function useInnerHandlers({
       chatId,
       threadId,
       text: {
-        text: `@${getMainUsername(botSender)} `,
+        text: `@${username} `,
       },
     });
+  });
+
+  const handleGuestForClick = useLastCallback(() => {
+    if (!guestFromSender) {
+      return;
+    }
+
+    openChat({ id: guestFromSender.id });
   });
 
   const handleReplyClick = useLastCallback((): void => {
@@ -129,13 +140,15 @@ export default function useInnerHandlers({
       chatId,
       threadId,
       messageId,
-      origin: isScheduled ? MediaViewerOrigin.ScheduledInline : MediaViewerOrigin.Inline,
+      origin: message.isEphemeral
+        ? MediaViewerOrigin.Ephemeral
+        : isScheduled ? MediaViewerOrigin.ScheduledInline : MediaViewerOrigin.Inline,
     });
   });
 
   const openMediaViewerWithPhotoOrVideo = useLastCallback((withDynamicLoading: boolean): void => {
     if (paidMedia && !paidMedia.isBought) return;
-    if (withDynamicLoading) {
+    if (withDynamicLoading && !message.isEphemeral) {
       searchChatMediaMessages({ chatId, threadId, currentMediaMessageId: messageId });
     }
 
@@ -148,18 +161,20 @@ export default function useInnerHandlers({
       chatId,
       threadId,
       messageId,
-      origin: isScheduled ? MediaViewerOrigin.ScheduledInline : MediaViewerOrigin.Inline,
+      origin: message.isEphemeral
+        ? MediaViewerOrigin.Ephemeral
+        : isScheduled ? MediaViewerOrigin.ScheduledInline : MediaViewerOrigin.Inline,
       timestamp: lastPlaybackTimestamp || videoContent?.timestamp || webpageTimestamp,
-      withDynamicLoading,
+      withDynamicLoading: message.isEphemeral ? false : withDynamicLoading,
     });
   });
   const handlePhotoMediaClick = useLastCallback((): void => {
-    const withDynamicLoading = !isScheduled && !paidMedia;
+    const withDynamicLoading = !message.isEphemeral && !isScheduled && !paidMedia;
     openMediaViewerWithPhotoOrVideo(withDynamicLoading);
   });
   const handleVideoMediaClick = useLastCallback(() => {
     const isGif = message.content?.video?.isGif;
-    const withDynamicLoading = !isGif && !isScheduled && !paidMedia;
+    const withDynamicLoading = !message.isEphemeral && !isGif && !isScheduled && !paidMedia;
     openMediaViewerWithPhotoOrVideo(withDynamicLoading);
   });
 
@@ -173,7 +188,7 @@ export default function useInnerHandlers({
   });
 
   const handleAudioPlay = useLastCallback((): void => {
-    openAudioPlayer({ chatId, messageId });
+    openAudioPlayer({ chatId, threadId, messageId });
   });
 
   const handleAlbumMediaClick = useLastCallback((albumMessageId: number, albumIndex?: number): void => {
@@ -191,6 +206,7 @@ export default function useInnerHandlers({
   });
 
   const handleReadMedia = useLastCallback((): void => {
+    if (message.isEphemeral) return;
     markMessagesRead({ chatId, messageIds: [messageId] });
   });
 
@@ -289,6 +305,7 @@ export default function useInnerHandlers({
   return {
     handleSenderClick,
     handleViaBotClick,
+    handleGuestForClick,
     handleReplyClick,
     handleDocumentClick,
     handleMediaClick,

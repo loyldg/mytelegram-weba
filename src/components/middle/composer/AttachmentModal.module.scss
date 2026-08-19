@@ -1,6 +1,13 @@
 .root {
   --border-radius-default: 0.625rem;
 
+  // The Media Editor renders in its own portal and fully covers this modal while open. Hide the
+  // modal's backdrop and dialog so they don't show behind the editor's fade-in transition.
+  &.editorActive {
+    pointer-events: none;
+    opacity: 0;
+  }
+
   :global {
     .modal-dialog {
       max-width: 26.25rem;
@@ -124,15 +131,8 @@
 
   transition: border-color 250ms ease-in-out;
 
-  :global {
-    .form-control {
-      background: var(--color-background);
-    }
-
-    .MentionTooltip {
-      z-index: 1;
-      right: 0 !important;
-    }
+  :global(.form-control) {
+    background: var(--color-background);
   }
 }
 

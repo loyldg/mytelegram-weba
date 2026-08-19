@@ -1,4 +1,5 @@
 import type {
+  ApiAiComposeToneType,
   ApiAppConfig,
   ApiAttachBot,
   ApiAvailableEffect,
@@ -45,6 +46,7 @@ import type {
   ApiStoryAlbum,
   ApiTimezone,
   ApiTonAmount,
+  ApiTopPeerCategory,
   ApiTranscription,
   ApiUpdateAuthorizationStateType,
   ApiUpdateConnectionStateType,
@@ -64,14 +66,12 @@ import type {
   ChatListType,
   ChatTranslatedMessages,
   EmojiKeywords,
-  IThemeSettings,
   ServiceNotification,
   SimilarBotsInfo,
   StarGiftCategory,
   StarsSubscriptions,
   StarsTransactionHistory,
   TextSummary,
-  ThemeKey,
   Thread,
   ThreadId,
   TopicsInfo,
@@ -92,6 +92,10 @@ export type GlobalState = {
     byId: Record<string, ApiTimezone>;
     hash: number;
   };
+  aiComposeTones?: {
+    tones: ApiAiComposeToneType[];
+    hash: string;
+  };
   isCacheApiSupported?: boolean;
   connectionState?: ApiUpdateConnectionStateType;
   currentUserId?: string;
@@ -105,6 +109,10 @@ export type GlobalState = {
   initialUnreadNotifications?: number;
   shouldShowContextMenuHint?: boolean;
   botFreezeAppealId?: string;
+  reactionPollingPause?: {
+    until: number;
+    chatId: string;
+  };
 
   audioPlayer: {
     volume: number;
@@ -186,6 +194,8 @@ export type GlobalState = {
   users: {
     byId: Record<string, ApiUser>;
     statusesById: Record<string, ApiUserStatus>;
+    savedMusicById?: Record<string, true>;
+    isSavedMusicLoading?: boolean;
     // Obtained from GetFullUser / UserFullInfo
     fullInfoById: Record<string, ApiUserFullInfo>;
     previewMediaByBotId: Record<string, ApiBotPreviewMedia[]>;
@@ -241,11 +251,14 @@ export type GlobalState = {
     notifyExceptionById: Record<string, ApiPeerNotifySettings>;
 
     similarBotsById: Record<string, SimilarBotsInfo>;
+
+    personalChannelIds?: string[];
   };
 
   messages: {
     byChatId: Record<string, {
       byId: Record<number, ApiMessage>;
+      ephemeralById: Record<number, ApiMessage>;
       summaryById: Record<number, TextSummary>;
       threadsById: Record<ThreadId, Thread>;
     }>;
@@ -413,20 +426,12 @@ export type GlobalState = {
     };
   };
 
-  topPeers: {
-    userIds?: string[];
+  topPeerCategories: Partial<Record<ApiTopPeerCategory, {
+    peerIds: string[];
+    ratingsByPeerId: Record<string, number>;
     lastRequestedAt?: number;
-  };
-
-  topInlineBots: {
-    userIds?: string[];
-    lastRequestedAt?: number;
-  };
-
-  topBotApps: {
-    userIds?: string[];
-    lastRequestedAt?: number;
-  };
+    isDisabled?: boolean;
+  }>>;
 
   activeSessions: {
     byHash: Record<string, ApiSession>;
@@ -447,7 +452,6 @@ export type GlobalState = {
     lastPremiumBandwithNotificationDate?: number;
     paidReactionPrivacy?: ApiPaidReactionPrivacyType;
     botVerificationShownPeerIds: string[];
-    themes: Partial<Record<ThemeKey, IThemeSettings>>;
     accountDaysTtl: number;
     passkeys?: ApiPasskey[];
   };

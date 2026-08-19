@@ -1,5 +1,4 @@
 import type { FC } from '../../../../lib/teact/teact';
-import type React from '../../../../lib/teact/teact';
 import {
   memo, useCallback, useEffect, useRef, useState,
 } from '../../../../lib/teact/teact';
@@ -14,6 +13,7 @@ import useHistoryBack from '../../../../hooks/useHistoryBack';
 import useOldLang from '../../../../hooks/useOldLang';
 
 import AnimatedIconFromSticker from '../../../common/AnimatedIconFromSticker';
+import Island from '../../../gili/layout/Island';
 import InputText from '../../../ui/InputText';
 import Loading from '../../../ui/Loading';
 
@@ -88,7 +88,7 @@ const SettingsTwoFaEmailCode: FC<OwnProps & StateProps> = ({
         )}
       </div>
 
-      <div className="settings-item settings-group">
+      <Island>
         <InputText
           value={value}
           ref={inputRef}
@@ -98,7 +98,7 @@ const SettingsTwoFaEmailCode: FC<OwnProps & StateProps> = ({
           onChange={handleInputChange}
         />
         {isLoading && <Loading />}
-      </div>
+      </Island>
     </div>
   );
 };

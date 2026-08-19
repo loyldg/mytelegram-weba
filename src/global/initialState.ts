@@ -4,19 +4,20 @@ import { LeftColumnContent, NewChatMembersProgress, SettingsScreens } from '../t
 
 import {
   ANIMATION_LEVEL_DEFAULT,
-  DARK_THEME_PATTERN_COLOR,
   DEFAULT_GIFT_PROFILE_FILTER_OPTIONS,
   DEFAULT_MESSAGE_TEXT_SIZE_PX,
-  DEFAULT_PATTERN_COLOR,
   DEFAULT_PLAYBACK_RATE,
   DEFAULT_RESALE_GIFTS_FILTER_OPTIONS,
   DEFAULT_VOLUME,
   FOLDERS_POSITION_DEFAULT,
+  INSTANT_VIEW_FONT_SIZE_ADJUST_DEFAULT,
   IOS_DEFAULT_MESSAGE_TEXT_SIZE_PX,
   MACOS_DEFAULT_MESSAGE_TEXT_SIZE_PX,
 } from '../config';
 import { IS_IOS, IS_MAC_OS } from '../util/browser/windowEnvironment';
+import { getDefaultPatternColor } from '../util/wallpaper';
 import { DEFAULT_APP_CONFIG } from '../limits';
+import { INITIAL_BROWSER_STATE } from './helpers/browser';
 
 export const INITIAL_PERFORMANCE_STATE_MAX: PerformanceType = {
   messageBlur: true,
@@ -78,18 +79,33 @@ export const INITIAL_PERFORMANCE_STATE_MIN: PerformanceType = {
   textStreaming: false,
 };
 
+export const SHARED_STATE_CACHE_VERSION = 1;
+
 export const INITIAL_SHARED_STATE: SharedState = {
+  cacheVersion: SHARED_STATE_CACHE_VERSION,
   settings: {
     theme: 'light',
+    themes: {
+      light: {
+        isBlurred: true,
+        patternColor: getDefaultPatternColor('light'),
+      },
+      dark: {
+        isBlurred: true,
+        patternColor: getDefaultPatternColor('dark'),
+      },
+    },
     shouldUseSystemTheme: true,
     messageTextSize: IS_IOS
       ? IOS_DEFAULT_MESSAGE_TEXT_SIZE_PX
       : (IS_MAC_OS ? MACOS_DEFAULT_MESSAGE_TEXT_SIZE_PX : DEFAULT_MESSAGE_TEXT_SIZE_PX),
+    instantViewFontSizeAdjust: INSTANT_VIEW_FONT_SIZE_ADJUST_DEFAULT,
     animationLevel: ANIMATION_LEVEL_DEFAULT,
     foldersPosition: FOLDERS_POSITION_DEFAULT,
     messageSendKeyCombo: 'enter',
+    shouldReplaceTextShortcuts: true,
     performance: INITIAL_PERFORMANCE_STATE_MAX,
-    shouldSkipWebAppCloseConfirmation: false,
+    shouldSkipBrowserCloseConfirmation: false,
     language: 'en',
     timeFormat: '24h',
     wasTimeFormatSetManually: false,
@@ -102,7 +118,7 @@ export const INITIAL_SHARED_STATE: SharedState = {
 };
 
 export const INITIAL_GLOBAL_STATE: GlobalState = {
-  cacheVersion: 3,
+  cacheVersion: 5,
   isInited: true,
   attachMenu: { bots: {} },
   passcode: {},
@@ -268,10 +284,7 @@ export const INITIAL_GLOBAL_STATE: GlobalState = {
     saved: {},
   },
 
-  topPeers: {},
-
-  topInlineBots: {},
-  topBotApps: {},
+  topPeerCategories: {},
 
   activeSessions: {
     byHash: {},
@@ -318,16 +331,6 @@ export const INITIAL_GLOBAL_STATE: GlobalState = {
     },
     privacy: {},
     botVerificationShownPeerIds: [],
-    themes: {
-      light: {
-        isBlurred: true,
-        patternColor: DEFAULT_PATTERN_COLOR,
-      },
-      dark: {
-        isBlurred: true,
-        patternColor: DARK_THEME_PATTERN_COLOR,
-      },
-    },
     accountDaysTtl: 365,
   },
 
@@ -368,18 +371,9 @@ export const INITIAL_TAB_STATE: TabState = {
     byUsername: {},
   },
 
-  webApps: {
-    openedWebApps: {},
-    openedOrderedKeys: [],
-    sessionKeys: [],
-    modalState: 'maximized',
-    isModalOpen: false,
-    isMoreAppsTabActive: false,
-  },
+  browser: INITIAL_BROWSER_STATE,
 
   globalSearch: {},
-
-  userSearch: {},
 
   leftColumn: {
     contentKey: LeftColumnContent.ChatList,
@@ -441,7 +435,7 @@ export const INITIAL_TAB_STATE: TabState = {
 
   isShareMessageModalShown: false,
 
-  isWebAppsCloseConfirmationModalOpen: false,
+  isBrowserCloseConfirmationModalOpen: false,
 
   forwardMessages: {},
 
@@ -462,10 +456,6 @@ export const INITIAL_TAB_STATE: TabState = {
 
   statistics: {
     byChatId: {},
-  },
-
-  pollModal: {
-    isOpen: false,
   },
 
   requestedTranslations: {

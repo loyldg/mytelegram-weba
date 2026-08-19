@@ -1,7 +1,7 @@
 @use '../../styles/mixins';
 
 .Composer {
-  --base-height: 3rem;
+  --base-height: var(--composer-height);
 
   align-items: flex-end;
 
@@ -16,10 +16,6 @@
       @media (max-width: 600px) {
         right: 1rem;
       }
-    }
-
-    .svg-appendix {
-      opacity: 0;
     }
 
     @media (max-width: 600px) {
@@ -81,33 +77,20 @@
     height: var(--base-height);
     margin-left: 0.5rem;
 
+    box-shadow: var(--shadow-footer);
+
     &:not(.danger):not(:hover) {
       color: var(--color-composer-button);
     }
 
-    .icon-send,
+    .icon-new-send,
     .icon-schedule,
     .icon-forward,
-    .icon-microphone-alt,
-    .icon-check,
+    .main-button-microphone,
+    .icon-check-bold,
     .icon-view-once,
     .icon-one-filled {
       position: absolute;
-    }
-
-    .paidStarsBadgeText {
-      display: inline-flex;
-      align-items: center;
-    }
-
-    &.cancel {
-      position: relative;
-      z-index: 1;
-
-      &:hover,
-      &.active {
-        background: var(--color-chat-hover);
-      }
     }
 
     &.recording {
@@ -116,68 +99,14 @@
       transition: box-shadow 0.1s;
     }
 
-    &.story-reaction-button {
-      --custom-emoji-size: 1.5rem;
-
-      overflow: visible !important;
-
-      &:hover {
-        background-color: var(--color-background) !important;
-      }
-
-      .icon-heart {
-        transition: color 0.2s ease-out;
-      }
-
-      .story-reaction-heart {
-        color: var(--color-heart) !important;
-      }
-    }
-
-    .paidStarsBadgeIcon {
-      margin-inline-start: 0;
-      margin-inline-end: 0.0625rem;
-    }
-
-    .paidStarsBadge {
-      position: absolute;
-      top: -1rem;
-
-      height: auto;
-      margin-top: 0.625rem;
-      padding-block: 0.25rem;
-      padding-inline: 0.375rem;
-
-      font-size: 0.8125rem;
-      font-weight: var(--font-weight-semibold) !important;
-      line-height: 1;
-
-      &.visible {
-        animation: grow-icon 0.4s ease-out;
-      }
-
-      &.hiding {
-        animation: hide-icon 0.4s forwards ease-out;
-      }
-
-      &.hidden {
-        pointer-events: none;
-        opacity: 0;
-      }
-
-      .icon {
-        font-size: 0.875rem;
-      }
-    }
-
     &.send, &.sendOneTime {
-      .icon-send {
+      .icon-new-send {
         animation: grow-icon 0.4s ease-out;
       }
 
-      .icon-microphone-alt,
+      .main-button-microphone,
       .icon-forward,
-      .icon-check,
+      .icon-check-bold,
       .icon-schedule {
         animation: hide-icon 0.4s forwards ease-out;
       }
@@ -188,52 +117,64 @@
         animation: grow-icon 0.4s ease-out;
       }
 
-      .icon-microphone-alt,
-      .icon-check,
+      .main-button-microphone,
+      .icon-check-bold,
       .icon-forward,
-      .icon-send {
+      .icon-new-send {
         animation: hide-icon 0.4s forwards ease-out;
       }
     }
 
     &.record {
-      .icon-microphone-alt {
+      .main-button-microphone {
         animation: grow-icon 0.4s ease-out;
       }
 
-      .icon-send,
-      .icon-check,
+      .icon-new-send,
+      .icon-check-bold,
       .icon-forward,
       .icon-schedule {
         animation: hide-icon 0.4s forwards ease-out;
       }
     }
 
+    .icon-round-video {
+      position: absolute;
+      transform: scale(0);
+    }
+
+    &.record.record-video {
+      .main-button-microphone {
+        animation: hide-icon 0.4s forwards ease-out;
+      }
+
+      .icon-round-video {
+        transform: scale(1);
+        animation: grow-icon 0.4s ease-out;
+      }
+    }
+
     &.edit {
-      .icon-check {
+      .icon-check-bold {
         animation: grow-icon 0.4s ease-out;
       }
 
-      .icon-send,
+      .icon-new-send,
       .icon-forward,
-      .icon-microphone-alt,
+      .main-button-microphone,
       .icon-schedule {
         animation: hide-icon 0.4s forwards ease-out;
       }
     }
 
     &.forward {
-      --color-primary: #212121;
-
       .icon-forward {
-        --color-primary: #707478;
-
         animation: grow-icon 0.4s ease-out;
       }
 
-      .icon-send,
-      .icon-check,
-      .icon-microphone-alt,
+      .icon-new-send,
+      .icon-check-bold,
+      .main-button-microphone,
       .icon-schedule {
         animation: hide-icon 0.4s forwards ease-out;
       }
@@ -259,35 +200,14 @@
     &.not-ready > .icon {
       animation-duration: 0ms !important;
     }
-
-    @media (hover: hover) {
-      &:not(:active):not(:focus):not(:hover) {
-        .icon-send,
-        .icon-schedule,
-        .icon-forward,
-        .icon-check {
-          color: var(--color-primary);
-        }
-      }
-    }
-
-    @media (hover: none) {
-      &:not(:active):not(:focus) {
-        .icon-send,
-        .icon-schedule,
-        .icon-forward,
-        .icon-check {
-          color: var(--color-primary);
-        }
-      }
-    }
   }
 
   &:not(.mounted) > .Button,
   body.no-message-composer-animations & > .Button {
-    .icon-send,
-    .icon-microphone-alt,
-    .icon-check,
+    .icon-new-send,
+    .main-button-microphone,
+    .icon-check-bold,
+    .icon-round-video,
     .icon-schedule {
       animation-duration: 0ms !important;
     }
@@ -327,19 +247,11 @@
     .ReactionSelector__hint {
       color: #fff;
     }
-
-    @media (max-width: 600px) {
-      top: -4.25rem;
-    }
   }
 
   .composer-action-buttons-container {
     position: relative;
     width: auto;
-
-    + .AttachMenu {
-      margin-left: var(--action-button-compact-fix);
-    }
   }
 
   .composer-action-buttons {
@@ -416,36 +328,369 @@
   border-bottom-right-radius: 0;
 
   background: var(--color-background);
-  box-shadow: 0 1px 2px var(--color-default-shadow);
+  box-shadow: var(--shadow-footer);
 
-  &.with-story-tweaks {
-    border-radius: var(--border-radius-default-small);
-    border-bottom-right-radius: 0;
-    box-shadow: none;
-    &.is-need-premium {
-      border-bottom-right-radius: var(--border-radius-default-small);
+  &.rich-input-expanded {
+    --rich-editor-header-height: 2.5rem;
+    --rich-editor-toolbar-height: var(--composer-main-button-height);
+    --rich-input-header-offset: calc(0.5rem + var(--middle-header-height) + var(--middle-panel-inline-padding));
+    --rich-input-footer-offset: calc(0.5rem + var(--composer-bottom-gap));
+    --rich-input-offset: calc(var(--rich-input-header-offset) + var(--rich-input-footer-offset));
+    --rich-input-height: calc(var(--vh, 1vh) * 100 - var(--rich-input-offset));
+
+    #message-input-text {
+      --rich-editor-inline-start-gap:
+        calc(
+          var(--action-button-size) + var(--composer-row-gap) + var(--composer-pill-padding)
+        );
+      --rich-editor-inline-end-gap:
+        calc(
+          2 * var(--action-button-size) + 2 * var(--composer-row-gap) + var(--composer-pill-padding)
+        );
+
+      .input-scroller {
+        margin-inline-start: calc(-1 * var(--rich-editor-inline-start-gap));
+        margin-inline-end: calc(-1 * var(--rich-editor-inline-end-gap));
+        padding-inline: 0.75rem;
+      }
+
+      .input-scroller:not(.clone) {
+        --rich-editor-bottom-mask-size: 1rem;
+        --rich-editor-scroller-height: calc(var(--rich-input-height) - var(--rich-editor-toolbar-height));
+        --scrollable-hint-size: calc(var(--rich-editor-header-height) + 1rem);
+
+        contain: paint;
+        overflow-x: hidden;
+        overflow-y: auto;
+
+        height: var(--rich-editor-scroller-height) !important;
+
+        /* stylelint-disable-next-line plugin/no-low-performance-animation-properties */
+        transition: height var(--layer-transition) !important;
+
+        &.with-scrollable-hint {
+          mask-image: none;
+
+          &::before {
+            pointer-events: none;
+            content: "";
+
+            position: sticky;
+            z-index: 1;
+            top: 0;
+
+            display: block;
+
+            height: var(--rich-editor-scroller-height);
+            margin-bottom: calc(-1 * var(--rich-editor-scroller-height));
+
+            background:
+              linear-gradient(
+                to bottom,
+                var(--color-background) 0,
+                var(--color-background) var(--rich-editor-header-height),
+                transparent 100%
+              ),
+              linear-gradient(to bottom, transparent, var(--color-background));
+            background-repeat: no-repeat;
+            background-position:
+              left 0 top calc(-1 * var(--scrollable-hint-top-mask-outset)),
+              left 0 bottom calc(-1 * var(--scrollable-hint-bottom-mask-outset));
+            background-size:
+              100% var(--scrollable-hint-size),
+              100% var(--rich-editor-bottom-mask-size);
+
+            /* stylelint-disable-next-line plugin/no-low-performance-animation-properties */
+            transition: background-position 200ms ease;
+          }
+        }
+
+        .input-scroller-content {
+          min-height: 100%;
+          padding-top: var(--rich-editor-header-height);
+        }
+
+        .form-control {
+          min-height: calc(100% - var(--rich-editor-header-height));
+        }
+
+        .placeholder-text {
+          top: calc(var(--rich-editor-header-height) + var(--composer-input-padding-block));
+        }
+      }
     }
-  }
 
-  .svg-appendix {
-    position: absolute;
-    right: -0.5rem;
-    bottom: -0.1875rem;
+    .rich-editor-history {
+      z-index: 2;
+    }
 
-    width: 0.5625rem;
-    height: 1.25rem;
+    @media (max-width: 600px) {
+      --rich-input-footer-offset: calc(0.5rem + var(--composer-bottom-gap-mobile));
 
-    font-size: 1rem !important;
-
-    transition: opacity 200ms;
-
-    .corner {
-      fill: var(--color-background);
+      .message-input-wrapper {
+        --action-button-size: 2rem;
+      }
     }
   }
 
   @media (max-width: 600px) {
     max-width: calc(100% - 3.375rem);
+  }
+}
+
+.Composer.is-chat-composer {
+  --base-height: var(--composer-main-button-height);
+
+  @include mixins.composer-pill;
+
+  // `ComposerEmbeddedMessage` / `WebPagePreview` are full-width flex children that
+  // wrap into their own row above the input row
+  flex-wrap: wrap;
+  box-shadow: var(--shadow-footer);
+
+  .select-mode-active + .middle-column-footer & {
+    position: relative;
+    padding-right: var(--composer-pill-padding);
+  }
+
+  .composer-wrapper {
+    max-width: calc(100% - var(--composer-main-button-width) - var(--composer-row-gap));
+    border-radius: 0;
+    background: none;
+    box-shadow: none;
+  }
+
+  .ComposerEmbeddedMessage {
+    flex-basis: 100%;
+    min-width: 0;
+  }
+
+  .message-input-wrapper {
+    --action-button-compact-fix: 0rem;
+
+    gap: var(--composer-row-gap);
+
+    .input-scroller {
+      --_scroller-controls-width: calc(var(--action-button-size) + var(--composer-main-button-width));
+      --_scroller-gaps-width: calc(2 * var(--composer-row-gap) + var(--composer-pill-padding) + 0.25rem);
+      --_scroller-right-gap: calc(var(--_scroller-controls-width) + var(--_scroller-gaps-width));
+    }
+
+    > .Menu {
+      display: contents;
+    }
+
+    .bot-menu {
+      --height: var(--composer-main-button-height);
+      --icon-width: var(--composer-icon-size);
+
+      align-self: center;
+      margin-bottom: 0;
+    }
+
+    .bot-commands {
+      align-self: center;
+
+      width: var(--composer-main-button-height);
+      height: var(--composer-main-button-height);
+
+      color: white !important;
+
+      background: var(--color-primary) !important;
+
+      &.activated {
+        background: var(--color-primary-shade) !important;
+      }
+
+      @media (hover: hover) {
+        &:hover {
+          background: var(--color-primary-shade) !important;
+        }
+      }
+    }
+
+    .rich-editor-button,
+    .composer-action-button,
+    .symbol-menu-button,
+    .AttachMenu--button {
+      .icon {
+        font-size: var(--composer-icon-size);
+      }
+    }
+
+    .rich-editor-button {
+      z-index: 2;
+      top: 0.25rem;
+      right: calc(-1 * (var(--composer-row-gap) + var(--composer-main-button-width) / 2 + 0.875rem));
+    }
+  }
+
+  #message-input-text .form-control {
+    padding-inline: 0;
+  }
+
+  #message-input-text .placeholder-text,
+  #message-input-text .forced-placeholder {
+    left: 0;
+  }
+
+  .composer-wrapper,
+  .message-input-wrapper,
+  #message-input-text {
+    min-width: 0;
+  }
+
+  > .Button.main-button {
+    --paid-stars-padding: 0.625rem;
+
+    @include mixins.composer-action-button-pill;
+
+    z-index: 2;
+    overflow: hidden;
+    margin-left: var(--composer-row-gap);
+    box-shadow: none;
+
+    .icon {
+      color: white;
+    }
+
+    .icon-new-send {
+      font-size: 1.75rem;
+    }
+
+    &.has-paid-stars .icon-new-send {
+      display: none;
+    }
+
+    // Same approach as `.bot-menu`: explicit width from a measured CSS variable, animated by CSS
+    &.paid {
+      width: calc(var(--paid-stars-width, 0px) + 2 * var(--paid-stars-padding));
+      min-width: var(--composer-main-button-width);
+    }
+
+    .paidStars {
+      display: flex;
+      flex-shrink: 0;
+      gap: 0.125rem;
+      align-items: center;
+
+      font-family: var(--font-family-monospace);
+      font-size: 1rem;
+      font-weight: var(--font-weight-semibold);
+      color: var(--color-white);
+
+      .icon {
+        font-size: 1.25rem;
+      }
+    }
+
+    @media (hover: hover) {
+      &:hover {
+        background-color: var(--color-primary-shade);
+      }
+    }
+  }
+}
+
+.Composer.is-story-composer {
+  --base-height: var(--composer-main-button-height);
+
+  @include mixins.composer-pill;
+
+  .composer-wrapper {
+    max-width: calc(100% - var(--composer-main-button-width) - var(--composer-row-gap));
+    background: none;
+    box-shadow: none;
+  }
+
+  .composer-wrapper,
+  .message-input-wrapper,
+  #story-input-text {
+    min-width: 0;
+  }
+
+  .message-input-wrapper {
+    --action-button-compact-fix: 0rem;
+
+    flex-grow: 1;
+    gap: var(--composer-row-gap);
+
+    .input-scroller {
+      --_scroller-controls-width: calc(var(--action-button-size) + var(--composer-main-button-width));
+      --_scroller-gaps-width: calc(2 * var(--composer-row-gap) + var(--composer-pill-padding));
+      --_scroller-right-gap: calc(var(--_scroller-controls-width) + var(--_scroller-gaps-width));
+
+      @include mixins.adapt-padding-to-scrollbar(var(--_scroller-right-gap), var(--composer-row-gap));
+    }
+
+    > .Menu {
+      display: contents;
+    }
+  }
+
+  #story-input-text {
+    .form-control {
+      padding-inline: var(--composer-row-gap);
+    }
+
+    .placeholder-text {
+      left: var(--composer-row-gap);
+    }
+  }
+
+  .story-reaction-button {
+    --custom-emoji-size: 1.5rem;
+
+    position: absolute;
+    right: 0;
+    bottom: 0;
+    overflow: visible;
+
+    .icon-heart {
+      transition: color 0.2s ease-out;
+    }
+
+    .story-reaction-heart {
+      color: var(--color-heart);
+    }
+  }
+
+  .story-reaction-button,
+  .symbol-menu-button,
+  .mobile-symbol-menu-button {
+    transition: opacity 150ms ease-out, transform 150ms ease-out, visibility 150ms;
+
+    body.no-message-composer-animations & {
+      transition: none;
+    }
+  }
+
+  &:not(.is-story-composer-focused) {
+    .symbol-menu-button,
+    .mobile-symbol-menu-button {
+      transform: scale(0.75);
+      visibility: hidden;
+      opacity: 0;
+    }
+  }
+
+  &.is-story-composer-focused .story-reaction-button {
+    transform: scale(0.75);
+    visibility: hidden;
+    opacity: 0;
+  }
+
+  > .Button.main-button {
+    // The input scroller spans the whole pill and `.composer-wrapper` is stacked above the flow,
+    // so the button has to outrank it to stay clickable
+    z-index: 2;
+    margin-left: var(--composer-row-gap);
+    border-radius: var(--composer-control-radius);
+    box-shadow: none;
+
+    .icon-new-send {
+      font-size: 1.625rem;
+    }
   }
 }
 
@@ -456,7 +701,7 @@
   position: relative;
   display: flex;
 
-  .ai-composer-button {
+  .rich-editor-button {
     position: absolute;
     z-index: 1;
     top: 0.4375rem;
@@ -467,23 +712,118 @@
 
     color: var(--color-composer-button);
 
-    opacity: 1;
-
-    transition: opacity 150ms ease-out;
+    transition: opacity 150ms ease-out, background-color 150ms ease-out;
   }
 
-  .ai-composer-button-hidden {
+  &.is-voice-recording > :not(.voice-record-bar) {
+    visibility: hidden;
+  }
+
+  .rich-editor-button-hidden {
     pointer-events: none;
     opacity: 0;
     transition: opacity 150ms ease-out;
   }
 
+  .rich-editor-history {
+    pointer-events: none;
+
+    position: absolute;
+    z-index: 1;
+    top: 0;
+    left: 0.25rem;
+    transform: translateY(-125%);
+
+    display: flex;
+
+    opacity: 0;
+
+    transition: transform 200ms ease-in, opacity 200ms ease-in;
+
+    &.rich-editor-history-open {
+      pointer-events: auto;
+      transform: translateY(0);
+      opacity: 1;
+      transition-timing-function: ease-out;
+    }
+
+    body.no-message-composer-animations & {
+      transition: none;
+    }
+  }
+
   .input-scroller {
-    --_scroller-right-gap: calc((var(--action-button-size) + var(--action-button-compact-fix) - 0.125rem));
+    --_scroller-right-gap: calc(var(--action-button-size) + var(--action-button-compact-fix) - 0.125rem);
 
     scrollbar-gutter: stable;
     margin-right: calc(-1 * var(--_scroller-right-gap));
     padding-right: var(--_scroller-right-gap);
+  }
+
+  .rich-editor-toolbar-viewport {
+    pointer-events: none;
+    overflow: hidden;
+    height: 0;
+
+    /* stylelint-disable-next-line plugin/no-low-performance-animation-properties */
+    transition: height var(--layer-transition);
+
+    .rich-input-expanded & {
+      pointer-events: auto;
+      height: var(--rich-editor-toolbar-height, var(--composer-main-button-height));
+    }
+
+    body.no-message-composer-animations & {
+      transition: none !important;
+    }
+  }
+
+  .rich-editor-toolbar {
+    transform: translateY(100%);
+
+    display: flex;
+    flex-wrap: nowrap;
+    gap: 0.5rem;
+    align-items: center;
+    justify-content: space-evenly;
+
+    height: var(--rich-editor-toolbar-height, var(--composer-main-button-height));
+    padding: 0 0.75rem;
+
+    /* stylelint-disable plugin/no-low-performance-animation-properties */
+    transition: transform var(--layer-transition);
+    /* stylelint-enable plugin/no-low-performance-animation-properties */
+
+    .rich-input-expanded & {
+      transform: translateY(0);
+    }
+
+    body.no-message-composer-animations & {
+      transition: none !important;
+    }
+
+    .Button {
+      width: var(--composer-main-button-width);
+      height: var(--composer-main-button-height);
+      border-radius: 50%;
+      font-size: 1.5rem;
+    }
+
+    @media (max-width: 600px) {
+      gap: 0;
+      justify-content: space-around;
+      padding-inline: 0;
+
+      .Button {
+        width: 2rem;
+        height: 2rem;
+        font-size: var(--composer-icon-size);
+      }
+    }
+  }
+
+  .rich-editor-toolbar-menu {
+    flex-shrink: 0;
   }
 
   > .Spinner {
@@ -513,42 +853,42 @@
     }
 
     &.bot-menu {
+      --height: 2rem;
       --icon-width: 1.25rem;
       --icon-gap: 0.25rem;
-      --padding-sides: 0.5rem;
+      --padding-sides: calc((var(--height) - var(--icon-width)) / 2);
 
       display: inline-flex;
+      align-items: center;
       justify-content: flex-start;
 
-      width: 2rem;
+      width: var(--height);
       max-width: clamp(0px, 12rem, 25vw);
-      height: 2rem;
-      margin: 0 0.5rem 0.5rem;
+      height: var(--height);
       padding: 0 var(--padding-sides);
-      border-radius: 0.5rem;
+      border-radius: calc(var(--height) / 2);
 
       color: white !important;
       text-transform: none;
 
       background: var(--color-primary) !important;
       /* stylelint-disable-next-line plugin/no-low-performance-animation-properties */
-      transition: 0.25s ease-out width, 0.25s ease-out border-radius;
+      transition: 0.25s ease-out width, 0.15s background-color;
 
       &.open {
-        width: calc(var(--bot-menu-text-width) + var(--padding-sides) * 2 + var(--icon-gap) + var(--icon-width));
-        border-radius: 1rem;
+        width: calc(var(--icon-width) + var(--icon-gap) + var(--bot-menu-text-width) + var(--padding-sides) * 2);
+      }
+
+      @media (hover: hover) {
+        &:hover {
+          background-color: var(--color-primary-shade) !important;
+        }
       }
     }
 
     .bot-menu-icon {
-      transform: translateX(-0.15rem);
       margin-right: var(--icon-gap);
-      font-size: 1.25rem;
-      transition: 0.25s ease-out transform;
-
-      &.open {
-        transform: translateX(0);
-      }
+      font-size: var(--icon-width);
     }
 
     .bot-menu-text {
@@ -564,11 +904,6 @@
 
     &.bot-commands {
       color: var(--color-primary) !important;
-
-      // SymbolMenu button should be accessible if BotCommandsMenu opened
-      body.is-touch-env &.activated + .Button.mobile-symbol-menu-button {
-        z-index: calc(var(--z-menu-backdrop) + 1);
-      }
     }
 
     &.scheduled-button .icon::after {
@@ -586,41 +921,6 @@
       background: var(--color-active-darker);
     }
   }
-
-  > .input-group {
-    flex-grow: 1;
-    margin-bottom: 0;
-  }
-
-  .recording-state {
-    position: relative;
-
-    display: inline-block;
-
-    height: var(--base-height);
-    padding: 0 3.125rem 0 1rem;
-
-    font-family: var(--font-family);
-    font-variant-numeric: tabular-nums;
-    line-height: var(--base-height);
-
-    &::after {
-      content: "";
-
-      position: absolute;
-      top: 50%;
-      right: 1.3125rem;
-
-      width: 0.75rem;
-      height: 0.75rem;
-      margin-top: -0.375rem;
-      border-radius: 0.375rem;
-
-      background: var(--color-error);
-
-      animation: recording-blink-like-macos 1.5s infinite;
-    }
-  }
 }
 
 .symbol-menu-trigger {
@@ -629,27 +929,35 @@
   left: -1rem;
 }
 
-@media (min-width: 600px) {
-  .symbol-menu-button {
-    width: 2rem !important;
-    margin-left: 0.75rem !important;
-
-    .Button + & {
-      margin-left: -0.25rem !important;
-    }
-  }
-}
-
 .input-scroller {
   overflow: hidden;
   min-height: var(--base-height, 3rem);
-  max-height: 26rem;
+  max-height: 10rem;
 
   /* stylelint-disable-next-line plugin/no-low-performance-animation-properties */
   transition: height 100ms ease;
 
+  &.with-scrollable-hint {
+    /* stylelint-disable plugin/no-low-performance-animation-properties */
+    transition:
+      height 100ms ease,
+      scrollbar-color 0.3s ease,
+      mask-size 200ms ease,
+      mask-position 200ms ease;
+    /* stylelint-enable plugin/no-low-performance-animation-properties */
+  }
+
   &.overflown {
     overflow-y: auto;
+  }
+
+  &.rich-only-preview {
+    cursor: pointer;
+    overflow: hidden !important;
+
+    .ProseMirror {
+      pointer-events: none !important;
+    }
   }
 
   & > .input-scroller-content {
@@ -660,40 +968,20 @@
     transition: none !important;
   }
 
-  .emoji {
-    pointer-events: none;
-
-    width: 1.25rem;
-    height: 1.25rem;
-    margin: 0 1px -5px;
-
-    vertical-align: 0;
-  }
-
-  .custom-emoji {
-    margin: 0;
-    vertical-align: text-top;
-
-    &.colorable {
-      filter: var(--input-custom-emoji-filter);
-    }
-  }
-
-  // Workaround to preserve correct input height
-  &.clone {
-    .custom-emoji {
-      vertical-align: bottom;
-    }
-  }
-
   @media (max-width: 600px) {
-    max-height: 16rem;
+    max-height: 10rem;
   }
 }
 
 #message-input-text,
 #story-input-text,
 #caption-input-text {
+  --composer-input-line-height: 1.375;
+  --composer-input-padding-block:
+    calc(
+      (var(--base-height, 3rem) - var(--composer-text-size, 1rem) * var(--composer-input-line-height)) / 2
+    );
+
   position: relative;
   flex-grow: 1;
 
@@ -702,14 +990,15 @@
     overflow: hidden;
 
     height: auto;
-    padding: calc((var(--base-height, 3rem) - var(--composer-text-size, 1rem) * 1.375) / 2) 0.875rem;
+    padding: var(--composer-input-padding-block) 0.875rem;
     border: none !important;
     border-radius: 0 !important;
 
     font-family: var(--font-family);
     font-size: var(--composer-text-size, 1rem);
-    line-height: 1.375;
+    line-height: var(--composer-input-line-height);
     text-align: initial;
+    white-space: pre-wrap;
 
     background: transparent !important;
     box-shadow: none !important;
@@ -737,7 +1026,7 @@
     pointer-events: none;
 
     position: absolute;
-    top: calc((3.25rem - var(--composer-text-size, 1rem) * 1.375) / 2);
+    top: var(--composer-input-padding-block);
     bottom: auto;
 
     unicode-bidi: plaintext;
@@ -748,7 +1037,7 @@
     max-width: 100%;
 
     font-size: var(--composer-text-size, 1rem);
-    line-height: 1.3125;
+    line-height: var(--composer-input-line-height);
     color: var(--color-placeholders);
     text-align: initial;
     text-overflow: ellipsis;
@@ -789,37 +1078,6 @@
     }
   }
 
-  .text-entity-link {
-    cursor: var(--custom-cursor, default);
-    color: var(--color-links) !important;
-    text-decoration: none;
-    word-break: break-all;
-
-    &:hover,
-    &:active,
-    &:visited {
-      text-decoration: underline !important;
-    }
-  }
-
-  .spoiler {
-    padding: 0 0.3125rem 0.125rem 0.3125rem;
-    border-radius: 0.5rem;
-
-    text-shadow:
-      -2px -2px 0 var(--color-background),
-      2px -2px 0 var(--color-background),
-      -2px 2px 0 var(--color-background),
-      2px 2px 0 var(--color-background);
-
-    background-image: url("../../assets/spoiler-dots-black.png");
-    background-size: auto min(100%, 1.125rem);
-  }
-
-  html.theme-dark & .spoiler {
-    background-image: url("../../assets/spoiler-dots-white.png");
-  }
-
   .clone {
     pointer-events: none;
 
@@ -835,21 +1093,46 @@
 
     opacity: 0;
   }
+
+  .input-scroller.clone .form-control {
+    position: static;
+  }
 }
 
 #message-input-text {
+  --composer-input-line-height: 1.3125;
+
+  > .input-scroller {
+    box-sizing: content-box;
+    margin-top: calc(-1 * var(--composer-pill-padding));
+    margin-bottom: calc(-1 * var(--composer-pill-padding));
+    padding-top: var(--composer-pill-padding);
+    padding-bottom: var(--composer-pill-padding);
+
+    &:not(.clone) {
+      /* stylelint-disable plugin/no-low-performance-animation-properties */
+      transition:
+        height var(--composer-input-grow-duration) ease,
+        margin-top var(--composer-embedded-message-duration) ease-out,
+        padding-top var(--composer-embedded-message-duration) ease-out;
+      /* stylelint-enable plugin/no-low-performance-animation-properties */
+    }
+
+    &.clone {
+      padding-top: 0;
+      padding-bottom: 0;
+    }
+  }
+
   .form-control {
     height: auto;
     margin-bottom: 0;
-    padding: calc((var(--base-height, 3rem) - var(--composer-text-size, 1rem) * 1.3125) / 2) 0;
-
-    line-height: 1.3125;
-    white-space: pre-wrap;
+    padding-inline: 0;
   }
 
-  .forced-placeholder,
-  .placeholder-text {
-    top: calc((var(--base-height, 3rem) - var(--composer-text-size, 1rem) * 1.3125) / 2);
+  .Composer.with-embedded & > .input-scroller:not(.clone) {
+    margin-top: calc(-1 * var(--composer-embedded-message-gap));
+    padding-top: var(--composer-embedded-message-gap);
   }
 
   &:not(:only-child) {
@@ -863,40 +1146,24 @@
     }
   }
 
-  .ComposerEmbeddedMessage + .message-input-wrapper &,
-  .WebPagePreview + .message-input-wrapper & {
-    .form-control.overflown {
-      margin-top: 0.75rem;
-    }
+  .input-scroller {
+    // `MessageInput` clamps the normal height; an unrestricted maximum preserves the collapse transition
+    max-height: none;
   }
 }
 
 #story-input-text,
 #caption-input-text {
-  --margin-for-scrollbar: 2rem;
   .input-scroller {
     min-height: var(--base-height, 3rem);
     max-height: 10rem;
-    margin-right: calc((var(--margin-for-scrollbar) + 1rem) * -1);
-
-    &.is-need-premium {
-      margin-right: 0.5rem;
-    }
 
     &:has(.form-control:focus) {
       border-color: var(--color-primary);
     }
   }
 
-  .input-scroller-content {
-    margin-right: calc(var(--margin-for-scrollbar) + 0.5rem);
-    &.is-need-premium {
-      margin-right: 0;
-    }
-  }
-
   .placeholder-text {
-    top: auto;
     left: 0.875rem;
   }
 
@@ -918,63 +1185,20 @@
   }
 }
 
-#caption-input-text .placeholder-text {
-  bottom: 0.875rem;
+#caption-input-text {
+  --margin-for-scrollbar: 2rem;
+
+  .input-scroller {
+    margin-right: calc((var(--margin-for-scrollbar) + 1rem) * -1);
+  }
+
+  .input-scroller-content {
+    margin-right: calc(var(--margin-for-scrollbar) + 0.5rem);
+  }
 }
 
 #story-input-text .placeholder-text {
-  top: calc((var(--base-height, 3rem) - var(--composer-text-size, 1rem) * 1.3125) / 2);
-  left: 0.875rem;
-
   &.is-need-premium {
     pointer-events: auto;
-  }
-}
-
-.composer-tooltip {
-  scrollbar-gutter: stable;
-
-  position: absolute;
-  bottom: calc(100% + 0.5rem);
-  left: 0;
-  transform-origin: bottom;
-  transform: translateY(1.5rem);
-
-  overflow-x: hidden;
-  overflow-y: auto;
-
-  width: 100%;
-  max-height: 15rem;
-  padding: 0.5rem;
-  border-radius: var(--border-radius-messages);
-
-  opacity: 0;
-  background: var(--color-background);
-  box-shadow: 0 1px 2px var(--color-default-shadow);
-
-  transition: opacity var(--layer-transition), transform var(--layer-transition);
-
-  @include mixins.adapt-padding-to-scrollbar(0.5rem);
-
-  &:not(.shown) {
-    display: none;
-  }
-
-  &.open {
-    transform: translateY(0);
-    opacity: 1;
-  }
-
-  .Loading {
-    margin: 1rem 0;
-  }
-}
-
-@keyframes recording-blink-like-macos {
-  from {
-    opacity: 1;
-  }
-  to {
-    opacity: 0.3;
   }
 }

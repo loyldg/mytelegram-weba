@@ -28,28 +28,49 @@
   pointer-events: auto;
 
   position: absolute;
-  top: 0;
+  top: calc(var(--middle-panel-inline-padding) + var(--middle-header-player-height, 0px));
+  right: 0;
   left: 0;
 
   display: flex;
   align-items: center;
 
-  width: 100%;
-  height: 3.5rem;
-  padding-right: max(0.875rem, env(safe-area-inset-right));
-  padding-left: max(1.5rem, env(safe-area-inset-left));
+  width: calc(100% - var(--middle-panel-inline-padding) * 2);
+  max-width: calc(var(--messages-container-width) - var(--middle-panel-inline-padding) * 2);
+  height: var(--middle-header-height);
+  margin: 0 auto;
+  padding-top: 0.25rem;
+  padding-right: max(0.8125rem, env(safe-area-inset-right));
+  padding-bottom: 0.25rem;
+  padding-left: max(0.25rem, env(safe-area-inset-left));
+  border-radius: 2rem;
 
   opacity: 0;
   background-color: var(--color-background);
+  box-shadow: var(--shadow-island);
 
-  transition: opacity 200ms ease-in-out;
+  /* stylelint-disable-next-line plugin/no-low-performance-animation-properties */
+  transition: opacity 200ms ease-in-out, top var(--top-stack-transition);
 
   .active & {
     opacity: 1;
   }
 
+  :global(body.no-page-transitions) & {
+    transition: none !important;
+  }
+
   :global(body.is-tauri.is-macos) & {
     padding-left: var(--window-controls-width);
+  }
+
+  @media (min-width: 1276px) {
+    /* stylelint-disable-next-line @stylistic/max-line-length */
+    width: calc(100% - var(--right-column-width) - var(--middle-panel-inline-padding) * 2);
+
+    :global(#Main.right-column-open) & {
+      width: calc(100% - var(--middle-panel-inline-padding) * 2);
+    }
   }
 
   @media (max-width: 600px) {
@@ -122,16 +143,22 @@
   transition-behavior: allow-discrete;
 
   .mobile & {
+    // Detached card hanging under the floating search island, like the desktop dropdown.
     position: absolute;
-    top: 3.375rem; // Subpixel rendering can leave 1px gap otherwise
+    /* stylelint-disable-next-line @stylistic/max-line-length */
+    top: calc(var(--middle-panel-inline-padding) + var(--middle-header-player-height, 0px) + var(--middle-header-height) + var(--middle-header-gap));
     right: 0;
-    bottom: 3.375rem;
+    bottom: auto;
     left: 0;
     transform: none;
 
-    max-height: none;
+    width: calc(100% - var(--middle-panel-inline-padding) * 2);
+    max-width: calc(var(--messages-container-width) - var(--middle-panel-inline-padding) * 2);
+    // Leave a gap above the bottom navigation island (3.5rem island + 0.5rem gap + safe area).
+    max-height: calc(100% - var(--middle-header-height) - 5.5rem - env(safe-area-inset-bottom));
+    margin: 0 auto;
     padding: 0;
-    border-radius: 0;
+    border-radius: 1.375rem;
   }
 
   @starting-style {
@@ -259,39 +286,29 @@
   pointer-events: auto;
 
   position: absolute;
-  bottom: 0;
+  right: 0;
+  bottom: calc(var(--composer-bottom-gap-mobile) + env(safe-area-inset-bottom));
   left: 0;
-  transform: translateY(100%);
+  transform: translateY(calc(100% + var(--composer-bottom-gap-mobile) + env(safe-area-inset-bottom)));
 
   display: flex;
   align-items: center;
 
-  width: 100%;
+  width: calc(100% - var(--middle-panel-inline-padding) * 2);
+  max-width: calc(var(--messages-container-width) - var(--middle-panel-inline-padding) * 2);
   height: 3.5rem;
-  padding-right: max(0.5rem, env(safe-area-inset-right));
+  margin: 0 auto;
+  padding-right: max(1.25rem, env(safe-area-inset-right));
   padding-left: max(1rem, env(safe-area-inset-left));
+  border-radius: var(--border-radius-messages);
 
   background-color: var(--color-background);
-  box-shadow: 0 -2px 2px var(--color-light-shadow);
+  box-shadow: var(--shadow-island);
 
   transition: transform 200ms ease-in-out;
 
   .active & {
     transform: translateY(0);
-  }
-
-  :global {
-    body:not(.keyboard-visible) & {
-      height: 3.5rem;
-      padding-bottom: 0;
-    }
-
-    @media (max-width: 600px) {
-      body:not(.keyboard-visible) & {
-        height: calc(3.5rem + env(safe-area-inset-bottom));
-        padding-bottom: env(safe-area-inset-bottom);
-      }
-    }
   }
 }
 

@@ -16,6 +16,7 @@ import type {
   ApiTimezone,
   ApiUrlAuthResult,
   ApiWallpaper,
+  ApiWallpaperSettings,
   ApiWebSession,
   LangPackStringValue,
 } from '../../types';
@@ -34,8 +35,17 @@ import { buildApiUser } from './users';
 
 export function buildApiWallpaper(wallpaper: GramJs.TypeWallPaper): ApiWallpaper | undefined {
   if (wallpaper instanceof GramJs.WallPaperNoFile) {
-    // TODO: Plain color wallpapers
-    return undefined;
+    const settings = wallpaper.settings && buildApiWallpaperSettings(wallpaper.settings);
+    if (!settings) {
+      return undefined;
+    }
+
+    return {
+      slug: String(wallpaper.id),
+      isDark: wallpaper.dark,
+      isDefault: wallpaper.default,
+      settings,
+    };
   }
 
   const { slug } = wallpaper;
@@ -49,6 +59,30 @@ export function buildApiWallpaper(wallpaper: GramJs.TypeWallPaper): ApiWallpaper
   return {
     slug,
     document,
+    isPattern: wallpaper.pattern,
+    isDark: wallpaper.dark,
+    isCreator: wallpaper.creator,
+    isDefault: wallpaper.default,
+    settings: wallpaper.settings && buildApiWallpaperSettings(wallpaper.settings),
+  };
+}
+
+function buildApiWallpaperSettings(settings: GramJs.TypeWallPaperSettings): ApiWallpaperSettings {
+  const {
+    backgroundColor, secondBackgroundColor, thirdBackgroundColor, fourthBackgroundColor,
+    intensity, rotation, blur, motion, emoticon,
+  } = settings;
+
+  return {
+    backgroundColor,
+    secondBackgroundColor,
+    thirdBackgroundColor,
+    fourthBackgroundColor,
+    intensity,
+    rotation,
+    emoticon,
+    isBlurred: blur,
+    isMoving: motion,
   };
 }
 
@@ -211,7 +245,7 @@ export function buildApiUrlAuthResult(result: GramJs.TypeUrlAuthResult): ApiUrlA
 export function buildApiConfig(config: GramJs.Config): ApiConfig {
   const {
     testMode, expires, gifSearchUsername, chatSizeMax, autologinToken, reactionsDefault,
-    messageLengthMax, editTimeLimit, forwardedCountMax,
+    messageLengthMax, editTimeLimit, forwardedCountMax, ratingEDecay,
   } = config;
   const defaultReaction = reactionsDefault && buildApiReaction(reactionsDefault);
   return {
@@ -224,6 +258,7 @@ export function buildApiConfig(config: GramJs.Config): ApiConfig {
     maxMessageLength: messageLengthMax,
     editTimeLimit,
     maxForwardedCount: forwardedCountMax,
+    ratingEDecay,
   };
 }
 

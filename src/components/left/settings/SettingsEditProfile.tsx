@@ -1,21 +1,29 @@
 import {
-  memo, useEffect, useMemo, useState,
+  memo, useCallback, useEffect, useMemo, useState,
 } from '../../../lib/teact/teact';
 import { getActions, withGlobal } from '../../../global';
 
-import type { ApiBirthday, ApiUsername } from '../../../api/types';
+import type { ApiBirthday, ApiMessage, ApiUsername } from '../../../api/types';
+import type { GlobalState } from '../../../global/types';
 import { ApiMediaFormat } from '../../../api/types';
 import { ProfileEditProgress, SettingsScreens } from '../../../types';
 
 import { PURCHASE_USERNAME, TME_LINK_PREFIX, USERNAME_PURCHASE_ERROR } from '../../../config';
 import { getChatAvatarHash } from '../../../global/helpers';
-import { selectTabState, selectUser, selectUserFullInfo } from '../../../global/selectors';
+import { filterPeersByQuery } from '../../../global/helpers/peers';
+import {
+  selectChat, selectChatMessage, selectTabState, selectUser, selectUserFullInfo,
+} from '../../../global/selectors';
 import { selectCurrentLimit } from '../../../global/selectors/limits';
 import { formatDateToString } from '../../../util/dates/oldDateFormat';
 import { NEXT_ARROW_REPLACEMENT } from '../../../util/localization/format';
 import { throttle } from '../../../util/schedulers';
 import renderText from '../../common/helpers/renderText';
+import { ChatAnimationTypes } from '../main/hooks';
 
+import useSelector from '../../../hooks/data/useSelector';
+import useEnsureMessage from '../../../hooks/useEnsureMessage';
+import useFlag from '../../../hooks/useFlag';
 import useHistoryBack from '../../../hooks/useHistoryBack';
 import useLang from '../../../hooks/useLang';
 import useLastCallback from '../../../hooks/useLastCallback';
@@ -24,14 +32,21 @@ import useOldLang from '../../../hooks/useOldLang';
 import usePreviousDeprecated from '../../../hooks/usePreviousDeprecated';
 
 import ManageUsernames from '../../common/ManageUsernames';
+import ChatOrUserPicker from '../../common/pickers/ChatOrUserPicker';
 import SafeLink from '../../common/SafeLink';
 import UsernameInput from '../../common/UsernameInput';
+import Island, { IslandDescription, IslandOutside, IslandTitle } from '../../gili/layout/Island';
+import Surface from '../../gili/layout/Surface';
 import AvatarEditable from '../../ui/AvatarEditable';
+import Button from '../../ui/Button';
 import FloatingActionButton from '../../ui/FloatingActionButton';
 import InputText from '../../ui/InputText';
 import Link from '../../ui/Link';
 import ListItem from '../../ui/ListItem';
 import TextArea from '../../ui/TextArea';
+import Chat from '../main/Chat';
+
+import styles from './SettingsEditProfile.module.scss';
 
 type OwnProps = {
   isActive: boolean;
@@ -44,11 +59,15 @@ type StateProps = {
   currentLastName?: string;
   currentBirthday?: ApiBirthday;
   currentBio?: string;
+  currentPersonalChannelId?: string;
+  currentPersonalChannelMessageId?: number;
+  currentPersonalChannelMessage?: ApiMessage;
   progress?: ProfileEditProgress;
   checkedUsername?: string;
   editUsernameError?: string;
   isUsernameAvailable?: boolean;
   maxBioLength: number;
+  personalChannelIds?: string[];
   usernames?: ApiUsername[];
 };
 
@@ -63,19 +82,25 @@ const SettingsEditProfile = ({
   currentLastName,
   currentBirthday,
   currentBio,
+  currentPersonalChannelId,
+  currentPersonalChannelMessageId,
+  currentPersonalChannelMessage,
   progress,
   checkedUsername,
   editUsernameError,
   isUsernameAvailable,
   maxBioLength,
+  personalChannelIds,
   usernames,
   onReset,
 }: OwnProps & StateProps) => {
   const {
     loadCurrentUser,
+    loadPersonalChannels,
     updateProfile,
     openSettingsScreen,
     openBirthdaySetupModal,
+    showNotification,
   } = getActions();
 
   const oldLang = useOldLang();
@@ -85,6 +110,7 @@ const SettingsEditProfile = ({
   const currentUsername = firstEditableUsername?.username || '';
   const [isUsernameTouched, setIsUsernameTouched] = useState(false);
   const [isProfileFieldsTouched, setIsProfileFieldsTouched] = useState(false);
+  const [isPersonalChannelTouched, setIsPersonalChannelTouched] = useState(false);
   const [error, setError] = useState<string | undefined>();
 
   const [photo, setPhoto] = useState<File | undefined>();
@@ -92,6 +118,22 @@ const SettingsEditProfile = ({
   const [lastName, setLastName] = useState(currentLastName || '');
   const [bio, setBio] = useState(currentBio || '');
   const [editableUsername, setEditableUsername] = useState<string | false>(currentUsername);
+  const [personalChannelId, setPersonalChannelId] = useState(currentPersonalChannelId);
+  const [personalChannelSearch, setPersonalChannelSearch] = useState('');
+  const [isPersonalChannelPickerOpen, openPersonalChannelPicker, closePersonalChannelPicker] = useFlag();
+
+  const selectPersonalChannel = useCallback((global: GlobalState) => {
+    return personalChannelId ? selectChat(global, personalChannelId) : undefined;
+  }, [personalChannelId]);
+  const personalChannel = useSelector(selectPersonalChannel);
+
+  useEnsureMessage(
+    currentPersonalChannelId!,
+    currentPersonalChannelMessageId,
+    currentPersonalChannelMessage,
+    undefined,
+    !currentPersonalChannelId,
+  );
 
   const currentAvatarBlobUrl = useMedia(currentAvatarHash, false, ApiMediaFormat.BlobUrl);
 
@@ -107,8 +149,20 @@ const SettingsEditProfile = ({
       return false;
     }
 
-    return Boolean(photo) || isProfileFieldsTouched || (isUsernameTouched && renderingIsUsernameAvailable === true);
-  }, [isUsernameError, photo, isProfileFieldsTouched, isUsernameTouched, renderingIsUsernameAvailable]);
+    return Boolean(photo) || isProfileFieldsTouched || isPersonalChannelTouched
+      || (isUsernameTouched && renderingIsUsernameAvailable === true);
+  }, [
+    isUsernameError, photo, isProfileFieldsTouched, isPersonalChannelTouched,
+    isUsernameTouched, renderingIsUsernameAvailable,
+  ]);
+
+  const filteredPersonalChannelIds = useMemo(() => {
+    return filterPeersByQuery({
+      ids: personalChannelIds || [],
+      query: personalChannelSearch,
+      type: 'chat',
+    });
+  }, [personalChannelIds, personalChannelSearch]);
 
   useHistoryBack({
     isActive,
@@ -122,6 +176,12 @@ const SettingsEditProfile = ({
       loadCurrentUser();
     });
   }, [loadCurrentUser]);
+
+  useEffect(() => {
+    if (isActive) {
+      loadPersonalChannels();
+    }
+  }, [isActive, loadPersonalChannels]);
 
   useEffect(() => {
     setPhoto(undefined);
@@ -138,8 +198,15 @@ const SettingsEditProfile = ({
   }, [currentUsername]);
 
   useEffect(() => {
+    if (isPersonalChannelTouched) return;
+
+    setPersonalChannelId(currentPersonalChannelId);
+  }, [currentPersonalChannelId, isPersonalChannelTouched]);
+
+  useEffect(() => {
     if (progress === ProfileEditProgress.Complete) {
       setIsProfileFieldsTouched(false);
+      setIsPersonalChannelTouched(false);
       setIsUsernameTouched(false);
       setError(undefined);
     }
@@ -189,12 +256,39 @@ const SettingsEditProfile = ({
     openBirthdaySetupModal({ currentBirthday });
   });
 
+  const handlePersonalChannelPickerOpen = useLastCallback(() => {
+    if (!personalChannelIds?.length && !personalChannelId) {
+      showNotification({ message: { key: 'PersonalChannelNoChannels' } });
+      return;
+    }
+
+    openPersonalChannelPicker();
+  });
+
+  const handlePersonalChannelPickerClose = useLastCallback(() => {
+    closePersonalChannelPicker();
+    setPersonalChannelSearch('');
+  });
+
+  const handlePersonalChannelSelect = useLastCallback((channelId: string) => {
+    setPersonalChannelId(channelId);
+    setIsPersonalChannelTouched(channelId !== currentPersonalChannelId);
+    handlePersonalChannelPickerClose();
+  });
+
+  const handlePersonalChannelRemove = useLastCallback(() => {
+    setPersonalChannelId(undefined);
+    setIsPersonalChannelTouched(Boolean(currentPersonalChannelId));
+    handlePersonalChannelPickerClose();
+  });
+
   const handleProfileSave = useLastCallback(() => {
     const trimmedFirstName = firstName.trim();
     const trimmedLastName = lastName.trim();
     const trimmedBio = bio.trim();
 
-    if (!editableUsername) return;
+    if (editableUsername === false) return;
+    if (isUsernameTouched && !editableUsername) return;
 
     if (!trimmedFirstName.length) {
       setError(ERROR_FIRST_NAME_MISSING);
@@ -203,43 +297,58 @@ const SettingsEditProfile = ({
 
     updateProfile({
       photo,
-      ...(isProfileFieldsTouched && {
-        firstName: trimmedFirstName,
-        lastName: trimmedLastName,
-        bio: trimmedBio,
-      }),
-      ...(isUsernameTouched && {
-        username: editableUsername,
-      }),
+      firstName: isProfileFieldsTouched ? trimmedFirstName : undefined,
+      lastName: isProfileFieldsTouched ? trimmedLastName : undefined,
+      bio: isProfileFieldsTouched ? trimmedBio : undefined,
+      username: isUsernameTouched ? editableUsername : undefined,
+      personalChannelId: isPersonalChannelTouched ? personalChannelId || false : undefined,
     });
   });
+
+  const personalChannelPickerFooter = useMemo(() => {
+    if (!personalChannelId) return undefined;
+
+    return (
+      <div className="picker-footer">
+        <Button
+          className="picker-footer-button"
+          color="danger"
+          onClick={handlePersonalChannelRemove}
+        >
+          {lang('PersonalChannelRemove')}
+        </Button>
+      </div>
+    );
+  }, [handlePersonalChannelRemove, lang, personalChannelId]);
 
   function renderPurchaseLink() {
     const purchaseInfoLink = `${TME_LINK_PREFIX}${PURCHASE_USERNAME}`;
 
     return (
-      <p className="settings-item-description" dir={oldLang.isRtl ? 'rtl' : undefined}>
+      <IslandDescription dir={oldLang.isRtl ? 'rtl' : undefined}>
         {(oldLang('lng_username_purchase_available'))
           .replace('{link}', '%PURCHASE_LINK%')
           .split('%')
           .map((s) => {
             return (s === 'PURCHASE_LINK' ? <SafeLink url={purchaseInfoLink} text={`@${PURCHASE_USERNAME}`} /> : s);
           })}
-      </p>
+      </IslandDescription>
     );
   }
 
   return (
     <div className="settings-fab-wrapper">
-      <div className="settings-content no-border custom-scroll">
-        <div className="settings-item">
+      <Surface scrollable className="settings-content no-border">
+        <IslandOutside className="settings-content-header">
+          <AvatarEditable
+            currentAvatarBlobUrl={currentAvatarBlobUrl}
+            onChange={handlePhotoChange}
+            title={lang('AriaSettingsEditProfilePhoto')}
+            disabled={isLoading}
+          />
+        </IslandOutside>
+        <Island>
           <div className="settings-input">
-            <AvatarEditable
-              currentAvatarBlobUrl={currentAvatarBlobUrl}
-              onChange={handlePhotoChange}
-              title={lang('AriaSettingsEditProfilePhoto')}
-              disabled={isLoading}
-            />
             <InputText
               value={firstName}
               onChange={handleFirstNameChange}
@@ -262,15 +371,15 @@ const SettingsEditProfile = ({
               maxLengthIndicator={maxBioLength ? (maxBioLength - bio.length).toString() : undefined}
             />
           </div>
+        </Island>
+        <IslandDescription dir={oldLang.isRtl ? 'rtl' : undefined}>
+          {renderText(oldLang('lng_settings_about_bio'), ['br', 'simple_markdown'])}
+        </IslandDescription>
 
-          <p className="settings-item-description" dir={oldLang.isRtl ? 'rtl' : undefined}>
-            {renderText(oldLang('lng_settings_about_bio'), ['br', 'simple_markdown'])}
-          </p>
-        </div>
-
-        <div className="settings-item">
+        <Island>
           <ListItem
-            icon="gift"
+            icon="birthday-filled"
+            iconBg="purple"
             narrow
             rightElement={formattedBirthday ?
               <span className="settings-birthday-date">{formattedBirthday}</span>
@@ -279,21 +388,20 @@ const SettingsEditProfile = ({
           >
             <span className="flex-grow">{lang('SettingsBirthday')}</span>
           </ListItem>
-          <p className="settings-item-description" dir={oldLang.isRtl ? 'rtl' : undefined}>
-            {lang('BirthdayPrivacySuggestion', {
-              link: (
-                <Link isPrimary onClick={handleBirthdayPrivacyClick}>
-                  {lang('BirthdayPrivacySuggestionLink',
-                    undefined, { withNodes: true, specialReplacement: NEXT_ARROW_REPLACEMENT })}
-                </Link>
-              ),
-            }, { withNodes: true })}
-          </p>
-        </div>
+        </Island>
+        <IslandDescription dir={oldLang.isRtl ? 'rtl' : undefined}>
+          {lang('BirthdayPrivacySuggestion', {
+            link: (
+              <Link isPrimary onClick={handleBirthdayPrivacyClick}>
+                {lang('BirthdayPrivacySuggestionLink',
+                  undefined, { withNodes: true, specialReplacement: NEXT_ARROW_REPLACEMENT })}
+              </Link>
+            ),
+          }, { withNodes: true })}
+        </IslandDescription>
 
-        <div className="settings-item">
-          <h4 className="settings-item-header" dir={oldLang.isRtl ? 'rtl' : undefined}>{oldLang('Username')}</h4>
-
+        <IslandTitle dir={oldLang.isRtl ? 'rtl' : undefined}>{oldLang('Username')}</IslandTitle>
+        <Island>
           <div className="settings-input">
             <UsernameInput
               currentUsername={currentUsername}
@@ -303,22 +411,21 @@ const SettingsEditProfile = ({
               onChange={handleUsernameChange}
             />
           </div>
-
-          {editUsernameError === USERNAME_PURCHASE_ERROR && renderPurchaseLink()}
-          <p className="settings-item-description" dir={oldLang.isRtl ? 'rtl' : undefined}>
-            {renderText(oldLang('UsernameHelp'), ['br', 'simple_markdown'])}
-          </p>
-          {editableUsername && (
-            <p className="settings-item-description" dir={oldLang.isRtl ? 'rtl' : undefined}>
-              {oldLang('lng_username_link')}
-              <br />
-              <span className="username-link">
-                {TME_LINK_PREFIX}
-                {editableUsername}
-              </span>
-            </p>
-          )}
-        </div>
+        </Island>
+        {editUsernameError === USERNAME_PURCHASE_ERROR && renderPurchaseLink()}
+        <IslandDescription dir={oldLang.isRtl ? 'rtl' : undefined}>
+          {renderText(oldLang('UsernameHelp'), ['br', 'simple_markdown'])}
+        </IslandDescription>
+        {editableUsername && (
+          <IslandDescription dir={oldLang.isRtl ? 'rtl' : undefined}>
+            {oldLang('lng_username_link')}
+            <br />
+            <span className="username-link">
+              {TME_LINK_PREFIX}
+              {editableUsername}
+            </span>
+          </IslandDescription>
+        )}
 
         {shouldRenderUsernamesManage && (
           <ManageUsernames
@@ -326,7 +433,38 @@ const SettingsEditProfile = ({
             onEditUsername={setEditableUsername}
           />
         )}
-      </div>
+
+        <Island>
+          {personalChannel ? (
+            <div className={styles.personalChannelItem} onClick={handlePersonalChannelPickerOpen}>
+              <Chat
+                chatId={personalChannel.id}
+                orderDiff={0}
+                shiftDiff={0}
+                animationType={ChatAnimationTypes.None}
+                isPreview
+                previewMessageId={personalChannelId === currentPersonalChannelId
+                  ? currentPersonalChannelMessageId : undefined}
+              />
+            </div>
+          ) : (
+            <ListItem
+              icon="megaphone-filled"
+              iconBg="orange"
+              multiline
+              narrow
+              disabled={personalChannelIds === undefined}
+              onClick={handlePersonalChannelPickerOpen}
+            >
+              <span className="title">{lang('PersonalChannelTitle')}</span>
+              <span className="subtitle">{lang('PersonalChannelAddHint')}</span>
+            </ListItem>
+          )}
+        </Island>
+        <IslandDescription dir={lang.isRtl ? 'rtl' : undefined}>
+          {lang('PersonalChannelDescription')}
+        </IslandDescription>
+      </Surface>
 
       <FloatingActionButton
         isShown={isSaveButtonShown}
@@ -336,6 +474,18 @@ const SettingsEditProfile = ({
         iconName="check"
         isLoading={isLoading}
       />
+
+      <ChatOrUserPicker
+        isOpen={isPersonalChannelPickerOpen}
+        chatOrUserIds={filteredPersonalChannelIds}
+        title={lang('PersonalChannelPickerTitle')}
+        searchPlaceholder={lang('Search')}
+        search={personalChannelSearch}
+        footer={personalChannelPickerFooter}
+        onSearchChange={setPersonalChannelSearch}
+        onSelectChatOrUser={handlePersonalChannelSelect}
+        onClose={handlePersonalChannelPickerClose}
+      />
     </div>
   );
 };
@@ -343,9 +493,10 @@ const SettingsEditProfile = ({
 export default memo(withGlobal<OwnProps>(
   (global): Complete<StateProps> => {
     const { currentUserId } = global;
+    const { profileEdit } = selectTabState(global);
     const {
       progress, isUsernameAvailable, checkedUsername, error: editUsernameError,
-    } = selectTabState(global).profileEdit || {};
+    } = profileEdit || {};
     const currentUser = currentUserId ? selectUser(global, currentUserId) : undefined;
 
     const maxBioLength = selectCurrentLimit(global, 'aboutLength');
@@ -356,6 +507,10 @@ export default memo(withGlobal<OwnProps>(
       usernames,
     } = currentUser || {};
     const currentUserFullInfo = currentUserId ? selectUserFullInfo(global, currentUserId) : undefined;
+    const currentPersonalChannelId = currentUserFullInfo?.personalChannelId;
+    const currentPersonalChannelMessageId = currentUserFullInfo?.personalChannelMessageId;
+    const currentPersonalChannelMessage = currentPersonalChannelId && currentPersonalChannelMessageId
+      ? selectChatMessage(global, currentPersonalChannelId, currentPersonalChannelMessageId) : undefined;
     const currentAvatarHash = currentUser && getChatAvatarHash(currentUser);
 
     return {
@@ -364,11 +519,15 @@ export default memo(withGlobal<OwnProps>(
       currentLastName,
       currentBirthday: currentUserFullInfo?.birthday,
       currentBio: currentUserFullInfo?.bio,
+      currentPersonalChannelId,
+      currentPersonalChannelMessageId,
+      currentPersonalChannelMessage,
       progress,
       isUsernameAvailable,
       checkedUsername,
       editUsernameError,
       maxBioLength,
+      personalChannelIds: global.chats.personalChannelIds,
       usernames,
     };
   },

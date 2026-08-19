@@ -1,5 +1,4 @@
 import type { ElementRef, TeactNode } from '../../lib/teact/teact';
-import type React from '../../lib/teact/teact';
 import { useRef } from '../../lib/teact/teact';
 
 import type { IconName } from '../../types/icons';
@@ -16,6 +15,7 @@ import useLang from '../../hooks/useLang';
 import useLastCallback from '../../hooks/useLastCallback';
 
 import Icon from '../common/icons/Icon';
+import IconBackdrop, { type IconBackdropColor } from '../gili/primitives/IconBackdrop';
 import Button from './Button';
 import Menu from './Menu';
 import MenuItem from './MenuItem';
@@ -45,6 +45,7 @@ interface OwnProps {
   buttonRef?: ElementRef<HTMLDivElement | HTMLAnchorElement>;
   icon?: IconName;
   iconClassName?: string;
+  iconBg?: IconBackdropColor;
   leftElement?: TeactNode;
   secondaryIcon?: IconName;
   secondaryIconClassName?: string;
@@ -84,6 +85,7 @@ const ListItem = ({
   buttonRef,
   icon,
   iconClassName,
+  iconBg,
   leftElement,
   buttonClassName,
   menuBubbleClassName,
@@ -248,9 +250,11 @@ const ListItem = ({
           <RippleEffect />
         )}
         {leftElement}
-        {icon && (
+        {icon && (iconBg ? (
+          <IconBackdrop className={buildClassName('ListItem-main-icon', iconClassName)} color={iconBg} icon={icon} />
+        ) : (
           <Icon name={icon} className={buildClassName('ListItem-main-icon', iconClassName)} />
-        )}
+        ))}
         {multiline && (<div className="multiline-item">{children}</div>)}
         {!multiline && children}
         {secondaryIcon && (

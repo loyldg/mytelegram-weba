@@ -4,22 +4,28 @@ import {
 } from '../../../lib/teact/teact';
 import { getActions, withGlobal } from '../../../global';
 
+import type { ApiMessage } from '../../../api/types';
+import type { MenuItemContextAction } from '../../ui/ListItem';
 import type { StateProps } from './helpers/createMapStateToProps';
 import { LoadMoreDirection, MediaViewerOrigin } from '../../../types';
 
 import { SLIDE_TRANSITION_DURATION } from '../../../config';
 import buildClassName from '../../../util/buildClassName';
+import { getGridCornerClassName } from '../../../util/gridCorners';
 import { parseSearchResultKey } from '../../../util/keys/searchResultKey';
 import { MEMO_EMPTY_ARRAY } from '../../../util/memo';
 import { throttle } from '../../../util/schedulers';
 import { createMapStateToProps } from './helpers/createMapStateToProps';
 
 import { useIntersectionObserver } from '../../../hooks/useIntersectionObserver';
+import useLang from '../../../hooks/useLang';
+import useLastCallback from '../../../hooks/useLastCallback';
 import useOldLang from '../../../hooks/useOldLang';
 import useAsyncRendering from '../../right/hooks/useAsyncRendering';
 
 import Media from '../../common/Media';
 import NothingFound from '../../common/NothingFound';
+import Island from '../../gili/layout/Island';
 import InfiniteScroll from '../../ui/InfiniteScroll';
 import Loading from '../../ui/Loading';
 import Transition from '../../ui/Transition.tsx';
@@ -44,11 +50,13 @@ const MediaResults: FC<OwnProps & StateProps> = ({
   const {
     searchMessagesGlobal,
     openMediaViewer,
+    focusMessage,
   } = getActions();
 
   const containerRef = useRef<HTMLDivElement>();
 
-  const lang = useOldLang();
+  const oldLang = useOldLang();
+  const lang = useLang();
 
   const { observe: observeIntersectionForMedia } = useIntersectionObserver({
     rootRef: containerRef,
@@ -86,17 +94,29 @@ const MediaResults: FC<OwnProps & StateProps> = ({
     });
   }, [openMediaViewer]);
 
+  const getMessageContextActions = useLastCallback((message: ApiMessage): MenuItemContextAction[] => {
+    return [{
+      title: lang('FocusMessage'),
+      icon: 'show-message',
+      handler: () => {
+        focusMessage({ chatId: message.chatId, messageId: message.id });
+      },
+    }];
+  });
+
   function renderGallery() {
     return (
-      <div className="media-list" dir={lang.isRtl ? 'rtl' : undefined}>
-        {foundMessages.map((message) => (
+      <div className="media-list" dir={oldLang.isRtl ? 'rtl' : undefined}>
+        {foundMessages.map((message, i) => (
           <Media
             key={`${message.chatId}-${message.id}`}
+            className={getGridCornerClassName(i, foundMessages.length)}
             idPrefix="search-media"
             message={message}
             isProtected={isChatProtected || message.isProtected}
             observeIntersection={observeIntersectionForMedia}
             onClick={handleSelectMedia}
+            contextActions={getMessageContextActions(message)}
           />
         ))}
       </div>
@@ -141,12 +161,19 @@ const MediaResults: FC<OwnProps & StateProps> = ({
         {canRenderContents && (!foundIds || foundIds.length === 0) && (
           <NothingFound
             withSticker
-            text={lang('ChatList.Search.NoResults')}
-            description={lang('ChatList.Search.NoResultsDescription')}
+            text={oldLang('ChatList.Search.NoResults')}
+            description={oldLang('ChatList.Search.NoResultsDescription')}
           />
         )}
         {isMediaGrid && renderGallery()}
-        {isMessageList && renderSearchResult()}
+        {isMessageList && (
+          <Island className="search-island search-section">
+            <h3 className="section-heading" dir={lang.isRtl ? 'auto' : undefined}>
+              {lang('SearchMessages')}
+            </h3>
+            {renderSearchResult()}
+          </Island>
+        )}
       </InfiniteScroll>
     </Transition>
   );

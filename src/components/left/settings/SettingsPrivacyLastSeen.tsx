@@ -9,7 +9,7 @@ import renderText from '../../common/helpers/renderText';
 import useLastCallback from '../../../hooks/useLastCallback';
 import useOldLang from '../../../hooks/useOldLang';
 
-import StarIcon from '../../common/icons/StarIcon';
+import Island, { IslandDescription } from '../../gili/layout/Island';
 import Checkbox from '../../ui/Checkbox';
 import ListItem from '../../ui/ListItem';
 
@@ -42,33 +42,33 @@ const SettingsPrivacyLastSeen = ({
   return (
     <>
       {canShowHideReadTime && (
-        <div className="settings-item">
-          <Checkbox
-            label={lang('HideReadTime')}
-            checked={shouldHideReadMarks}
-            onCheck={handleChangeShouldHideReadMarks}
-          />
-          <p className="settings-item-description-larger" dir={lang.isRtl ? 'rtl' : undefined}>
+        <>
+          <Island>
+            <Checkbox
+              label={lang('HideReadTime')}
+              checked={shouldHideReadMarks}
+              onCheck={handleChangeShouldHideReadMarks}
+            />
+          </Island>
+          <IslandDescription dir={lang.isRtl ? 'rtl' : undefined}>
             {renderText(lang('HideReadTimeInfo'), ['br'])}
-          </p>
-        </div>
+          </IslandDescription>
+        </>
       )}
-      <div className="settings-item">
+      <Island>
         <ListItem
-          leftElement={<StarIcon className="icon ListItem-main-icon" type="premium" size="big" />}
+          icon="premium-filled"
+          iconBg="premium"
           onClick={handleOpenPremiumModal}
         >
           {isCurrentUserPremium ? lang('PrivacyLastSeenPremiumForPremium') : lang('PrivacyLastSeenPremium')}
         </ListItem>
-        <p
-          className="settings-item-description-larger premium-info"
-          dir={lang.isRtl ? 'rtl' : undefined}
-        >
-          {isCurrentUserPremium
-            ? lang('PrivacyLastSeenPremiumInfoForPremium')
-            : lang('PrivacyLastSeenPremiumInfo')}
-        </p>
-      </div>
+      </Island>
+      <IslandDescription dir={lang.isRtl ? 'rtl' : undefined}>
+        {isCurrentUserPremium
+          ? lang('PrivacyLastSeenPremiumInfoForPremium')
+          : lang('PrivacyLastSeenPremiumInfo')}
+      </IslandDescription>
     </>
   );
 };

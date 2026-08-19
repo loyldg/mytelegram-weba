@@ -49,10 +49,13 @@ export interface ApiUser {
   paidMessagesStars?: number;
   isBotForum?: boolean;
   canManageBotForumTopics?: boolean;
+  isGuestChatBot?: boolean;
+  isGuardBot?: boolean;
 }
 
 export interface ApiUserFullInfo {
   isBlocked?: boolean;
+  ttlPeriod?: number;
   bio?: string;
   commonChatsCount?: number;
   pinnedMessageId?: number;
@@ -70,6 +73,7 @@ export interface ApiUserFullInfo {
   birthday?: ApiBirthday;
   personalChannelId?: string;
   personalChannelMessageId?: number;
+  privateForwardName?: string;
   businessLocation?: ApiBusinessLocation;
   businessWorkHours?: ApiBusinessWorkHours;
   businessIntro?: ApiBusinessIntro;

@@ -1,8 +1,11 @@
 import type { FC } from '../../lib/teact/teact';
-import type React from '../../lib/teact/teact';
 import {
   useCallback, useMemo, useRef, useState,
 } from '../../lib/teact/teact';
+
+import type { IAnchorPosition } from '../../types';
+
+import useLastCallback from '../../hooks/useLastCallback';
 
 import Button from './Button';
 import Menu from './Menu';
@@ -37,7 +40,7 @@ const DropdownMenu: FC<OwnProps> = ({
   transformOriginX,
   transformOriginY,
   positionX = 'left',
-  positionY = 'top',
+  positionY,
   footer,
   forceOpen,
   withPortal,
@@ -49,9 +52,16 @@ const DropdownMenu: FC<OwnProps> = ({
   autoClose = true,
 }) => {
   const menuRef = useRef<HTMLDivElement>();
+  const triggerRef = useRef<HTMLDivElement>();
   const [isOpen, setIsOpen] = useState(false);
+  const [menuAnchor, setMenuAnchor] = useState<IAnchorPosition | undefined>();
 
   const toggleIsOpen = () => {
+    if (!isOpen && withPortal && triggerRef.current) {
+      const rect = triggerRef.current.getBoundingClientRect();
+      setMenuAnchor({ x: rect.left, y: rect.bottom });
+    }
+
     setIsOpen(!isOpen);
 
     if (isOpen) {
@@ -97,8 +107,16 @@ const DropdownMenu: FC<OwnProps> = ({
     );
   }, [trigger]);
 
+  const getTriggerElement = useLastCallback(() => triggerRef.current);
+  const getRootElement = useLastCallback(() => document.body);
+  const getMenuElement = useLastCallback(
+    () => menuRef.current?.querySelector('.bubble') as HTMLElement | undefined,
+  );
+  const getLayout = useLastCallback(() => ({ withPortal: true }));
+
   return (
     <div
+      ref={triggerRef}
       className={`DropdownMenu ${className || ''}`}
       onKeyDown={handleKeyDown}
       onTransitionEnd={onTransitionEnd}
@@ -120,6 +138,13 @@ const DropdownMenu: FC<OwnProps> = ({
         onClose={handleClose}
         onCloseAnimationEnd={onHide}
         onMouseEnterBackdrop={onMouseEnterBackdrop}
+        {...(withPortal && menuAnchor ? {
+          anchor: menuAnchor,
+          getTriggerElement,
+          getRootElement,
+          getMenuElement,
+          getLayout,
+        } : undefined)}
       >
         {children}
       </Menu>

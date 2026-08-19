@@ -10,8 +10,8 @@ export { default as MapModal } from '../components/modals/map/MapModal';
 export { default as UrlAuthModal } from '../components/modals/urlAuth/UrlAuthModal';
 export { default as HistoryCalendar } from '../components/main/HistoryCalendar';
 export { default as NewContactModal } from '../components/main/NewContactModal';
-export { default as WebAppModal } from '../components/modals/webApp/WebAppModal';
-export { default as MinimizedWebAppModal } from '../components/modals/webApp/MinimizedWebAppModal';
+export { default as BrowserModal } from '../components/modals/browser/BrowserModal';
+export { default as MinimizedBrowserModal } from '../components/modals/browser/MinimizedBrowserModal';
 export { default as BotTrustModal } from '../components/main/BotTrustModal';
 export { default as AttachBotInstallModal } from '../components/modals/attachBotInstall/AttachBotInstallModal';
 export { default as DeleteFolderDialog } from '../components/main/DeleteFolderDialog';
@@ -44,9 +44,9 @@ export { default as SuggestedPostApprovalModal }
   from '../components/modals/suggestedPostApproval/SuggestedPostApprovalModal';
 export { default as CalendarModal } from '../components/common/CalendarModal';
 export { default as DeleteMessageModal } from '../components/common/DeleteMessageModal';
+export { default as DeleteMemberModal } from '../components/modals/deleteMember/DeleteMemberModal';
 export { default as PinMessageModal } from '../components/common/PinMessageModal';
 export { default as UnpinAllMessagesModal } from '../components/common/UnpinAllMessagesModal';
-export { default as MessageSelectToolbar } from '../components/middle/MessageSelectToolbar';
 export { default as SeenByModal } from '../components/common/SeenByModal';
 export { default as PrivacySettingsNoticeModal } from '../components/common/PrivacySettingsNoticeModal';
 export { default as CountryPickerModal } from '../components/common/CountryPickerModal';
@@ -54,6 +54,7 @@ export { default as ReactorListModal } from '../components/middle/ReactorListMod
 export { default as EmojiInteractionAnimation } from '../components/middle/EmojiInteractionAnimation';
 export { default as ChatLanguageModal } from '../components/middle/ChatLanguageModal';
 export { default as CollectibleInfoModal } from '../components/modals/collectible/CollectibleInfoModal';
+export { default as QrCodeModal } from '../components/modals/qrCode/QrCodeModal';
 
 export { default as LeftSearch } from '../components/left/search/LeftSearch';
 export { default as Settings } from '../components/left/settings/Settings';
@@ -73,21 +74,24 @@ export { default as ReactionPicker } from '../components/middle/message/reaction
 
 export { default as AiMessageEditorModal }
   from '../components/middle/composer/AiMessageEditorModal/AiMessageEditorModal';
+export { default as AiToneEmojiPickerModal }
+  from '../components/middle/composer/AiMessageEditorModal/AiToneEmojiPickerModal';
+export { default as AiTonePreviewModal }
+  from '../components/modals/aiTonePreview/AiTonePreviewModal';
 
 export { default as AttachmentModal } from '../components/middle/composer/AttachmentModal';
-export { default as PollModal } from '../components/middle/composer/PollModal';
+export { default as PollModal } from '../components/modals/poll/PollModal';
 export { default as ToDoListModal } from '../components/middle/composer/ToDoListModal';
 export { default as SymbolMenu } from '../components/middle/composer/SymbolMenu';
-export { default as ChatCommandTooltip } from '../components/middle/composer/ChatCommandTooltip';
+export { default as ChatCommandTooltip } from '../components/common/tooltips/ChatCommandTooltip';
 export { default as BotCommandMenu } from '../components/middle/composer/BotCommandMenu';
-export { default as MentionTooltip } from '../components/middle/composer/MentionTooltip';
-export { default as StickerTooltip } from '../components/middle/composer/StickerTooltip';
-export { default as CustomEmojiTooltip } from '../components/middle/composer/CustomEmojiTooltip';
+export { default as MentionTooltip } from '../components/common/tooltips/MentionTooltip';
+export { default as StickerTooltip } from '../components/common/tooltips/StickerTooltip';
+export { default as CustomEmojiTooltip } from '../components/common/tooltips/CustomEmojiTooltip';
 export { default as CustomSendMenu } from '../components/middle/composer/CustomSendMenu';
 export { default as DropArea } from '../components/middle/composer/DropArea';
-export { default as TextFormatter } from '../components/middle/composer/TextFormatter';
-export { default as EmojiTooltip } from '../components/middle/composer/EmojiTooltip';
-export { default as InlineBotTooltip } from '../components/middle/composer/InlineBotTooltip';
+export { default as EmojiTooltip } from '../components/common/tooltips/EmojiTooltip';
+export { default as InlineBotTooltip } from '../components/common/tooltips/InlineBotTooltip';
 export { default as SendAsMenu } from '../components/middle/composer/SendAsMenu';
 
 export { default as StickerSearch } from '../components/right/StickerSearch';
@@ -105,7 +109,7 @@ export { default as PaymentModal } from '../components/payment/PaymentModal';
 export { default as ReceiptModal } from '../components/payment/ReceiptModal';
 export { default as InviteViaLinkModal } from '../components/modals/inviteViaLink/InviteViaLinkModal';
 export { default as OneTimeMediaModal } from '../components/modals/oneTimeMedia/OneTimeMediaModal';
-export { default as WebAppsCloseConfirmationModal } from '../components/main/WebAppsCloseConfirmationModal';
+export { default as BrowserCloseConfirmationModal } from '../components/main/BrowserCloseConfirmationModal';
 export { default as FrozenAccountModal } from '../components/modals/frozenAccount/FrozenAccountModal';
 export { default as ProfileRatingModal } from '../components/modals/profileRating/ProfileRatingModal';
 export { default as DisableSharingAboutModal } from '../components/modals/disableSharing/DisableSharingAboutModal';

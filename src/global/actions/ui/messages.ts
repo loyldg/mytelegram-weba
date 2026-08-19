@@ -1,7 +1,6 @@
-import type { ApiMessage } from '../../../api/types';
+import type { ClipboardTextFormat, MessageCopyRequest } from '../../../types/messageCopy';
 import type {
   ActionReturnType,
-  GlobalState,
 } from '../../types';
 import { MAIN_THREAD_ID } from '../../../api/types';
 import { type ActiveDownloads, FocusDirection } from '../../../types';
@@ -13,25 +12,19 @@ import {
 } from '../../../config';
 import { cancelScrollBlockingAnimation, isAnimatingScroll } from '../../../util/animateScroll';
 import { IS_TOUCH_ENV } from '../../../util/browser/windowEnvironment';
-import { copyHtmlToClipboard } from '../../../util/clipboard';
+import { copyTextToClipboardFromPromise } from '../../../util/clipboard';
 import { getCurrentTabId } from '../../../util/establishMultitabRole';
 import { compact, findLast } from '../../../util/iteratees';
-import { getTranslationFn } from '../../../util/localization';
-import parseHtmlAsFormattedText from '../../../util/parseHtmlAsFormattedText';
-import { getServerTime } from '../../../util/serverTime';
-import versionNotification from '../../../versionNotification.txt';
+import { Bundles, loadBundle } from '../../../util/moduleLoader';
 import {
   getMediaFilename,
   getMediaFormat,
   getMediaHash,
-  getMessageStatefulContent,
-  isChatChannel,
 } from '../../helpers';
-import { getMessageSummaryText } from '../../helpers/messageSummary';
 import { addTabStateResetterAction } from '../../helpers/meta';
-import { getPeerTitle } from '../../helpers/peers';
-import { renderMessageSummaryHtml } from '../../helpers/renderMessageSummaryHtml';
-import { addActionHandler, getGlobal, setGlobal } from '../../index';
+import {
+  addActionHandler, getActions, getGlobal, setGlobal,
+} from '../../index';
 import {
   addActiveMediaDownload,
   cancelMessageMediaDownload,
@@ -46,11 +39,11 @@ import { replaceTabThreadParam, replaceThreadLocalStateParam, updateThreadReadSt
 import {
   selectAllowedMessageActionsSlow,
   selectCanForwardMessage,
+  selectCanForwardMessages,
   selectChat,
   selectChatLastMessageId,
   selectChatMessage,
   selectChatMessages,
-  selectChatScheduledMessages,
   selectCurrentChat,
   selectCurrentMessageList,
   selectForwardedMessageIdsByGroupId,
@@ -59,7 +52,6 @@ import {
   selectMessageIdsByGroupId,
   selectRequestedChatTranslationLanguage,
   selectRequestedMessageTranslationLanguage,
-  selectSender,
   selectTabState,
   selectViewportIds,
 } from '../../selectors';
@@ -72,7 +64,6 @@ import { getIsMobile } from '../../../hooks/useAppLayout';
 const FOCUS_DURATION = 1500;
 const FOCUS_NO_HIGHLIGHT_DURATION = SCROLL_MAX_DURATION + ANIMATION_END_DELAY;
 const POLL_RESULT_OPEN_DELAY_MS = 450;
-const VERSION_NOTIFICATION_DURATION = 1000 * 60 * 60 * 24 * 7; // 7 days
 const SERVICE_NOTIFICATIONS_MAX_AMOUNT = 1e3;
 
 let blurTimeout: number | undefined;
@@ -112,12 +103,12 @@ addActionHandler('markTypingDraftDone', (global, actions, payload): ActionReturn
 
 addActionHandler('setEditingDraft', (global, actions, payload): ActionReturnType => {
   const {
-    text, chatId, threadId, type,
+    draft, chatId, threadId, type,
   } = payload;
 
   const paramName = type === 'scheduled' ? 'editingScheduledDraft' : 'editingDraft';
 
-  return replaceThreadLocalStateParam(global, chatId, threadId, paramName, text);
+  return replaceThreadLocalStateParam(global, chatId, threadId, paramName, draft);
 });
 
 addActionHandler('editLastMessage', (global, actions, payload): ActionReturnType => {
@@ -141,7 +132,8 @@ addActionHandler('editLastMessage', (global, actions, payload): ActionReturnType
     return undefined;
   }
 
-  return replaceThreadLocalStateParam(global, chatId, threadId, 'editingId', lastOwnEditableMessageId);
+  actions.startEditingMessage({ messageId: lastOwnEditableMessageId, tabId });
+  return undefined;
 });
 
 addActionHandler('replyToNextMessage', (global, actions, payload): ActionReturnType => {
@@ -158,6 +150,8 @@ addActionHandler('replyToNextMessage', (global, actions, payload): ActionReturnT
   }
 
   const replyInfo = selectDraft(global, chatId, threadId)?.replyInfo;
+  if (replyInfo?.type === 'ephemeral') return;
+
   const isLatest = selectIsViewportNewest(global, chatId, threadId, tabId);
 
   let messageId: number | undefined;
@@ -535,6 +529,13 @@ addActionHandler('setShouldPreventComposerAnimation', (global, actions, payload)
   }, tabId);
 });
 
+addActionHandler('setIsRichInputExpanded', (global, actions, payload): ActionReturnType => {
+  const { isRichInputExpanded, tabId = getCurrentTabId() } = payload;
+  return updateTabState(global, {
+    isRichInputExpanded,
+  }, tabId);
+});
+
 addActionHandler('openReplyMenu', (global, actions, payload): ActionReturnType => {
   const {
     fromChatId, messageId, quoteText, quoteOffset, tabId = getCurrentTabId(),
@@ -558,10 +559,13 @@ addActionHandler('openForwardMenu', (global, actions, payload): ActionReturnType
   if (groupedId) {
     groupedMessageIds = selectMessageIdsByGroupId(global, fromChatId, groupedId);
   }
+  const resolvedMessageIds = groupedMessageIds || messageIds;
+  if (resolvedMessageIds && !selectCanForwardMessages(global, fromChatId, resolvedMessageIds)) return;
+
   return updateTabState(global, {
     forwardMessages: {
       fromChatId,
-      messageIds: groupedMessageIds || messageIds,
+      messageIds: resolvedMessageIds,
       storyId,
       withMyScore,
     },
@@ -754,30 +758,36 @@ addActionHandler('exitMessageSelectMode', (global, actions, payload): ActionRetu
 });
 
 addActionHandler('openPollModal', (global, actions, payload): ActionReturnType => {
-  const { isQuiz, tabId = getCurrentTabId() } = payload || {};
+  const {
+    chatId,
+    threadId,
+    messageListType,
+    isQuiz,
+    tabId = getCurrentTabId(),
+  } = payload;
+  const replyInfo = selectDraft(global, chatId, threadId ?? MAIN_THREAD_ID)?.replyInfo;
+  if (replyInfo?.type === 'ephemeral') return;
 
   return updateTabState(global, {
     pollModal: {
-      isOpen: true,
+      chatId,
+      threadId,
+      messageListType,
       isQuiz,
     },
   }, tabId);
 });
-
-addActionHandler('closePollModal', (global, actions, payload): ActionReturnType => {
-  const { tabId = getCurrentTabId() } = payload || {};
-
-  return updateTabState(global, {
-    pollModal: {
-      isOpen: false,
-    },
-  }, tabId);
-});
+addTabStateResetterAction('closePollModal', 'pollModal');
 
 addActionHandler('openTodoListModal', (global, actions, payload): ActionReturnType => {
   const {
     chatId, messageId, forNewTask, tabId = getCurrentTabId(),
   } = payload;
+  const currentMessageList = selectCurrentMessageList(global, tabId);
+  if (!messageId && currentMessageList?.chatId === chatId) {
+    const replyInfo = selectDraft(global, chatId, currentMessageList.threadId)?.replyInfo;
+    if (replyInfo?.type === 'ephemeral') return;
+  }
 
   return updateTabState(global, {
     todoListModal: {
@@ -790,35 +800,8 @@ addActionHandler('openTodoListModal', (global, actions, payload): ActionReturnTy
 
 addTabStateResetterAction('closeTodoListModal', 'todoListModal');
 
-addActionHandler('checkVersionNotification', (global, actions): ActionReturnType => {
-  if (CHANGELOG_DATETIME && Date.now() > CHANGELOG_DATETIME + VERSION_NOTIFICATION_DURATION) {
-    return;
-  }
-
-  const currentVersion = APP_VERSION.split('.').slice(0, 2).join('.');
-  const { serviceNotifications } = global;
-
-  if (serviceNotifications.find(({ version }) => version === currentVersion)) {
-    return;
-  }
-
-  const message: Omit<ApiMessage, 'id'> = {
-    chatId: SERVICE_NOTIFICATIONS_USER_ID,
-    date: getServerTime(),
-    content: {
-      text: parseHtmlAsFormattedText(versionNotification, true),
-    },
-    isOutgoing: false,
-  };
-
-  actions.createServiceNotification({
-    message: message as ApiMessage,
-    version: currentVersion,
-  });
-});
-
 addActionHandler('createServiceNotification', (global, actions, payload): ActionReturnType => {
-  const { message, version } = payload;
+  const { message } = payload;
   const { serviceNotifications } = global;
 
   const maxId = Math.max(
@@ -835,7 +818,6 @@ addActionHandler('createServiceNotification', (global, actions, payload): Action
   const serviceNotification = {
     id,
     message,
-    version,
     isUnread: true,
   };
 
@@ -925,24 +907,38 @@ addActionHandler('closeChatLanguageModal', (global, actions, payload): ActionRet
 });
 
 addActionHandler('copySelectedMessages', (global, actions, payload): ActionReturnType => {
-  const { tabId = getCurrentTabId() } = payload || {};
+  const { shouldNotify, tabId = getCurrentTabId() } = payload || {};
   const tabState = selectTabState(global, tabId);
-  if (!tabState.selectedMessages) {
+  const selectedMessages = tabState.selectedMessages;
+  const messageList = selectCurrentMessageList(global, tabId);
+  if (!selectedMessages?.messageIds.length || !messageList || messageList.chatId !== selectedMessages.chatId) {
+    if (shouldNotify) actions.showNotification({ message: { key: 'GeneralError' }, tabId });
     return;
   }
 
-  const { chatId, messageIds } = tabState.selectedMessages;
-  copyTextForMessages(global, chatId, messageIds);
+  const { chatId, messageIds } = selectedMessages;
+  copyTextForMessages({
+    request: {
+      type: 'messages',
+      chatId,
+      threadId: messageList.threadId,
+      messageListType: messageList.type,
+      messageIds,
+      withSenderHeaders: true,
+    },
+    shouldNotify,
+  }, tabId);
 });
 
 addActionHandler('copyMessagesByIds', (global, actions, payload): ActionReturnType => {
-  const { messageIds, tabId = getCurrentTabId() } = payload;
-  const chat = selectCurrentChat(global, tabId);
-  if (!messageIds || messageIds.length === 0 || !chat) {
+  const { tabId = getCurrentTabId() } = payload;
+  const { request } = payload;
+  if (request.type === 'messages' && !request.messageIds.length) {
+    if (payload.shouldNotify) actions.showNotification({ message: { key: 'GeneralError' }, tabId });
     return;
   }
 
-  copyTextForMessages(global, chat.id, messageIds);
+  copyTextForMessages(payload, tabId);
 });
 
 addActionHandler('openOneTimeMediaModal', (global, actions, payload): ActionReturnType => {
@@ -1059,44 +1055,35 @@ addActionHandler('closeSuggestedPostApprovalModal', (global, actions, payload): 
   }, tabId);
 });
 
-function copyTextForMessages(global: GlobalState, chatId: string, messageIds: number[]) {
-  const { type: messageListType, threadId } = selectCurrentMessageList(global) || {};
-  const lang = getTranslationFn();
+function copyTextForMessages(
+  payload: { request: MessageCopyRequest; shouldNotify?: boolean; textFormat?: ClipboardTextFormat },
+  tabId: number,
+) {
+  const { showNotification } = getActions();
+  const { request, shouldNotify, textFormat } = payload;
+  const messageList = {
+    chatId: request.chatId,
+    threadId: request.threadId,
+    type: request.messageListType,
+  };
 
-  const chat = selectChat(global, chatId);
+  const contentPromise = loadBundle(Bundles.Editor).then((bundle) => bundle.buildMessageCopyContent(
+    messageList,
+    request,
+    tabId,
+  ));
 
-  const chatMessages = messageListType === 'scheduled'
-    ? selectChatScheduledMessages(global, chatId)
-    : selectChatMessages(global, chatId);
-
-  if (!chat || !chatMessages || !threadId) return;
-
-  const messages = messageIds
-    .map((id) => chatMessages[id])
-    .filter((message) => selectAllowedMessageActionsSlow(global, message, threadId).canCopy)
-    .sort((message1, message2) => message1.id - message2.id);
-
-  const resultHtml: string[] = [];
-  const resultText: string[] = [];
-
-  messages.forEach((message) => {
-    const sender = isChatChannel(chat) ? chat : selectSender(global, message);
-    const senderTitle = `> ${sender ? getPeerTitle(lang, sender) : message.forwardInfo?.hiddenUserName || ''}:`;
-    const statefulContent = getMessageStatefulContent(global, message);
-
-    resultHtml.push(senderTitle);
-    resultHtml.push(`${renderMessageSummaryHtml(lang, message)}\n`);
-
-    resultText.push(senderTitle);
-    resultText.push(`${getMessageSummaryText(lang, message, statefulContent, false, 0, true)}\n`);
-  });
-
-  copyHtmlToClipboard(resultHtml.join('\n'), resultText.join('\n'));
+  void copyTextToClipboardFromPromise(
+    contentPromise,
+    shouldNotify ? () => showNotification({ message: { key: 'TextCopied' }, tabId }) : undefined,
+    shouldNotify ? () => showNotification({ message: { key: 'GeneralError' }, tabId }) : undefined,
+    textFormat,
+  );
 }
 
 addActionHandler('openDeleteMessageModal', (global, actions, payload): ActionReturnType => {
   const {
-    chatId, messageIds, isSchedule,
+    chatId, messageIds, isSchedule, reactionContext,
     tabId = getCurrentTabId(),
   } = payload;
 
@@ -1106,6 +1093,7 @@ addActionHandler('openDeleteMessageModal', (global, actions, payload): ActionRet
       chatId,
       messageIds,
       isSchedule,
+      reactionContext,
     },
   }, tabId);
   setGlobal(global);

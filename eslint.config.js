@@ -3,7 +3,6 @@ import eslintReact from '@eslint-react/eslint-plugin';
 import stylisticJs from '@stylistic/eslint-plugin';
 import { defineConfig, globalIgnores } from 'eslint/config';
 import { importX } from 'eslint-plugin-import-x';
-import jestPlugin from 'eslint-plugin-jest';
 import noNullPlugin from 'eslint-plugin-no-null';
 import reactHooksStaticDeps from 'eslint-plugin-react-hooks-static-deps';
 import simpleImportSortPlugin from 'eslint-plugin-simple-import-sort';
@@ -26,13 +25,12 @@ export default defineConfig(
     quoteProps: 'as-needed',
   }),
   globalIgnores([
-    'src/lib/rlottie/**',
+    '.cache/',
     'src/lib/video-preview/polyfill',
     'src/lib/fasttextweb/**',
     'src/lib/gramjs/tl/',
     'src/lib/lovely-chart/**',
     'src/lib/music-metadata-browser',
-    'src/lib/secret-sauce/',
     'src/lib/fastBlur.js',
     'src/types/language.d.ts',
     'dist/',
@@ -178,6 +176,7 @@ export default defineConfig(
       '@typescript-eslint/unbound-method': 'off',
       'unused-imports/no-unused-imports': 'error',
       'import-x/namespace': ['error', { allowComputed: true }],
+      'import-x/no-unresolved': ['error', { ignore: ['^virtual:'] }],
       'import-x/no-named-as-default-member': 'off',
       'react-hooks/exhaustive-deps': 'off',
       'react-hooks-static-deps/exhaustive-deps': [
@@ -202,12 +201,17 @@ export default defineConfig(
       '@eslint-react/no-use-context': 'off',
       '@eslint-react/no-context-provider': 'off',
       '@eslint-react/no-array-index-key': 'off',
-      '@eslint-react/web-api/no-leaked-timeout': 'off',
+      '@eslint-react/static-components': 'off',
+      '@eslint-react/web-api-no-leaked-event-listener': 'off',
+      '@eslint-react/web-api-no-leaked-fetch': 'off',
+      '@eslint-react/web-api-no-leaked-intersection-observer': 'off',
+      '@eslint-react/web-api-no-leaked-interval': 'off',
+      '@eslint-react/web-api-no-leaked-resize-observer': 'off',
+      '@eslint-react/web-api-no-leaked-timeout': 'off',
       '@eslint-react/no-missing-key': 'off',
       '@eslint-react/no-nested-component-definitions': 'off',
       '@eslint-react/no-unused-props': 'off',
       '@eslint-react/dom-no-unsafe-iframe-sandbox': 'off',
-      '@eslint-react/dom/no-unsafe-iframe-sandbox': 'off',
       '@eslint-react/no-leaked-conditional-rendering': 'error',
     },
     plugins: {
@@ -215,15 +219,13 @@ export default defineConfig(
       'simple-import-sort': simpleImportSortPlugin,
       'unused-imports': unusedImports,
       'react-hooks-static-deps': reactHooksStaticDeps,
-      jest: jestPlugin,
       'tt-multitab': ttMultitabPlugin,
     },
     languageOptions: {
       parserOptions: {
-        projectService: true,
+        project: ['./tsconfig.json', './tsconfig.script.json'],
         tsconfigRootDir: import.meta.dirname,
       },
-      globals: jestPlugin.environments.globals.globals,
     },
   },
 );

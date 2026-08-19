@@ -1,0 +1,157 @@
+.frame {
+  --media-max-height: 27rem;
+  --media-min-width: 12rem;
+  --media-min-height: 5rem;
+
+  position: relative;
+
+  width: fit-content;
+  min-width: min(var(--media-min-width), 100%);
+  max-width: 100%;
+  min-height: var(--media-min-height);
+  max-height: var(--media-max-height);
+
+  &::before {
+    content: "";
+
+    display: block;
+    flex: 0 1 auto;
+
+    aspect-ratio: var(--media-aspect-ratio);
+    width:
+      clamp(
+        var(--media-min-width),
+        var(--media-width),
+        calc(var(--media-max-height) * var(--media-aspect-ratio))
+      );
+    max-width: 100%;
+    max-height: var(--media-max-height);
+  }
+
+  > :global(.full-media),
+  > :global(.thumbnail) {
+    position: absolute;
+    inset: 0;
+  }
+}
+
+.frame:global(.interactive) {
+  cursor: var(--custom-cursor, pointer);
+}
+
+.frame.intrinsic {
+  > :global(.full-media),
+  > :global(.thumbnail) {
+    object-fit: contain;
+  }
+}
+
+.frame.intrinsic > :global(.thumbnail.blurred-bg) {
+  object-fit: cover;
+}
+
+.fill {
+  width: 100%;
+  min-width: 0;
+  min-height: 0;
+  max-height: none;
+}
+
+.pictogram {
+  flex: 0 0 5rem;
+
+  width: 5rem;
+  min-width: 5rem;
+  max-width: 5rem;
+  height: 5rem;
+  min-height: 5rem;
+  max-height: 5rem;
+}
+
+.fill,
+.pictogram {
+  &::before {
+    content: none;
+  }
+}
+
+:global(.with-wide-media) .frame {
+  --media-min-width: 20rem;
+
+  @media (max-width: 600px) {
+    --media-min-width: 14rem;
+  }
+}
+
+.fill {
+  height: 100%;
+
+  > :global(.full-media),
+  > :global(.thumbnail) {
+    object-fit: cover;
+  }
+}
+
+.loading {
+  position: absolute;
+  inset: 0;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  &:not(:global(.open)) {
+    transform: scale(0);
+    opacity: 0.5;
+    transition: opacity 0.3s ease, transform 0.3s ease;
+  }
+}
+
+.controlButton {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  color: #fff;
+
+  opacity: 0.7;
+
+  transition: opacity 150ms;
+
+  &::before {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    width: 3.375rem;
+    height: 3.375rem;
+    border-radius: 50%;
+
+    background: rgba(black, 0.25);
+  }
+
+  &:hover {
+    opacity: 1;
+  }
+
+  &:global(.opacity-transition) {
+    transition: opacity 0.15s ease;
+
+    &:global(.not-open) {
+      opacity: 0;
+    }
+  }
+}
+
+.downloadButton {
+  font-size: 1.5rem;
+}
+
+.playButton {
+  font-size: 2.5rem;
+}

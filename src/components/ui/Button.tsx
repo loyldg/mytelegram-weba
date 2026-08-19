@@ -40,6 +40,7 @@ export type OwnProps = {
   isLoading?: boolean;
   ariaLabel?: string;
   ariaControls?: string;
+  ariaSelected?: boolean;
   hasPopup?: boolean;
   href?: string;
   download?: string;
@@ -60,9 +61,11 @@ export type OwnProps = {
   noForcedUpperCase?: boolean;
   shouldStopPropagation?: boolean;
   style?: string;
+  autoFocus?: boolean;
   iconName?: IconName;
   iconAlignment?: 'top' | 'bottom' | 'start' | 'end';
   iconClassName?: string;
+  iconHasPremiumBadge?: boolean;
   onClick?: (e: ReactMouseEvent<HTMLButtonElement, MouseEvent>) => void;
   onContextMenu?: (e: ReactMouseEvent<HTMLButtonElement, MouseEvent>) => void;
   onMouseDown?: (e: ReactMouseEvent<HTMLButtonElement>) => void;
@@ -98,6 +101,7 @@ const Button = ({
   noSparkleAnimation,
   ariaLabel,
   ariaControls,
+  ariaSelected,
   hasPopup,
   href,
   download,
@@ -114,9 +118,11 @@ const Button = ({
   shouldStopPropagation,
   noForcedUpperCase,
   style,
+  autoFocus,
   iconName,
   iconAlignment = 'start',
   iconClassName,
+  iconHasPremiumBadge,
   onClick,
   onContextMenu,
   onMouseDown,
@@ -190,7 +196,7 @@ const Button = ({
 
   const renderIcon = () => {
     if (!iconName) return undefined;
-    return <Icon name={iconName} className={iconClassName} />;
+    return <Icon name={iconName} className={iconClassName} hasPremiumBadge={iconHasPremiumBadge} />;
   };
 
   const renderContent = () => {
@@ -241,6 +247,7 @@ const Button = ({
         title={ariaLabel}
         download={download}
         tabIndex={tabIndex}
+        autoFocus={autoFocus}
         dir={isRtl ? 'rtl' : undefined}
         aria-label={ariaLabel}
         aria-controls={ariaControls}
@@ -268,9 +275,12 @@ const Button = ({
       onMouseLeave={onMouseLeave && !isNotInteractive ? onMouseLeave : undefined}
       onTransitionEnd={onTransitionEnd}
       onFocus={onFocus && !isNotInteractive ? onFocus : undefined}
+      disabled={disabled && !allowDisabledClick}
+      autoFocus={autoFocus}
       aria-label={ariaLabel}
       aria-controls={ariaControls}
       aria-haspopup={hasPopup}
+      aria-selected={ariaSelected}
       title={ariaLabel}
       tabIndex={tabIndex}
       dir={isRtl ? 'rtl' : undefined}

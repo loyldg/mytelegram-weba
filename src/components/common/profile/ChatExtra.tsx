@@ -57,13 +57,15 @@ import useLang from '../../../hooks/useLang';
 import useLastCallback from '../../../hooks/useLastCallback';
 import useOldLang from '../../../hooks/useOldLang';
 
+import Island from '../../gili/layout/Island';
+import Switch from '../../gili/primitives/Switch';
 import Chat from '../../left/main/Chat';
 import Button from '../../ui/Button';
 import ListItem from '../../ui/ListItem';
-import Switcher from '../../ui/Switcher';
 import CompactMapPreview from '../CompactMapPreview';
 import CustomEmoji from '../CustomEmoji';
 import Icon from '../icons/Icon';
+import QrIcon from '../icons/QrIcon';
 import SafeLink from '../SafeLink';
 import BusinessHours from './BusinessHours';
 import UserBirthday from './UserBirthday';
@@ -76,6 +78,7 @@ type OwnProps = {
   isSavedDialog?: boolean;
   isInSettings?: boolean;
   className?: string;
+  style?: string;
 };
 
 type StateProps = {
@@ -127,6 +130,7 @@ const ChatExtra = ({
   botAppPermissions,
   botVerification,
   className,
+  style,
   isInSettings,
   canViewSubscribers,
 }: OwnProps & StateProps) => {
@@ -142,6 +146,7 @@ const ChatExtra = ({
     toggleUserEmojiStatusPermission,
     toggleUserLocationPermission,
     requestNextManagementScreen,
+    openQrCodeModal,
   } = getActions();
 
   const {
@@ -176,8 +181,7 @@ const ChatExtra = ({
   } = useCollapsibleLines(
     noteTextRef,
     NOTE_MAX_LINES,
-    undefined,
-    !shouldRenderNote,
+    { isDisabled: !shouldRenderNote },
   );
 
   useEffectWithPrevDeps(([prevPeerId]) => {
@@ -197,6 +201,7 @@ const ChatExtra = ({
         width={width}
         height={height}
         zoom={zoom}
+        shouldShowPin
       />
     );
   }, [businessLocation, width, height, zoom]);
@@ -304,6 +309,12 @@ const ChatExtra = ({
     requestNextManagementScreen({ screen: ManagementScreens.ChannelSubscribers });
   });
 
+  const handleOpenQrCode = useLastCallback((e: React.MouseEvent) => {
+    stopEvent(e);
+    if (!peerId) return;
+    openQrCodeModal({ peerId });
+  });
+
   const handleOpenApp = useLastCallback(() => {
     const botId = user?.id;
     if (!botId) {
@@ -365,13 +376,27 @@ const ChatExtra = ({
         })
       : undefined;
 
+    const isSettingsUsername = Boolean(isInSettings) && !isChat;
+    const plainIcon = isChat ? 'link' : 'mention';
+
     return (
       <ListItem
-        icon={isChat ? 'link' : 'mention'}
+        icon={isSettingsUsername ? 'mention-filled' : plainIcon}
+        iconBg={isSettingsUsername ? 'blue' : undefined}
         multiline
         narrow
         ripple
-
+        rightElement={(
+          <Button
+            round
+            size="smaller"
+            color="translucent"
+            ariaLabel={lang('QrCodeTitle')}
+            onClick={handleOpenQrCode}
+          >
+            <QrIcon />
+          </Button>
+        )}
         onClick={() => {
           handleUsernameClick(mainUsername, isChat);
         }}
@@ -388,12 +413,14 @@ const ChatExtra = ({
   }
 
   return (
-    <div className={buildClassName('ChatExtra', className)} style={createVtnStyle('chatExtra')}>
+    <div className={buildClassName('ChatExtra', className)} style={style || createVtnStyle('chatExtra')}>
       {user && userFullInfo?.isUnofficialSecurityRisk && (
-        <div className={styles.unofficialSecurityRisk}>
-          <Icon className={buildClassName(styles.riskIcon, 'in-text-icon')} name="info-filled" />
-          {lang('UnofficialSecurityRisk', { peer: getPeerTitle(lang, user) })}
-        </div>
+        <Island className={styles.securityRiskIsland}>
+          <div className={styles.unofficialSecurityRisk}>
+            <Icon className={buildClassName(styles.riskIcon, 'in-text-icon')} name="info-filled" />
+            {lang('UnofficialSecurityRisk', { peer: getPeerTitle(lang, user) })}
+          </div>
+        </Island>
       )}
       {personalChannel && (
         <div className={styles.personalChannel} style={createVtnStyle('personalChannel')}>
@@ -401,244 +428,247 @@ const ChatExtra = ({
           <span className={styles.personalChannelSubscribers}>
             {oldLang('Subscribers', personalChannel.membersCount, 'i')}
           </span>
-          <Chat
-            chatId={personalChannel.id}
-            orderDiff={0}
-            shiftDiff={0}
-            animationType={ChatAnimationTypes.None}
-            isPreview
-            previewMessageId={personalChannelMessageId}
-            className={styles.personalChannelItem}
-          />
+          <Island className={styles.personalChannelItem}>
+            <Chat
+              chatId={personalChannel.id}
+              orderDiff={0}
+              shiftDiff={0}
+              animationType={ChatAnimationTypes.None}
+              isPreview
+              previewMessageId={personalChannelMessageId}
+            />
+          </Island>
         </div>
       )}
-      {Boolean(formattedNumber?.length) && (
-        <ListItem
-          icon="phone"
-          className={styles.phone}
-          multiline
-          narrow
-          ripple
-          onClick={handlePhoneClick}
-          style={createVtnStyle('phone')}
-        >
-          <span className="title" dir={lang.isRtl ? 'rtl' : undefined}>{formattedNumber}</span>
-          <span className="subtitle">{oldLang('Phone')}</span>
-        </ListItem>
-      )}
-      {activeUsernames && renderUsernames(activeUsernames)}
-      {description && Boolean(description.length) && (
-        <ListItem
-          icon="info"
-          className={styles.description}
-          multiline
-          narrow
-          isStatic
-          allowSelection
-          style={createVtnStyle('description')}
-        >
-          <span className="title word-break allow-selection" dir={lang.isRtl ? 'rtl' : undefined}>
-            {
-              renderText(description, [
-                'br',
-                shouldRenderAllLinks ? 'links' : 'tg_links',
-                'emoji',
-              ])
-            }
-          </span>
-          <span className="subtitle">{oldLang(userId ? 'UserBio' : 'Info')}</span>
-        </ListItem>
-      )}
-      {activeChatUsernames && !isTopicInfo && renderUsernames(activeChatUsernames, true)}
-      {((!activeChatUsernames && canInviteUsers) || isTopicInfo) && link && (
-        <ListItem
-          icon="link"
-          multiline
-          className={styles.link}
-          narrow
-          ripple
-          onClick={() => copy(link, oldLang('SetUrlPlaceholder'))}
-          style={createVtnStyle('link')}
-        >
-          <div className="title">{link}</div>
-          <span className="subtitle">{oldLang('SetUrlPlaceholder')}</span>
-        </ListItem>
-      )}
-      {birthday && (
-        <UserBirthday key={peerId} birthday={birthday} user={user!} isInSettings={isInSettings} />
-      )}
-      {hasMainMiniApp && (
-        <ListItem
-          multiline
-          className={styles.miniapp}
-          isStatic
-          narrow
-          style={createVtnStyle('miniapp')}
-        >
-          <Button
-            className={styles.openAppButton}
-            onClick={handleOpenApp}
+      <Island>
+        {Boolean(formattedNumber?.length) && (
+          <ListItem
+            icon={isInSettings ? 'phone-filled' : 'phone'}
+            iconBg={isInSettings ? 'green' : undefined}
+            className={styles.phone}
+            multiline
+            narrow
+            ripple
+            onClick={handlePhoneClick}
+            style={createVtnStyle('phone')}
           >
-            {oldLang('ProfileBotOpenApp')}
-          </Button>
-          <div className={styles.sectionInfo}>
-            {appTermsInfo}
-          </div>
-        </ListItem>
-      )}
-      {!isOwnProfile && !isInSettings && (
-        <ListItem
-          icon={isMuted ? 'mute' : 'unmute'}
-          className={styles.notifications}
-          narrow
-          ripple
-          onClick={handleToggleNotifications}
-          style={createVtnStyle('notifications')}
-        >
-          <span>{lang('Notifications')}</span>
-          <Switcher
-            id="group-notifications"
-            label={lang(userId ? 'AriaToggleUserNotifications' : 'AriaToggleChatNotifications')}
-            checked={!isMuted}
-            inactive
-          />
-        </ListItem>
-      )}
-      {businessWorkHours && (
-        <BusinessHours businessHours={businessWorkHours} />
-      )}
-      {businessLocation && (
-        <ListItem
-          icon="location"
-          ripple
-          multiline
-          narrow
-          className={styles.location}
-          style={createVtnStyle('location')}
-          rightElement={locationRightComponent}
-          onClick={handleClickLocation}
-        >
-          <div className="title">{businessLocation.address}</div>
-          <span className="subtitle">{oldLang('BusinessProfileLocation')}</span>
-        </ListItem>
-      )}
-      {shouldRenderNote && (
-        <ListItem
-          icon="note"
-          iconClassName={styles.noteListItemIcon}
-          multiline
-          narrow
-          isStatic
-          allowSelection
-          className={styles.note}
-          style={createVtnStyle('note')}
-        >
-          <div
-            ref={noteTextRef}
-            className={buildClassName(
-              'title',
-              'word-break',
-              'allow-selection',
-              styles.noteText,
-              isNoteCollapsed && styles.noteTextCollapsed,
-            )}
-            style={createVtnStyle('noteText', true)}
-            dir={lang.isRtl ? 'rtl' : undefined}
-            onClick={canExpandNote ? handleExpandNote : undefined}
+            <span className="title" dir={lang.isRtl ? 'rtl' : undefined}>{formattedNumber}</span>
+            <span className="subtitle">{oldLang('Phone')}</span>
+          </ListItem>
+        )}
+        {activeUsernames && renderUsernames(activeUsernames)}
+        {description && Boolean(description.length) && (
+          <ListItem
+            icon={isInSettings ? 'bio-filled' : 'info'}
+            iconBg={isInSettings ? 'gray' : undefined}
+            className={styles.description}
+            multiline
+            narrow
+            isStatic
+            allowSelection
+            style={createVtnStyle('description')}
           >
-            {renderTextWithEntities({
-              text: note.text,
-              entities: note.entities,
-            })}
-          </div>
-          <div className={buildClassName('subtitle', styles.noteSubtitle)} style={createVtnStyle('noteSubtitle')}>
-            <span>{lang('UserNoteTitle')}</span>
+            <span className="title word-break allow-selection" dir={lang.isRtl ? 'rtl' : undefined}>
+              {
+                renderText(description, [
+                  'br',
+                  shouldRenderAllLinks ? 'links' : 'tg_links',
+                  'emoji',
+                ])
+              }
+            </span>
+            <span className="subtitle">{oldLang(userId ? 'UserBio' : 'Info')}</span>
+          </ListItem>
+        )}
+        {activeChatUsernames && !isTopicInfo && renderUsernames(activeChatUsernames, true)}
+        {((!activeChatUsernames && canInviteUsers) || isTopicInfo) && link && (
+          <ListItem
+            icon="link"
+            multiline
+            className={styles.link}
+            narrow
+            ripple
+            onClick={() => copy(link, oldLang('SetUrlPlaceholder'))}
+            style={createVtnStyle('link')}
+          >
+            <div className="title">{link}</div>
+            <span className="subtitle">{oldLang('SetUrlPlaceholder')}</span>
+          </ListItem>
+        )}
+        {birthday && (
+          <UserBirthday key={peerId} birthday={birthday} user={user!} isInSettings={isInSettings} />
+        )}
+        {hasMainMiniApp && (
+          <ListItem
+            multiline
+            className={styles.miniapp}
+            isStatic
+            narrow
+            style={createVtnStyle('miniapp')}
+          >
+            <Button
+              className={styles.openAppButton}
+              onClick={handleOpenApp}
+            >
+              {oldLang('ProfileBotOpenApp')}
+            </Button>
+            <div className={styles.sectionInfo}>
+              {appTermsInfo}
+            </div>
+          </ListItem>
+        )}
+        {!isOwnProfile && !isInSettings && (
+          <ListItem
+            icon={isMuted ? 'mute' : 'unmute'}
+            className={styles.notifications}
+            narrow
+            ripple
+            onClick={handleToggleNotifications}
+            style={createVtnStyle('notifications')}
+          >
+            <span>{lang('Notifications')}</span>
+            <Switch
+              id="group-notifications"
+              checked={!isMuted}
+              className={styles.switch}
+            />
+          </ListItem>
+        )}
+        {businessWorkHours && (
+          <BusinessHours businessHours={businessWorkHours} isInSettings={isInSettings} />
+        )}
+        {businessLocation && (
+          <ListItem
+            icon={isInSettings ? 'location-filled' : 'location'}
+            iconBg={isInSettings ? 'red' : undefined}
+            ripple
+            multiline
+            narrow
+            className={styles.location}
+            style={createVtnStyle('location')}
+            rightElement={locationRightComponent}
+            onClick={handleClickLocation}
+          >
+            <div className="title">{businessLocation.address}</div>
+            <span className="subtitle">{oldLang('BusinessProfileLocation')}</span>
+          </ListItem>
+        )}
+        {shouldRenderNote && (
+          <ListItem
+            icon="note"
+            iconClassName={styles.noteListItemIcon}
+            multiline
+            narrow
+            isStatic
+            allowSelection
+            className={styles.note}
+            style={createVtnStyle('note')}
+          >
+            <div
+              ref={noteTextRef}
+              className={buildClassName(
+                'title',
+                'word-break',
+                'allow-selection',
+                styles.noteText,
+                isNoteCollapsed && styles.noteTextCollapsed,
+              )}
+              style={createVtnStyle('noteText', true)}
+              dir={lang.isRtl ? 'rtl' : undefined}
+              onClick={canExpandNote ? handleExpandNote : undefined}
+            >
+              {renderTextWithEntities({
+                text: note.text,
+                entities: note.entities,
+              })}
+            </div>
+            <div className={buildClassName('subtitle', styles.noteSubtitle)} style={createVtnStyle('noteSubtitle')}>
+              <span>{lang('UserNoteTitle')}</span>
 
-            <span className={styles.noteHint}>{lang('UserNoteHint')}</span>
-            {isNoteCollapsible && (
-              <Icon
-                className={buildClassName(
-                  styles.noteExpandIcon,
-                  styles.clickable,
-                )}
-                style={createVtnStyle('noteExpandIcon', true)}
-                onClick={handleToggleNote}
-                name={isNoteCollapsed ? 'down' : 'up'}
-              />
-            )}
+              <span className={styles.noteHint}>{lang('UserNoteHint')}</span>
+              {isNoteCollapsible && (
+                <Icon
+                  className={buildClassName(
+                    styles.noteExpandIcon,
+                    styles.clickable,
+                  )}
+                  style={createVtnStyle('noteExpandIcon', true)}
+                  onClick={handleToggleNote}
+                  name={isNoteCollapsed ? 'down' : 'up'}
+                />
+              )}
+            </div>
+          </ListItem>
+        )}
+        {hasSavedMessages && !isOwnProfile && !isInSettings && (
+          <ListItem
+            icon="saved-messages"
+            className={styles.savedMessages}
+            narrow
+            ripple
+            onClick={handleOpenSavedDialog}
+            style={createVtnStyle('savedMessages')}
+          >
+            <span>{oldLang('SavedMessagesTab')}</span>
+          </ListItem>
+        )}
+        {userFullInfo && 'isBotAccessEmojiGranted' in userFullInfo && (
+          <ListItem
+            icon="user"
+            className={styles.botEmojiStatus}
+            narrow
+            ripple
+            onClick={manageEmojiStatusChange}
+            style={createVtnStyle('botEmojiStatus')}
+          >
+            <span>{oldLang('BotProfilePermissionEmojiStatus')}</span>
+            <Switch
+              checked={Boolean(isBotCanManageEmojiStatus)}
+              className={styles.switch}
+            />
+          </ListItem>
+        )}
+        {botAppPermissions?.geolocation !== undefined && (
+          <ListItem
+            icon="location"
+            className={styles.botLocation}
+            narrow
+            ripple
+            onClick={handleLocationPermissionChange}
+            style={createVtnStyle('botLocation')}
+          >
+            <span>{oldLang('BotProfilePermissionLocation')}</span>
+            <Switch
+              checked={Boolean(botAppPermissions?.geolocation)}
+              className={styles.switch}
+            />
+          </ListItem>
+        )}
+        {canViewSubscribers && (
+          <ListItem
+            icon="group"
+            narrow
+            multiline
+            ripple
+            className={styles.subscribers}
+            onClick={handleOpenSubscribers}
+            style={createVtnStyle('subscribers')}
+          >
+            <div className="title">{lang('ProfileItemSubscribers')}</div>
+            <span className="subtitle">{lang.number(chat?.membersCount || 0)}</span>
+          </ListItem>
+        )}
+        {botVerification && (
+          <div className={styles.botVerificationSection} style={createVtnStyle('botVerification')}>
+            <CustomEmoji
+              className={styles.botVerificationIcon}
+              documentId={botVerification.iconId}
+              size={BOT_VERIFICATION_ICON_SIZE}
+            />
+            {botVerification.description}
           </div>
-        </ListItem>
-      )}
-      {hasSavedMessages && !isOwnProfile && !isInSettings && (
-        <ListItem
-          icon="saved-messages"
-          className={styles.savedMessages}
-          narrow
-          ripple
-          onClick={handleOpenSavedDialog}
-          style={createVtnStyle('savedMessages')}
-        >
-          <span>{oldLang('SavedMessagesTab')}</span>
-        </ListItem>
-      )}
-      {userFullInfo && 'isBotAccessEmojiGranted' in userFullInfo && (
-        <ListItem
-          icon="user"
-          className={styles.botEmojiStatus}
-          narrow
-          ripple
-          onClick={manageEmojiStatusChange}
-          style={createVtnStyle('botEmojiStatus')}
-        >
-          <span>{oldLang('BotProfilePermissionEmojiStatus')}</span>
-          <Switcher
-            label={oldLang('BotProfilePermissionEmojiStatus')}
-            checked={isBotCanManageEmojiStatus}
-            inactive
-          />
-        </ListItem>
-      )}
-      {botAppPermissions?.geolocation !== undefined && (
-        <ListItem
-          icon="location"
-          className={styles.botLocation}
-          narrow
-          ripple
-          onClick={handleLocationPermissionChange}
-          style={createVtnStyle('botLocation')}
-        >
-          <span>{oldLang('BotProfilePermissionLocation')}</span>
-          <Switcher
-            label={oldLang('BotProfilePermissionLocation')}
-            checked={botAppPermissions?.geolocation}
-            inactive
-          />
-        </ListItem>
-      )}
-      {canViewSubscribers && (
-        <ListItem
-          icon="group"
-          narrow
-          multiline
-          ripple
-          className={styles.subscribers}
-          onClick={handleOpenSubscribers}
-          style={createVtnStyle('subscribers')}
-        >
-          <div className="title">{lang('ProfileItemSubscribers')}</div>
-          <span className="subtitle">{lang.number(chat?.membersCount || 0)}</span>
-        </ListItem>
-      )}
-      {botVerification && (
-        <div className={styles.botVerificationSection} style={createVtnStyle('botVerification')}>
-          <CustomEmoji
-            className={styles.botVerificationIcon}
-            documentId={botVerification.iconId}
-            size={BOT_VERIFICATION_ICON_SIZE}
-          />
-          {botVerification.description}
-        </div>
-      )}
+        )}
+      </Island>
     </div>
   );
 };

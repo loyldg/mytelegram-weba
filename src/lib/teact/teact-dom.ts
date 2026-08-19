@@ -11,7 +11,7 @@ import type {
   VirtualElementTag,
 } from './teact';
 
-import { DEBUG } from '../../config';
+import { DEBUG, IS_PERF } from '../../config';
 import { addEventListener, removeAllDelegatedListeners, removeEventListener } from './dom-events';
 import {
   captureImmediateEffects,
@@ -52,6 +52,8 @@ const MAPPED_ATTRIBUTES: Partial<Record<string, string>> = {
   autoCorrect: 'autocorrect',
   autoPlay: 'autoplay',
   spellCheck: 'spellcheck',
+  autoFocus: 'autofocus',
+  srcDoc: 'srcdoc',
 };
 const INDEX_KEY_PREFIX = '__indexKey#';
 const SELECTION_STATE_ATTRIBUTE = '__teactSelectionState';
@@ -76,7 +78,7 @@ function render($element: VirtualElement | undefined, parentEl: HTMLElement) {
 
   $head.children = $renderedChild ? [$renderedChild] : [];
 
-  if (process.env.APP_ENV === 'perf') {
+  if (IS_PERF) {
     DEBUG_virtualTreeSize = 0;
     DEBUG_addToVirtualTreeSize($head);
 
@@ -412,7 +414,7 @@ function remount(
   } else {
     if (node) {
       parentEl.replaceChild(node, $current.target!);
-    } else {
+    } else if ($current.target!.parentNode === parentEl) {
       parentEl.removeChild($current.target!);
     }
 
@@ -484,7 +486,7 @@ function renderChildren(
   forceMoveToEnd = false,
   namespace?: string,
 ) {
-  if (('props' in $new) && $new.props.teactFastList) {
+  if ($new.type === VirtualType.Tag && $new.props.teactFastList) {
     renderFastListChildren($current, $new, currentContext, currentEl, namespace);
     return;
   }
@@ -965,7 +967,7 @@ function getChildKeysByIndex(children: VirtualElementChildren) {
     if (isNullable(key)) {
       if (DEBUG && isParentElement($child)) {
         // eslint-disable-next-line no-console
-        console.warn('Missing `key` in `teactFastList`');
+        console.warn('Missing `key` in `teactFastList`', $child);
       }
 
       key = `${INDEX_KEY_PREFIX}${index}`;

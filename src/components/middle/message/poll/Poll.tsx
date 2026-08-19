@@ -6,9 +6,10 @@ import {
   useRef,
   useState,
 } from '../../../../lib/teact/teact';
-import { getActions, getGlobal } from '../../../../global';
+import { getActions, getGlobal, getPromiseActions, withGlobal } from '../../../../global';
 
 import type {
+  ApiChat,
   ApiFormattedText,
   ApiLocation,
   ApiMessagePoll,
@@ -20,12 +21,19 @@ import type { ObserveFn } from '../../../../hooks/useIntersectionObserver';
 import { type MediaViewerMedia, MediaViewerOrigin, type ThemeKey } from '../../../../types';
 
 import { getMessageHtmlId } from '../../../../global/helpers';
-import { selectPeer } from '../../../../global/selectors';
+import { getPeerTitle } from '../../../../global/helpers/peers';
+import { selectChat, selectPeer } from '../../../../global/selectors';
 import buildClassName from '../../../../util/buildClassName';
 import { buildCollectionByKey, shuffle } from '../../../../util/iteratees';
 import { NEXT_ARROW_REPLACEMENT, PREVIOUS_ARROW_REPLACEMENT } from '../../../../util/localization/format';
 import { getServerTime } from '../../../../util/serverTime';
 import { renderTextWithEntities } from '../../../common/helpers/renderTextWithEntities';
+import {
+  canVoteInPollAsSubscriber,
+  canVoteInPollCountry,
+  getPollCountryRestrictionMessage,
+  getPollSubscriberRestrictionMessage,
+} from './helpers';
 
 import useTimeout from '../../../../hooks/schedulers/useTimeout';
 import useLang from '../../../../hooks/useLang';
@@ -34,6 +42,7 @@ import useLastCallback from '../../../../hooks/useLastCallback';
 import AvatarList from '../../../common/AvatarList';
 import CompactMapPreview from '../../../common/CompactMapPreview';
 import Document from '../../../common/Document';
+import Icon from '../../../common/icons/Icon';
 import PeerColorWrapper from '../../../common/PeerColorWrapper';
 import StickerView from '../../../common/StickerView';
 import Button from '../../../ui/Button';
@@ -44,6 +53,7 @@ import Video from '../Video';
 import PollOption from './PollOption';
 
 import styles from './Poll.module.scss';
+import optionStyles from './PollOption.module.scss';
 
 type OwnProps = {
   chatId: string;
@@ -56,11 +66,18 @@ type OwnProps = {
   observeIntersectionForPlaying?: ObserveFn;
 };
 
+type StateProps = {
+  chat?: ApiChat;
+  pollMaxAnswers: number;
+  phoneCountryIso2?: string;
+};
+
 const ATTACHED_MAP_WIDTH = 350;
 const ATTACHED_MAP_HEIGHT = 200;
 const ATTACHED_MAP_ZOOM = 15;
 const STICKER_PREVIEW_SIZE = 96;
 const VOTE_TIMEOUT = 5000;
+const MAX_OPTION_LENGTH = 100;
 
 const Poll = ({
   chatId,
@@ -71,7 +88,10 @@ const Poll = ({
   isInScheduled,
   observeIntersectionForLoading,
   observeIntersectionForPlaying,
-}: OwnProps) => {
+  chat,
+  pollMaxAnswers,
+  phoneCountryIso2,
+}: OwnProps & StateProps) => {
   const {
     openMapModal,
     openMediaViewer,
@@ -79,7 +99,9 @@ const Poll = ({
     requestConfetti,
     sendPollVote,
     loadMessage,
+    showNotification,
   } = getActions();
+  const { appendPollAnswer } = getPromiseActions();
   const lang = useLang();
   const serverTime = getServerTime();
 
@@ -88,6 +110,8 @@ const Poll = ({
   const [selectedOptions, setSelectedOptions] = useState<string[]>([]);
   const [isExplanationOpen, setIsExplanationOpen] = useState(false);
   const [isSendingVote, setIsSendingVote] = useState(false);
+  const [isAppendingAnswer, setIsAppendingAnswer] = useState(false);
+  const [newAnswerText, setNewAnswerText] = useState('');
   const [isViewingAuthorResults, setIsViewingAuthorResults] = useState(false);
   const [answerOrder] = useState<string[]>(() => (
     buildAnswerOrder(answers, summary.shouldShuffleAnswers)
@@ -113,18 +137,42 @@ const Poll = ({
   const selectedOptionsSet = useMemo(() => new Set(selectedOptions), [selectedOptions]);
   const hasResultData = Boolean(results.resultByOption);
   const totalVoters = results.totalVoters || 0;
+  const channelTitle = chat && getPeerTitle(lang, chat);
+  const canVoteAsSubscriber = canVoteInPollAsSubscriber(summary.isRestrictedToSubscribers, chat?.isNotJoined);
+  const canVoteInCountry = canVoteInPollCountry(phoneCountryIso2, summary.allowedCountryCodes);
+  const subscriberRestrictionMessage = useMemo(
+    () => getPollSubscriberRestrictionMessage(channelTitle, summary.isRestrictedToSubscribers),
+    [channelTitle, summary.isRestrictedToSubscribers],
+  );
+  const countryRestrictionMessage = useMemo(
+    () => getPollCountryRestrictionMessage(lang, summary.allowedCountryCodes),
+    [lang, summary.allowedCountryCodes],
+  );
+  const isSubscriberVoteRestricted = canVote && !canVoteAsSubscriber;
+  const isCountryVoteRestricted = canVote && !canVoteInCountry;
+  const canSubmitVote = canVote && canVoteAsSubscriber && canVoteInCountry;
+  const canClickVoteOptions = canVote && !isSendingVote && !isViewingAuthorResults;
+  const canShowRestrictedResults = (isSubscriberVoteRestricted || isCountryVoteRestricted)
+    && hasResultData && !areResultsHiddenForCurrentUser;
   const canToggleAuthorResults = summary.isCreator && canVote && hasResultData && totalVoters > 0;
   const areInlineResultsVisible = hasResultData && (
-    (!canVote && !areResultsHiddenForCurrentUser) || isViewingAuthorResults
+    (!canVote && !areResultsHiddenForCurrentUser) || isViewingAuthorResults || canShowRestrictedResults
   );
-  const canShowResultsPanel = hasChosenAnswer && summary.isPublic && hasResultData && !areResultsHiddenForCurrentUser;
+  const canShowResultsPanel = (
+    hasChosenAnswer || canShowRestrictedResults
+  ) && summary.isPublic && hasResultData && !areResultsHiddenForCurrentUser;
+  const canShowExplanation = hasExplanation && hasChosenAnswer;
+  const canAppendAnswer = Boolean(
+    summary.canAddAnswers && !summary.isClosed && !isInScheduled && answers.length < pollMaxAnswers,
+  );
+  const trimmedNewAnswerText = newAnswerText.trim().substring(0, MAX_OPTION_LENGTH);
 
   useEffect(() => {
-    if (!canVote) {
+    if (!canVote || !canVoteAsSubscriber || !canVoteInCountry) {
       setSelectedOptions([]);
       setIsSendingVote(false);
     }
-  }, [canVote]);
+  }, [canVote, canVoteAsSubscriber, canVoteInCountry]);
 
   useTimeout(() => {
     setIsSendingVote(false);
@@ -162,10 +210,19 @@ const Poll = ({
   }, [canToggleAuthorResults]);
 
   useEffect(() => {
-    if (!hasExplanation) {
+    if (!canShowExplanation) {
       setIsExplanationOpen(false);
     }
-  }, [hasExplanation]);
+  }, [canShowExplanation]);
+
+  useEffect(() => {
+    if (canAppendAnswer) {
+      return;
+    }
+
+    setNewAnswerText('');
+    setIsAppendingAnswer(false);
+  }, [canAppendAnswer]);
 
   const answersByOption = useMemo(() => buildCollectionByKey(answers, 'option'), [answers]);
 
@@ -234,8 +291,34 @@ const Poll = ({
     });
   });
 
+  const handleCountryRestrictedVote = useLastCallback(() => {
+    if (!countryRestrictionMessage) {
+      return;
+    }
+
+    showNotification({ message: countryRestrictionMessage });
+  });
+
+  const handleSubscriberRestrictedVote = useLastCallback(() => {
+    if (!subscriberRestrictionMessage) {
+      return;
+    }
+
+    showNotification({ message: subscriberRestrictionMessage });
+  });
+
   const handleSelectOption = useLastCallback((option: string) => {
     if (!canVote || isSendingVote || isViewingAuthorResults) {
+      return;
+    }
+
+    if (!canVoteAsSubscriber) {
+      handleSubscriberRestrictedVote();
+      return;
+    }
+
+    if (!canVoteInCountry) {
+      handleCountryRestrictedVote();
       return;
     }
 
@@ -258,7 +341,48 @@ const Poll = ({
       return;
     }
 
+    if (!canVoteAsSubscriber) {
+      handleSubscriberRestrictedVote();
+      return;
+    }
+
+    if (!canVoteInCountry) {
+      handleCountryRestrictedVote();
+      return;
+    }
+
     submitVote(selectedOptions);
+  });
+
+  const handleNewAnswerChange = useLastCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    setNewAnswerText(e.currentTarget.value);
+  });
+
+  const handleAppendAnswer = useLastCallback(async () => {
+    if (!canAppendAnswer || !trimmedNewAnswerText || isAppendingAnswer) {
+      return;
+    }
+
+    setIsAppendingAnswer(true);
+    try {
+      await appendPollAnswer({
+        chatId,
+        messageId,
+        text: trimmedNewAnswerText,
+      });
+      setNewAnswerText('');
+    } finally {
+      setIsAppendingAnswer(false);
+    }
+  });
+
+  const handleNewAnswerKeyDown = useLastCallback((e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key !== 'Enter') {
+      return;
+    }
+
+    e.preventDefault();
+    handleAppendAnswer();
   });
 
   const handleOpenPreview = useLastCallback((previewIndex: number) => {
@@ -323,7 +447,6 @@ const Poll = ({
     theme,
     previewIndex: explanationPreviewIndex,
     previewId: explanationPreviewIndex !== undefined ? getPollPreviewId(messageId, explanationPreviewIndex) : undefined,
-    isNestedMedia: true,
     observeIntersectionForLoading,
     observeIntersectionForPlaying,
     onOpenLocation: handleOpenLocation,
@@ -372,7 +495,24 @@ const Poll = ({
       </div>
     );
 
-    if (canVote && isMultipleChoice && selectedOptions.length) {
+    if (trimmedNewAnswerText) {
+      return (
+        <Button
+          className={styles.footerButton}
+          disabled={isAppendingAnswer || !canAppendAnswer}
+          noForcedUpperCase
+          isText
+          inline
+          size="smaller"
+          color="adaptive"
+          onClick={handleAppendAnswer}
+        >
+          {renderFooterBody(lang('Save'))}
+        </Button>
+      );
+    }
+
+    if (canSubmitVote && isMultipleChoice && selectedOptions.length) {
       return (
         <Button
           className={styles.footerButton}
@@ -427,7 +567,7 @@ const Poll = ({
       );
     }
 
-    if (canVote && isMultipleChoice) {
+    if (canSubmitVote && isMultipleChoice) {
       return (
         <Button
           className={styles.footerButton}
@@ -478,13 +618,17 @@ const Poll = ({
   }, [
     canShowResultsPanel,
     canToggleAuthorResults,
-    canVote,
+    canAppendAnswer,
+    canSubmitVote,
+    handleAppendAnswer,
+    isAppendingAnswer,
     isMultipleChoice,
     isSendingVote,
     isViewingAuthorResults,
     lang,
     selectedOptions.length,
     summary.isQuiz,
+    trimmedNewAnswerText,
     footerSubtext,
     totalVoters,
   ]);
@@ -493,7 +637,7 @@ const Poll = ({
     <>
       {attachedMediaEl}
       <div className={styles.root} dir={lang.isRtl ? 'rtl' : undefined}>
-        {isExplanationOpen && hasExplanation && (
+        {isExplanationOpen && canShowExplanation && (
           <PeerColorWrapper className={styles.explanation} shouldReset>
             <div className={styles.explanationHeader}>
               <span className={styles.explanationTitle}>
@@ -531,7 +675,7 @@ const Poll = ({
           <div className={styles.question} dir="auto">
             {questionText}
           </div>
-          {hasExplanation && !isExplanationOpen && (
+          {canShowExplanation && !isExplanationOpen && (
             <div className={styles.explanationToggleButton}>
               <Button
                 round
@@ -578,6 +722,7 @@ const Poll = ({
                 hasResults={areInlineResultsVisible || hasMaskedResults}
                 hasMaskedResults={hasMaskedResults}
                 isSendingVote={isSendingVote}
+                isClickable={canClickVoteOptions}
                 isInScheduled={isInScheduled}
                 isSelected={selectedOptionsSet.has(answer.option)}
                 isMultipleChoice={isMultipleChoice}
@@ -595,6 +740,31 @@ const Poll = ({
               />
             );
           })}
+          {canAppendAnswer && (
+            <div
+              className={buildClassName(
+                optionStyles.root,
+                optionStyles.addAnswer,
+                hasOptionMedia && optionStyles.hasMediaColumn,
+              )}
+            >
+              <div className={optionStyles.selector}>
+                <Icon name="add" className={optionStyles.addAnswerIcon} />
+              </div>
+              <div className={buildClassName(optionStyles.answer, optionStyles.addAnswerContent)}>
+                <input
+                  className={optionStyles.addAnswerInput}
+                  value={newAnswerText}
+                  placeholder={lang('CreatePollAddOption')}
+                  maxLength={MAX_OPTION_LENGTH}
+                  dir="auto"
+                  disabled={isAppendingAnswer}
+                  onChange={handleNewAnswerChange}
+                  onKeyDown={handleNewAnswerKeyDown}
+                />
+              </div>
+            </div>
+          )}
         </div>
         {footerContent && (
           <div className={styles.footer}>
@@ -639,7 +809,6 @@ function renderPollMedia({
   onOpenPreview,
   locationWidth = ATTACHED_MAP_WIDTH,
   locationHeight = ATTACHED_MAP_HEIGHT,
-  isNestedMedia,
 }: {
   content: MediaContent;
   theme: ThemeKey;
@@ -652,7 +821,6 @@ function renderPollMedia({
   onOpenPreview: (previewIndex: number) => void;
   locationWidth?: number;
   locationHeight?: number;
-  isNestedMedia?: boolean;
 }) {
   if (content.photo) {
     return (
@@ -661,7 +829,6 @@ function renderPollMedia({
         photo={content.photo}
         theme={theme}
         className={className}
-        isNestedMedia={isNestedMedia}
         canAutoLoad
         observeIntersection={observeIntersectionForLoading}
         clickArg={previewIndex}
@@ -676,7 +843,6 @@ function renderPollMedia({
         id={previewId}
         video={content.video}
         className={className}
-        isNestedMedia={isNestedMedia}
         canAutoLoad
         observeIntersectionForLoading={observeIntersectionForLoading}
         observeIntersectionForPlaying={observeIntersectionForPlaying}
@@ -706,7 +872,7 @@ function renderPollMedia({
         width={locationWidth}
         height={locationHeight}
         zoom={ATTACHED_MAP_ZOOM}
-        shouldShowPin={false}
+        isFullWidth
         onClick={() => onOpenLocation(content.location!)}
       />
     );
@@ -751,7 +917,13 @@ function PollSticker({
 }
 
 function hasPollOptionMedia(answer: ApiPoll['answers'][number]) {
-  return Boolean(answer.media?.photo || answer.media?.video || answer.media?.location || answer.media?.sticker);
+  return Boolean(
+    answer.media?.photo
+    || answer.media?.video
+    || answer.media?.location
+    || answer.media?.sticker
+    || answer.media?.webPage,
+  );
 }
 
 function onPreviewClick(onOpenPreview: (previewIndex: number) => void) {
@@ -761,4 +933,12 @@ function onPreviewClick(onOpenPreview: (previewIndex: number) => void) {
   };
 }
 
-export default memo(Poll);
+export default memo(withGlobal<OwnProps>((global, { chatId }): Complete<StateProps> => {
+  const chat = selectChat(global, chatId);
+
+  return {
+    chat,
+    pollMaxAnswers: global.appConfig.pollMaxAnswers,
+    phoneCountryIso2: global.appConfig.phoneCountryIso2,
+  };
+})(Poll));

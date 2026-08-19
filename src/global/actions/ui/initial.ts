@@ -112,7 +112,9 @@ addActionHandler('initShared', (): ActionReturnType => {
   startWebsync();
 });
 
-addActionHandler('initMain', (global): ActionReturnType => {
+addActionHandler('initMain', (global, actions): ActionReturnType => {
+  actions.cleanupExpiredTtlMessages();
+
   const { hasWebNotifications, hasPushNotifications } = selectSettingsKeys(global);
   if (hasWebNotifications && hasPushNotifications) {
     // Most of the browsers only show the notifications permission prompt after the first user gesture.
@@ -156,7 +158,7 @@ addCallback((global: GlobalState) => {
     document.documentElement.style.setProperty(
       '--composer-text-size', `${Math.max(messageTextSize, IS_IOS ? 16 : 15)}px`,
     );
-    document.documentElement.style.setProperty('--message-meta-height', `${Math.floor(messageTextSize * 1.3125)}px`);
+    document.documentElement.style.setProperty('--message-meta-height', `${Math.floor(messageTextSize * 1.25)}px`);
     document.documentElement.style.setProperty('--message-text-size', `${messageTextSize}px`);
     document.documentElement.setAttribute('data-message-text-size', messageTextSize.toString());
     document.body.classList.add('initial');

@@ -12,10 +12,11 @@ import { oldSetLanguage, setTimeFormat as setLegacyTimeFormat } from '../../../u
 import { applyPerformanceSettings } from '../../../util/perfomanceSettings';
 import switchTheme from '../../../util/switchTheme';
 import { updatePeerColors } from '../../../util/theme';
+import { updateSelectedWallpaperBlobs } from '../../../util/wallpaperStorage';
 import { callApi, setShouldEnableDebugLog } from '../../../api/gramjs';
 import { addTabStateResetterAction } from '../../helpers/meta';
 import {
-  addActionHandler, getActions, setGlobal,
+  addActionHandler, getActions, getGlobal, setGlobal,
 } from '../../index';
 import { replaceSettings, updateSharedSettings, updateThemeSettings } from '../../reducers';
 import { updateTabState } from '../../reducers/tabs';
@@ -69,7 +70,7 @@ addCallback((global: GlobalState) => {
       '--composer-text-size', `${Math.max(sharedSettings.messageTextSize, IS_IOS ? 16 : 15)}px`,
     );
     document.documentElement.style.setProperty('--message-meta-height',
-      `${Math.floor(sharedSettings.messageTextSize * 1.3125)}px`);
+      `${Math.floor(sharedSettings.messageTextSize * 1.25)}px`);
     document.documentElement.style.setProperty('--message-text-size', `${sharedSettings.messageTextSize}px`);
     document.documentElement.setAttribute('data-message-text-size', sharedSettings.messageTextSize.toString());
   }
@@ -141,9 +142,32 @@ addActionHandler('updatePerformanceSettings', (global, actions, payload): Action
 
 addActionHandler('setThemeSettings', (global, actions, payload): ActionReturnType => {
   const { theme, ...settings } = payload;
+  const previousBackground = selectSharedSettings(global).themes[theme]?.background;
 
-  return updateThemeSettings(global, theme, settings);
+  global = updateThemeSettings(global, theme, settings);
+  updateCustomBackgroundCache(global, previousBackground);
+
+  return global;
 });
+
+function updateCustomBackgroundCache(global: GlobalState, previousBackground: string | undefined) {
+  updateSelectedWallpaperBlobs(
+    getSelectedBackgrounds(global),
+    previousBackground,
+    getCurrentSelectedBackgrounds,
+  );
+}
+
+function getCurrentSelectedBackgrounds() {
+  const global = getGlobal();
+  return getSelectedBackgrounds(global);
+}
+
+function getSelectedBackgrounds(global: GlobalState) {
+  return Object.values(selectSharedSettings(global).themes)
+    .map((themeSettings) => themeSettings?.background)
+    .filter((background): background is string => Boolean(background));
+}
 
 addActionHandler('requestNextFoldersAction', (global, actions, payload): ActionReturnType => {
   const { foldersAction, tabId = getCurrentTabId() } = payload;

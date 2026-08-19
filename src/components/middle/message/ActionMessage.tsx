@@ -65,6 +65,7 @@ import NoForwardsRequest from './actions/NoForwardsRequest';
 import StarGift from './actions/StarGift';
 import StarGiftPurchaseOffer from './actions/StarGiftPurchaseOffer';
 import StarGiftUnique from './actions/StarGiftUnique';
+import SuggestedBirthday from './actions/SuggestedBirthday';
 import SuggestedPhoto from './actions/SuggestedPhoto';
 import SuggestedPostApproval from './actions/SuggestedPostApproval';
 import SuggestedPostBalanceTooLow from './actions/SuggestedPostBalanceTooLow';
@@ -113,14 +114,16 @@ const SINGLE_LINE_ACTIONS = new Set<ApiMessageAction['type']>([
   'pinMessage',
   'chatEditPhoto',
   'chatDeletePhoto',
+  'unsupported',
+]);
+const HIDDEN_TEXT_ACTIONS = new Set<ApiMessageAction['type']>(['giftCode', 'prizeStars',
+  'suggestProfilePhoto', 'suggestBirthday', 'suggestedPostApproval', 'starGiftPurchaseOffer', 'noForwardsRequest']);
+const WITH_LINK_BREAKS_ACTIONS = new Set<ApiMessageAction['type']>([
   'todoCompletions',
   'todoAppendTasks',
   'pollAppendAnswer',
   'pollDeleteAnswer',
-  'unsupported',
 ]);
-const HIDDEN_TEXT_ACTIONS = new Set<ApiMessageAction['type']>(['giftCode', 'prizeStars',
-  'suggestProfilePhoto', 'suggestedPostApproval', 'starGiftPurchaseOffer', 'noForwardsRequest']);
 
 const ActionMessage = ({
   message,
@@ -179,6 +182,7 @@ const ActionMessage = ({
 
   const isTextHidden = HIDDEN_TEXT_ACTIONS.has(action.type);
   const isSingleLine = SINGLE_LINE_ACTIONS.has(action.type);
+  const withLinkBreaks = WITH_LINK_BREAKS_ACTIONS.has(action.type);
   const isFluidMultiline = IS_FLUID_BACKGROUND_SUPPORTED && !isSingleLine;
   const isClickableText = action.type === 'suggestedPostSuccess';
   const isNarrowMessage = action.type === 'starGiftPurchaseOfferDeclined';
@@ -290,7 +294,7 @@ const ActionMessage = ({
   });
 
   const {
-    isContextMenuOpen, contextMenuAnchor,
+    isContextMenuOpen, contextMenuAnchor, isContextMenuAltKeyPressed,
     handleBeforeContextMenu, handleContextMenu,
     handleContextMenuClose, handleContextMenuHide,
   } = useContextMenuHandlers(
@@ -509,6 +513,14 @@ const ActionMessage = ({
           />
         );
 
+      case 'suggestBirthday':
+        return (
+          <SuggestedBirthday
+            message={message}
+            action={action}
+          />
+        );
+
       case 'prizeStars':
       case 'giftCode':
         return (
@@ -625,6 +637,7 @@ const ActionMessage = ({
         'message-list-item',
         styles.root,
         isSingleLine && styles.singleLine,
+        withLinkBreaks && styles.withLinkBreaks,
         isFluidMultiline && styles.fluidMultiline,
         fullContent && styles.hasFullContent,
         isFocused && !noFocusHighlight && 'focused',
@@ -694,8 +707,10 @@ const ActionMessage = ({
         <ContextMenuContainer
           isOpen={isContextMenuOpen}
           anchor={contextMenuAnchor}
+          isAltKeyPressed={isContextMenuAltKeyPressed}
           message={message}
           messageListType="thread"
+          threadId={threadId}
           className={styles.contextContainer}
           onClose={handleContextMenuClose}
           onCloseAnimationEnd={handleContextMenuHide}

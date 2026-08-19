@@ -7,7 +7,8 @@ type HandlerName =
   | 'onDown'
   | 'onLeft'
   | 'onRight'
-  | 'onTab';
+  | 'onTab'
+  | 'onSpace';
 type Handler = (e: KeyboardEvent) => void | boolean;
 type CaptureOptions = Partial<Record<HandlerName, Handler>>;
 
@@ -22,6 +23,7 @@ const keyToHandlerName: Record<string, HandlerName> = {
   ArrowLeft: 'onLeft',
   ArrowRight: 'onRight',
   Tab: 'onTab',
+  ' ': 'onSpace',
 };
 
 const handlers: Record<HandlerName, Handler[]> = {
@@ -34,6 +36,7 @@ const handlers: Record<HandlerName, Handler[]> = {
   onLeft: [],
   onRight: [],
   onTab: [],
+  onSpace: [],
 };
 
 export default function captureKeyboardListeners(options: CaptureOptions) {
@@ -68,6 +71,10 @@ export function hasActiveHandler(key: string) {
 }
 
 function handleKeyDown(e: KeyboardEvent) {
+  if (e.isComposing) {
+    return;
+  }
+
   const handlerName = keyToHandlerName[e.key];
   if (!handlerName) {
     return;
@@ -100,6 +107,6 @@ function releaseKeyboardListener(options: CaptureOptions) {
   });
 
   if (!hasActiveHandlers()) {
-    document.removeEventListener('keydown', handleKeyDown, false);
+    document.removeEventListener('keydown', handleKeyDown, true);
   }
 }

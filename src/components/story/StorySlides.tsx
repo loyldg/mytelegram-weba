@@ -1,4 +1,3 @@
-import type React from '../../lib/teact/teact';
 import {
   memo, useEffect, useLayoutEffect, useMemo, useRef, useSignal, useState,
 } from '../../lib/teact/teact';
@@ -64,6 +63,7 @@ interface StateProps {
 const ACTIVE_SLIDE_VERTICAL_CORRECTION_REM = 1.75;
 const SWIPE_Y_THRESHOLD = 50;
 const SCROLL_RELEASE_DELAY = 1500;
+const SWIPE_EXCLUDED_SELECTOR = '.Composer, .ReactionPicker, .SymbolMenu';
 
 enum SwipeDirection {
   Horizontal,
@@ -267,7 +267,7 @@ function StorySlides({
       isNotPassive: true,
       withNativeDrag: true,
       withWheelDrag: true,
-      excludedClosestSelector: '.Composer',
+      excludedClosestSelector: SWIPE_EXCLUDED_SELECTOR,
       onDrag: (event, captureEvent, {
         dragOffsetX, dragOffsetY,
       }) => {

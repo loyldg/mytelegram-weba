@@ -1,4 +1,3 @@
-import type React from '../../../lib/teact/teact';
 import { memo, useEffect } from '../../../lib/teact/teact';
 import { getActions, withGlobal } from '../../../global';
 
@@ -28,14 +27,13 @@ import { REM } from '../../common/helpers/mediaDimensions';
 import renderText from '../../common/helpers/renderText';
 import renderKeyboardButtonText from '../composer/helpers/renderKeyboardButtonText';
 
-import useCurrentOrPrev from '../../../hooks/useCurrentOrPrev';
 import useDerivedState from '../../../hooks/useDerivedState';
 import useEnsureMessage from '../../../hooks/useEnsureMessage';
 import { useFastClick } from '../../../hooks/useFastClick';
 import useFlag from '../../../hooks/useFlag';
+import useFrozenProps from '../../../hooks/useFrozenProps';
 import useLang from '../../../hooks/useLang';
 import useLastCallback from '../../../hooks/useLastCallback';
-import useShowTransition from '../../../hooks/useShowTransition';
 import useAsyncRendering from '../../right/hooks/useAsyncRendering';
 import useHeaderPane, { type PaneState } from '../hooks/useHeaderPane';
 
@@ -62,7 +60,6 @@ type OwnProps = {
 
   messageListType: MessageListType;
   className?: string;
-  isFullWidth?: boolean;
   shouldHide?: boolean;
   getLoadingPinnedId: Signal<number | undefined>;
   getCurrentPinnedIndex: Signal<number>;
@@ -86,7 +83,6 @@ const HeaderPinnedMessage = ({
   getLoadingPinnedId,
   pinnedMessageIds,
   messagesById,
-  isFullWidth,
   topMessageSender,
   getCurrentPinnedIndex,
   className,
@@ -114,7 +110,31 @@ const HeaderPinnedMessage = ({
   const canRenderLoader = useAsyncRendering([isLoading], SHOW_LOADER_DELAY);
   const shouldShowLoader = canRenderLoader && isLoading;
 
-  const renderingPinnedMessage = useCurrentOrPrev(pinnedMessage, true);
+  const isOpen = Boolean(pinnedMessage) && !shouldHide;
+
+  const {
+    chatId: renderingChatId,
+    threadId: renderingThreadId,
+    pinnedMessage: renderingPinnedMessage,
+    pinnedMessageId: renderingPinnedMessageId,
+    pinnedMessageIds: renderingPinnedMessageIds,
+    pinnedMessagesCount: renderingPinnedMessagesCount,
+    pinnedMessageNumber: renderingPinnedMessageNumber,
+    currentPinnedIndex: renderingPinnedIndex,
+    topMessageTitle: renderingTopMessageTitle,
+    canUnpin: renderingCanUnpin,
+  } = useFrozenProps({
+    chatId,
+    threadId,
+    pinnedMessage,
+    pinnedMessageId,
+    pinnedMessageIds,
+    pinnedMessagesCount,
+    pinnedMessageNumber,
+    currentPinnedIndex,
+    topMessageTitle,
+    canUnpin,
+  }, !isOpen);
   const hasPictogram = Boolean(
     renderingPinnedMessage && canRenderCompactMediaPreview(renderingPinnedMessage.content),
   );
@@ -128,49 +148,48 @@ const HeaderPinnedMessage = ({
 
   useEnsureMessage(chatId, pinnedMessageId, pinnedMessage);
 
-  const isOpen = Boolean(pinnedMessage) && !shouldHide;
-  const {
-    ref: transitionRef,
-  } = useShowTransition({
-    isOpen,
-    noOpenTransition: true,
-    shouldForceOpen: isFullWidth, // Use pane animation instead
-  });
-
   const { ref, shouldRender } = useHeaderPane({
     isOpen,
-    isDisabled: !isFullWidth,
-    ref: transitionRef,
+    isPending: Boolean(pinnedMessageId) && !pinnedMessage && !shouldHide,
+    measureKey: `${chatId}_${threadId}`,
     onStateChange: onPaneStateChange,
   });
 
   const [isUnpinDialogOpen, openUnpinDialog, closeUnpinDialog] = useFlag();
 
+  useEffect(() => {
+    closeUnpinDialog();
+  }, [chatId, threadId, closeUnpinDialog]);
+
   const handleUnpinMessage = useLastCallback(() => {
     closeUnpinDialog();
-    pinMessage({ chatId, messageId: pinnedMessage!.id, isUnpin: true });
+    pinMessage({ chatId: renderingChatId, messageId: renderingPinnedMessage!.id, isUnpin: true });
   });
 
-  const inlineButton = pinnedMessage && getMessageSingleInlineButton(pinnedMessage);
+  const inlineButton = renderingPinnedMessage && getMessageSingleInlineButton(renderingPinnedMessage);
 
   const handleInlineButtonClick = useLastCallback(() => {
     if (inlineButton) {
-      clickBotInlineButton({ chatId: pinnedMessage.chatId, messageId: pinnedMessage.id, button: inlineButton });
+      clickBotInlineButton({
+        chatId: renderingPinnedMessage.chatId, messageId: renderingPinnedMessage.id, button: inlineButton,
+      });
     }
   });
 
   const handleAllPinnedClick = useLastCallback(() => {
-    openThread({ chatId, threadId, type: 'pinned' });
+    openThread({ chatId: renderingChatId, threadId: renderingThreadId, type: 'pinned' });
   });
 
   const handleMessageClick = useLastCallback((e: React.MouseEvent<HTMLElement, MouseEvent>): void => {
-    const nextMessageId = e.shiftKey && Array.isArray(pinnedMessageIds)
-      ? pinnedMessageIds[cycleRestrict(pinnedMessageIds.length, pinnedMessageIds.indexOf(pinnedMessageId!) - 2)]
-      : pinnedMessageId!;
+    const nextMessageId = e.shiftKey && Array.isArray(renderingPinnedMessageIds)
+      ? renderingPinnedMessageIds[cycleRestrict(
+        renderingPinnedMessageIds.length, renderingPinnedMessageIds.indexOf(renderingPinnedMessageId!) - 2,
+      )]
+      : renderingPinnedMessageId!;
 
     if (!getLoadingPinnedId()) {
       focusMessage({
-        chatId, threadId, messageId: nextMessageId, noForumTopicPanel: true,
+        chatId: renderingChatId, threadId: renderingThreadId, messageId: nextMessageId, noForumTopicPanel: true,
       });
       onFocusPinnedMessage(nextMessageId);
     }
@@ -186,10 +205,11 @@ const HeaderPinnedMessage = ({
     <div
       ref={ref}
       className={buildClassName(
-        'HeaderPinnedMessageWrapper', styles.root, isFullWidth ? styles.fullWidth : styles.mini, className,
+        'HeaderPinnedMessageWrapper', styles.root,
+        className,
       )}
     >
-      {(pinnedMessagesCount > 1 || shouldShowLoader) && (
+      {(renderingPinnedMessagesCount > 1 || shouldShowLoader) && (
         <Button
           round
           size="smaller"
@@ -213,7 +233,7 @@ const HeaderPinnedMessage = ({
           />
         </Button>
       )}
-      {canUnpin && (
+      {renderingCanUnpin && (
         <Button
           round
           size="smaller"
@@ -237,8 +257,8 @@ const HeaderPinnedMessage = ({
         dir={lang.isRtl ? 'rtl' : undefined}
       >
         <PinnedMessageNavigation
-          count={pinnedMessagesCount}
-          index={currentPinnedIndex}
+          count={renderingPinnedMessagesCount}
+          index={renderingPinnedIndex}
         />
         <Transition activeKey={renderingPinnedMessage.id} name="slideVertical" className={styles.pictogramTransition}>
           <CompactMediaPreview
@@ -253,15 +273,17 @@ const HeaderPinnedMessage = ({
           dir={lang.isRtl ? 'rtl' : undefined}
         >
           <div className={styles.title} dir={lang.isRtl ? 'rtl' : undefined}>
-            {!topMessageTitle && (
+            {!renderingTopMessageTitle && (
               <AnimatedCounter
-                text={pinnedMessagesCount === 1
+                text={renderingPinnedMessagesCount === 1
                   ? lang('PinnedMessageTitleSingle')
-                  : lang('PinnedMessageTitle', { index: pinnedMessageNumber }, { pluralValue: pinnedMessagesCount })}
+                  : lang('PinnedMessageTitle',
+                    { index: renderingPinnedMessageNumber },
+                    { pluralValue: renderingPinnedMessagesCount })}
               />
             )}
 
-            {topMessageTitle && renderText(topMessageTitle)}
+            {renderingTopMessageTitle && renderText(renderingTopMessageTitle)}
           </div>
           <Transition
             activeKey={renderingPinnedMessage.id}

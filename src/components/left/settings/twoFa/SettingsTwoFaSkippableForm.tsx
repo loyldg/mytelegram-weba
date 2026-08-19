@@ -1,5 +1,4 @@
 import type { FC } from '../../../../lib/teact/teact';
-import type React from '../../../../lib/teact/teact';
 import {
   memo, useCallback, useEffect, useRef, useState,
 } from '../../../../lib/teact/teact';
@@ -16,6 +15,7 @@ import useHistoryBack from '../../../../hooks/useHistoryBack';
 import useOldLang from '../../../../hooks/useOldLang';
 
 import AnimatedIconFromSticker from '../../../common/AnimatedIconFromSticker';
+import Island from '../../../gili/layout/Island';
 import Button from '../../../ui/Button';
 import InputText from '../../../ui/InputText';
 import Modal from '../../../ui/Modal';
@@ -107,8 +107,8 @@ const SettingsTwoFaSkippableForm: FC<OwnProps & StateProps> = ({
         )}
       </div>
 
-      <div className="settings-item settings-group">
-        <form action="" onSubmit={handleSubmit}>
+      <Island>
+        <form className="settings-input" action="" onSubmit={handleSubmit}>
           <InputText
             ref={inputRef}
             value={value}
@@ -161,7 +161,7 @@ const SettingsTwoFaSkippableForm: FC<OwnProps & StateProps> = ({
             </div>
           </Modal>
         )}
-      </div>
+      </Island>
     </div>
   );
 };

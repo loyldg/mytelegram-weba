@@ -18,6 +18,7 @@ import useLang from '../../../hooks/useLang';
 import useLastCallback from '../../../hooks/useLastCallback';
 
 import Audio from '../../common/Audio';
+import CustomEmoji from '../../common/CustomEmoji';
 import Document from '../../common/Document';
 import EmojiIconBackground from '../../common/embedded/EmojiIconBackground';
 import Icon from '../../common/icons/Icon';
@@ -37,6 +38,7 @@ const MAX_TEXT_LENGTH = 170; // symbols
 const WEBPAGE_STORY_TYPE = 'telegram_story';
 const WEBPAGE_GIFT_TYPE = 'telegram_nft';
 const WEBPAGE_AUCTION_TYPE = 'telegram_auction';
+const WEBPAGE_AI_TONE_TYPE = 'telegram_aicomposetone';
 const STICKER_SIZE = 80;
 const EMOJI_SIZE = 38;
 
@@ -47,7 +49,6 @@ type OwnProps = {
   noAvatars?: boolean;
   canAutoLoad?: boolean;
   canAutoPlay?: boolean;
-  asForwarded?: boolean;
   isDownloading?: boolean;
   isProtected?: boolean;
   isConnected?: boolean;
@@ -73,7 +74,6 @@ const WebPage = ({
   noAvatars,
   canAutoLoad,
   canAutoPlay,
-  asForwarded,
   isDownloading = false,
   isProtected,
   isConnected,
@@ -91,7 +91,7 @@ const WebPage = ({
   onAudioPlay,
   onCancelMediaTransfer,
 }: OwnProps) => {
-  const { openUrl, openTelegramLink } = getActions();
+  const { openBrowserTab, openUrl, openTelegramLink } = getActions();
   const stickersRef = useRef<HTMLDivElement>();
 
   const lang = useLang();
@@ -107,6 +107,7 @@ const WebPage = ({
   const fullWebPage = webPage?.webpageType === 'full' ? webPage : undefined;
 
   const { story: storyData, stickers } = fullWebPage || {};
+  const cachedPage = fullWebPage?.cachedPage;
 
   useEnsureStory(storyData?.peerId, storyData?.id, story);
 
@@ -130,6 +131,15 @@ const WebPage = ({
     });
   });
 
+  const handleQuickButtonClick = useLastCallback(() => {
+    if (cachedPage) {
+      openBrowserTab({ tab: { type: 'instantView', webPageId: webPage.id } });
+      return;
+    }
+
+    handleOpenTelegramLink();
+  });
+
   if (webPage?.webpageType !== 'full') return undefined;
 
   const {
@@ -148,21 +158,26 @@ const WebPage = ({
   const isStory = type === WEBPAGE_STORY_TYPE;
   const isGift = type === WEBPAGE_GIFT_TYPE;
   const isAuction = type === WEBPAGE_AUCTION_TYPE;
+  const isAiTone = type === WEBPAGE_AI_TONE_TYPE;
   const isExpiredStory = story && 'isDeleted' in story;
 
   const resultType = stickers?.isEmoji ? 'telegram_emojiset' : type;
   const auctionEndDate = isAuction && webPage.auction ? webPage.auction.endDate : undefined;
-  const quickButtonLangKey = !isExpiredStory ? getWebpageButtonLangKey(resultType, auctionEndDate) : undefined;
+  const quickButtonLangKey = !isExpiredStory
+    ? getWebpageButtonLangKey(resultType, { auctionEndDate, cachedPage: fullWebPage?.cachedPage })
+    : undefined;
   const quickButtonTitle = quickButtonLangKey && lang(quickButtonLangKey);
-  const quickButtonIcon = getWebpageButtonIcon(resultType);
+  const quickButtonIcon = getWebpageButtonIcon(resultType, { cachedPage: fullWebPage?.cachedPage });
 
   const truncatedDescription = trimText(description, MAX_TEXT_LENGTH);
+  const aiToneEmojiId = isAiTone ? webPage.aiComposeToneEmojiId : undefined;
   const isArticle = Boolean(truncatedDescription || title || siteName);
-  let isSquarePhoto = Boolean(stickers);
+  let isSquarePhoto = Boolean(stickers) || Boolean(aiToneEmojiId);
   if (isArticle && webPage?.photo && !webPage.video && !webPage.document) {
     isSquarePhoto = getIsSmallPhoto(webPage, mediaSize);
   }
-  const isMediaInteractive = (photo || video) && onMediaClick && !isSquarePhoto;
+  const hasWideMedia = Boolean((photo || video) && !isSquarePhoto);
+  const isMediaInteractive = hasWideMedia && Boolean(onMediaClick);
 
   const className = buildClassName(
     'WebPage',
@@ -173,6 +188,7 @@ const WebPage = ({
     document && 'with-document',
     quickButtonTitle && 'with-quick-button',
     (isGift || isAuction) && 'with-gift',
+    isAiTone && 'WebPage--ai-tone',
   );
 
   function renderQuickButton() {
@@ -182,10 +198,11 @@ const WebPage = ({
         size="tiny"
         color="translucent"
         isRectangular
+        inline
         noForcedUpperCase={!isAuction}
-        onClick={handleOpenTelegramLink}
+        onClick={handleQuickButtonClick}
       >
-        {quickButtonIcon && <Icon name={quickButtonIcon} />}
+        {quickButtonIcon && <Icon name={quickButtonIcon} className="in-text-icon" />}
         {quickButtonTitle}
       </Button>
     );
@@ -200,6 +217,8 @@ const WebPage = ({
     >
       <div className={buildClassName(
         'WebPage--content',
+        hasWideMedia && 'has-adaptive-width',
+        hasWideMedia && 'with-wide-media',
         isStory && 'is-story',
         (isGift || isAuction) && 'is-gift',
       )}
@@ -246,13 +265,9 @@ const WebPage = ({
         {photo && !isGift && !isAuction && !video && (
           <Photo
             photo={photo}
-            isOwn={message?.isOutgoing}
-            isNestedMedia
             observeIntersection={observeIntersectionForLoading}
-            noAvatars={noAvatars}
             canAutoLoad={canAutoLoad}
             size={isSquarePhoto ? 'pictogram' : 'inline'}
-            asForwarded={asForwarded}
             nonInteractive={!isMediaInteractive}
             isDownloading={isDownloading}
             isProtected={isProtected}
@@ -264,13 +279,9 @@ const WebPage = ({
         {video && (
           <Video
             video={video}
-            isOwn={message?.isOutgoing}
-            isNestedMedia
             observeIntersectionForLoading={observeIntersectionForLoading}
-            noAvatars={noAvatars}
             canAutoLoad={canAutoLoad}
             canAutoPlay={canAutoPlay}
-            asForwarded={asForwarded}
             isDownloading={isDownloading}
             isProtected={isProtected}
             lastPlaybackTimestamp={lastPlaybackTimestamp || linkTimestamp}
@@ -321,6 +332,11 @@ const WebPage = ({
                 />
               </div>
             ))}
+          </div>
+        )}
+        {aiToneEmojiId && (
+          <div className="media-inner square-image WebPage--ai-tone-emoji">
+            <CustomEmoji documentId={aiToneEmojiId} size={STICKER_SIZE} />
           </div>
         )}
       </div>

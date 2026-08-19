@@ -1,7 +1,7 @@
 @use "../../../styles/mixins";
 
 .root {
-  @include mixins.middle-header-pane;
+  @include mixins.middle-header-pane-content;
 
   cursor: var(--custom-cursor, pointer);
 
@@ -11,17 +11,7 @@
 
   height: auto;
 
-  // Slight variation from mixins.middle-header-pane
-  padding-right: max(1rem, env(safe-area-inset-right));
-  padding-left: max(1rem, env(safe-area-inset-left));
-
   line-height: 1.25;
-
-  transition: background-color 0.2s, transform var(--slide-transition);
-
-  &:hover {
-    background-color: var(--color-background-selected);
-  }
 }
 
 .content {
@@ -30,7 +20,16 @@
   gap: 0.5rem;
   align-items: center;
 
+  padding-block: 0.5rem;
+  padding-inline: 0.75rem;
+  border-radius: var(--pane-content-radius);
+
   color: var(--color-text);
+
+  transition: background-color 0.2s;
+  &:hover {
+    background-color: var(--color-background-selected);
+  }
 }
 
 .info {

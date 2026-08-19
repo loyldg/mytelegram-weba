@@ -2,7 +2,7 @@ import type { ApiDimensions, ApiMessage } from '../../../api/types';
 import { MediaViewerOrigin } from '../../../types';
 
 import { ANIMATION_END_DELAY, MESSAGE_CONTENT_SELECTOR } from '../../../config';
-import { requestMutation } from '../../../lib/fasterdom/fasterdom';
+import { requestMeasure, requestMutation } from '../../../lib/fasterdom/fasterdom';
 import { getMessageHtmlId } from '../../../global/helpers';
 import { applyStyles } from '../../../util/animation';
 import { IS_TOUCH_ENV } from '../../../util/browser/windowEnvironment';
@@ -18,6 +18,10 @@ import {
 } from '../../common/helpers/mediaDimensions';
 
 const ANIMATION_DURATION = 200;
+const MIDDLE_HEADER_PANES_HEIGHT_PROPERTY = '--middle-header-panes-height';
+const EDITOR_LANDING_TIMEOUT = 1500;
+
+let pendingEditorGhost: { ghost: HTMLDivElement; host: HTMLElement; fallbackTimeout: number } | undefined;
 
 export function animateOpening(
   hasFooter: boolean,
@@ -27,10 +31,11 @@ export function animateOpening(
   isVideo: boolean,
   message?: ApiMessage,
   mediaIndex?: number,
+  sourceId?: string,
 ) {
-  const { mediaEl: fromImage } = getNodes(origin, message, mediaIndex);
+  const { mediaEl: fromImage } = getNodes(origin, message, mediaIndex, sourceId);
   if (!fromImage) {
-    return;
+    return false;
   }
 
   const { width: windowWidth } = windowSize.get();
@@ -45,7 +50,7 @@ export function animateOpening(
 
   let {
     top: fromTop, left: fromLeft, width: fromWidth, height: fromHeight,
-  } = fromImage.getBoundingClientRect();
+  } = getRenderedMediaRect(fromImage, dimensions);
 
   if ([
     MediaViewerOrigin.SharedMedia,
@@ -76,7 +81,7 @@ export function animateOpening(
     });
     applyShape(ghost, origin);
 
-    document.body.appendChild(ghost);
+    getGhostHost().appendChild(ghost);
     document.body.classList.add('ghost-animating');
 
     requestMutation(() => {
@@ -85,21 +90,22 @@ export function animateOpening(
 
       setTimeout(() => {
         requestMutation(() => {
-          if (document.body.contains(ghost)) {
-            document.body.removeChild(ghost);
-          }
+          removeGhost(ghost);
           document.body.classList.remove('ghost-animating');
         });
       }, ANIMATION_DURATION + ANIMATION_END_DELAY);
     });
   });
+
+  return true;
 }
 
 export function animateClosing(
-  origin: MediaViewerOrigin, bestImageData: string, message?: ApiMessage, mediaIndex?: number,
+  origin: MediaViewerOrigin, bestImageData: string, dimensions: ApiDimensions,
+  message?: ApiMessage, mediaIndex?: number, sourceId?: string,
 ) {
-  const { container, mediaEl: toImage } = getNodes(origin, message, mediaIndex);
-  if (!toImage) {
+  const { container, mediaEl: toImage } = getNodes(origin, message, mediaIndex, sourceId);
+  if (!container || !toImage) {
     return;
   }
 
@@ -115,7 +121,7 @@ export function animateClosing(
   } = fromImage.getBoundingClientRect();
   const {
     top: targetTop, left: toLeft, width: toWidth, height: toHeight,
-  } = toImage.getBoundingClientRect();
+  } = getRenderedMediaRect(toImage, dimensions);
 
   let toTop = targetTop;
   if (!isElementInViewport(container)) {
@@ -134,6 +140,7 @@ export function animateClosing(
       MediaViewerOrigin.ScheduledInline,
       MediaViewerOrigin.Album,
       MediaViewerOrigin.ScheduledAlbum,
+      MediaViewerOrigin.RichPageBlock,
     ].includes(origin)
     && !isMessageImageFullyVisible(toImage)
   );
@@ -183,7 +190,7 @@ export function animateClosing(
 
   requestMutation(() => {
     applyStyles(ghost, styles);
-    if (!existingGhost) document.body.appendChild(ghost);
+    if (!existingGhost) getGhostHost().appendChild(ghost);
     document.body.classList.add('ghost-animating');
 
     requestMutation(() => {
@@ -201,14 +208,131 @@ export function animateClosing(
 
       setTimeout(() => {
         requestMutation(() => {
-          if (document.body.contains(ghost)) {
-            document.body.removeChild(ghost);
-          }
+          removeGhost(ghost);
           document.body.classList.remove('ghost-animating');
         });
       }, ANIMATION_DURATION + ANIMATION_END_DELAY);
     });
   });
+}
+
+// Builds the flying ghost from the Media Viewer's current media while the viewer is still open, so
+// the viewer can stay visible as an opaque backdrop until the editor is ready. Returns `false` when
+// no source media is on screen, so the caller can close the viewer itself.
+export function prepareMediaEditorGhost(bestImageData?: string) {
+  const mediaViewer = document.getElementById('MediaViewer');
+  const fromImage = mediaViewer?.querySelector<HTMLImageElement>(
+    '.MediaViewerSlide--active img, .MediaViewerSlide--active video',
+  );
+  if (!fromImage) {
+    return false;
+  }
+
+  const {
+    top, left, width, height,
+  } = fromImage.getBoundingClientRect();
+
+  requestMutation(() => {
+    discardPendingEditorGhost();
+
+    // The closing Media Viewer is a modal `<dialog>` in the top layer, so a plain ghost on `body`
+    // would be dimmed by its backdrop. A `manual` popover puts the ghost in the top layer too.
+    const host = document.createElement('div');
+    host.className = 'ghost-host';
+    host.popover = 'manual';
+
+    const ghost = createGhost(bestImageData || fromImage);
+    ghost.classList.add('for-media-editor');
+    applyStyles(ghost, {
+      top: `${top}px`,
+      left: `${left}px`,
+      width: `${width}px`,
+      height: `${height}px`,
+    });
+
+    host.appendChild(ghost);
+    document.body.appendChild(host);
+    host.showPopover();
+    document.body.classList.add('ghost-animating');
+
+    const fallbackTimeout = window.setTimeout(fadeOutPendingEditorGhost, EDITOR_LANDING_TIMEOUT);
+    pendingEditorGhost = { ghost, host, fallbackTimeout };
+  });
+
+  return true;
+}
+
+export function landGhostInMediaEditor(target: HTMLElement, onLand: NoneToVoidFunction) {
+  if (!pendingEditorGhost) {
+    onLand();
+    return;
+  }
+
+  const { ghost, host, fallbackTimeout } = pendingEditorGhost;
+  clearTimeout(fallbackTimeout);
+  pendingEditorGhost = undefined;
+
+  requestMeasure(() => {
+    const {
+      top: toTop, left: toLeft, width: toWidth, height: toHeight,
+    } = target.getBoundingClientRect();
+    const {
+      top: fromTop, left: fromLeft, width: fromWidth, height: fromHeight,
+    } = ghost.getBoundingClientRect();
+
+    const scaleX = fromWidth / toWidth;
+    const scaleY = fromHeight / toHeight;
+
+    requestMutation(() => {
+      // Move the ghost box to the target, but keep it visually at the source via a transform, so
+      // the transition lands on the exact target box (no residual transform / sub-pixel drift)
+      applyStyles(ghost, {
+        transition: 'none',
+        top: `${toTop}px`,
+        left: `${toLeft}px`,
+        width: `${toWidth}px`,
+        height: `${toHeight}px`,
+        transformOrigin: 'top left',
+        transform: `translate3d(${fromLeft - toLeft}px, ${fromTop - toTop}px, 0) scale(${scaleX}, ${scaleY})`,
+      });
+
+      requestMutation(() => {
+        ghost.style.transition = '';
+        ghost.style.transform = '';
+
+        setTimeout(() => {
+          onLand();
+
+          setTimeout(() => {
+            requestMutation(() => removeGhostHost(ghost, host));
+          }, ANIMATION_END_DELAY);
+        }, ANIMATION_DURATION + ANIMATION_END_DELAY);
+      });
+    });
+  });
+}
+
+function fadeOutPendingEditorGhost() {
+  if (!pendingEditorGhost) return;
+
+  const { ghost, host } = pendingEditorGhost;
+  pendingEditorGhost = undefined;
+
+  requestMutation(() => {
+    ghost.style.opacity = '0';
+
+    setTimeout(() => {
+      requestMutation(() => removeGhostHost(ghost, host));
+    }, ANIMATION_DURATION + ANIMATION_END_DELAY);
+  });
+}
+
+function discardPendingEditorGhost() {
+  if (!pendingEditorGhost) return;
+
+  clearTimeout(pendingEditorGhost.fallbackTimeout);
+  removeGhostHost(pendingEditorGhost.ghost, pendingEditorGhost.host);
+  pendingEditorGhost = undefined;
 }
 
 function createGhost(
@@ -252,6 +376,20 @@ function createGhost(
   return ghost;
 }
 
+function getGhostHost() {
+  return document.getElementById('MediaViewer') || document.body;
+}
+
+function removeGhost(ghost: HTMLDivElement) {
+  ghost.parentElement?.removeChild(ghost);
+}
+
+function removeGhostHost(ghost: HTMLDivElement, host: HTMLElement) {
+  removeGhost(ghost);
+  host.remove();
+  document.body.classList.remove('ghost-animating');
+}
+
 function uncover(realWidth: number, realHeight: number, top: number, left: number, width: number, height: number) {
   if (realWidth === realHeight) {
     const size = Math.max(width, height) * (realWidth / realHeight);
@@ -274,13 +412,49 @@ function uncover(realWidth: number, realHeight: number, top: number, left: numbe
   };
 }
 
+function getRenderedMediaRect(mediaEl: HTMLElement, dimensions: ApiDimensions) {
+  const rect = mediaEl.getBoundingClientRect();
+  if (getComputedStyle(mediaEl).objectFit !== 'contain') {
+    return rect;
+  }
+
+  const { width, height } = calculateContainedDimensions(
+    rect.width, rect.height, dimensions.width, dimensions.height,
+  );
+
+  return {
+    top: rect.top + (rect.height - height) / 2,
+    left: rect.left + (rect.width - width) / 2,
+    width,
+    height,
+  };
+}
+
+function calculateContainedDimensions(
+  availableWidth: number,
+  availableHeight: number,
+  mediaWidth: number,
+  mediaHeight: number,
+): ApiDimensions {
+  const scale = Math.min(availableWidth / mediaWidth, availableHeight / mediaHeight);
+
+  return {
+    width: mediaWidth * scale,
+    height: mediaHeight * scale,
+  };
+}
+
 function isMessageImageFullyVisible(imageEl: HTMLElement) {
   const messageListElement = document.querySelector<HTMLDivElement>('.Transition_slide-active > .MessageList')!;
 
   const { top } = getOffsetToContainer(imageEl, messageListElement);
+  const computedStyle = getComputedStyle(messageListElement);
+  const headerPanesHeight = parseFloat(computedStyle.getPropertyValue(MIDDLE_HEADER_PANES_HEIGHT_PROPERTY)) || 0;
+  const visibleTop = messageListElement.scrollTop + headerPanesHeight;
+  const visibleBottom = messageListElement.scrollTop + messageListElement.offsetHeight;
 
-  return top > messageListElement.scrollTop
-    && top + imageEl.offsetHeight < messageListElement.scrollTop + messageListElement.offsetHeight;
+  return top > visibleTop
+    && top + imageEl.offsetHeight < visibleBottom;
 }
 
 function getTopOffset(hasFooter: boolean) {
@@ -293,11 +467,26 @@ function getTopOffset(hasFooter: boolean) {
   return topOffsetRem * REM;
 }
 
-function getNodes(origin: MediaViewerOrigin, message?: ApiMessage, index?: number) {
+function getNodes(origin: MediaViewerOrigin, message?: ApiMessage, index?: number, sourceId?: string) {
   let containerSelector;
   let mediaSelector;
 
   switch (origin) {
+    case MediaViewerOrigin.RichPageBlock:
+    case MediaViewerOrigin.IVPageBlock: {
+      const container = sourceId ? document.getElementById(sourceId) : undefined;
+      const pageBlockMediaSelector = 'img.full-media, video.full-media, img.thumbnail:not(.blurred-bg), '
+        + 'canvas.thumbnail:not(.blurred-bg), img, video';
+      const mediaEls = container?.querySelectorAll<HTMLImageElement | HTMLVideoElement | HTMLCanvasElement>(
+        pageBlockMediaSelector,
+      );
+
+      return {
+        container,
+        mediaEl: mediaEls?.[0],
+      };
+    }
+
     case MediaViewerOrigin.Album:
     case MediaViewerOrigin.ScheduledAlbum:
       // eslint-disable-next-line @stylistic/max-len
@@ -362,9 +551,9 @@ function getNodes(origin: MediaViewerOrigin, message?: ApiMessage, index?: numbe
     case MediaViewerOrigin.Inline:
     default:
       containerSelector = `.Transition_slide-active > .MessageList #${getMessageHtmlId(message!.id, index)}`;
-      mediaSelector = `${MESSAGE_CONTENT_SELECTOR} img.full-media,`
-        + `${MESSAGE_CONTENT_SELECTOR} video.full-media,`
-        + `${MESSAGE_CONTENT_SELECTOR} img.thumbnail:not(.blurred-bg)`;
+      mediaSelector = `${MESSAGE_CONTENT_SELECTOR} :not(.embedded-thumb) > img.full-media,`
+        + `${MESSAGE_CONTENT_SELECTOR} :not(.embedded-thumb) > video.full-media,`
+        + `${MESSAGE_CONTENT_SELECTOR} :not(.embedded-thumb) > img.thumbnail:not(.blurred-bg)`;
   }
 
   const container = document.querySelector<HTMLElement>(containerSelector)!;
@@ -389,13 +578,6 @@ function applyShape(ghost: HTMLDivElement, origin: MediaViewerOrigin) {
       ghost.classList.add('rounded-corners');
       break;
 
-    case MediaViewerOrigin.SharedMedia:
-    case MediaViewerOrigin.SettingsAvatar:
-    case MediaViewerOrigin.ProfileAvatar:
-    case MediaViewerOrigin.SearchResult:
-      (ghost.firstChild as HTMLElement).style.objectFit = 'cover';
-      break;
-
     case MediaViewerOrigin.MiddleHeaderAvatar:
     case MediaViewerOrigin.SuggestedAvatar:
     case MediaViewerOrigin.ChannelAvatar:
@@ -405,6 +587,5 @@ function applyShape(ghost: HTMLDivElement, origin: MediaViewerOrigin) {
 }
 
 function clearShape(ghost: HTMLDivElement) {
-  (ghost.firstChild as HTMLElement).style.objectFit = 'default';
   ghost.classList.remove('rounded-corners', 'circle');
 }

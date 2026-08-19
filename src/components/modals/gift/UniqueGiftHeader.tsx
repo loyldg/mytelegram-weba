@@ -1,4 +1,3 @@
-import type React from '@teact';
 import type { TeactNode } from '@teact';
 import { memo, useMemo } from '@teact';
 import { getActions } from '../../../global';
@@ -25,7 +24,7 @@ import useFlag from '../../../hooks/useFlag';
 import useLang from '../../../hooks/useLang';
 
 import AnimatedIconFromSticker from '../../common/AnimatedIconFromSticker';
-import Icon from '../../common/icons/Icon';
+import GramIcon from '../../common/icons/GramIcon';
 import StarIcon from '../../common/icons/StarIcon';
 import RadialPatternBackground from '../../common/profile/RadialPatternBackground';
 import Transition from '../../ui/Transition';
@@ -153,7 +152,7 @@ const UniqueGiftHeader = ({
           {formatStarsTransactionAmount(lang, resellPrice)}
           {NNBSP}
           {resellPrice.currency === 'XTR' && <StarIcon type="gold" size="adaptive" />}
-          {resellPrice.currency === 'TON' && <Icon className="in-text-icon" name="toncoin" />}
+          {resellPrice.currency === 'TON' && <GramIcon className="in-text-icon" />}
         </span>
       )}
       {children}

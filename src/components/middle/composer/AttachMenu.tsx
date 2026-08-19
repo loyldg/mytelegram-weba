@@ -33,6 +33,7 @@ import useOldLang from '../../../hooks/useOldLang';
 import Icon from '../../common/icons/Icon';
 import Menu from '../../ui/Menu';
 import MenuItem from '../../ui/MenuItem';
+import MenuSeparator from '../../ui/MenuSeparator';
 import ResponsiveHoverButton from '../../ui/ResponsiveHoverButton';
 import AttachBotItem from './AttachBotItem';
 import FormattedDateModal from './FormattedDateModal';
@@ -44,6 +45,7 @@ export type OwnProps = {
   threadId?: ThreadId;
   isButtonVisible: boolean;
   canAttachMedia: boolean;
+  canAttachFiles: boolean;
   canAttachPolls: boolean;
   canAttachToDoLists: boolean;
   canSendPhotos: boolean;
@@ -57,13 +59,15 @@ export type OwnProps = {
   theme: ThemeKey;
   canEditMedia?: boolean;
   editingMessage?: ApiMessage;
-  messageListType?: MessageListType;
+  messageListType: MessageListType;
   paidMessagesStars?: number;
   canInsertDate?: boolean;
+  canExpandRichInput?: boolean;
+  menuPositionX: 'left' | 'right';
   onFileSelect: (files: File[]) => void;
   onDateInsert: (text: ApiFormattedText) => void;
-  onPollCreate: NoneToVoidFunction;
   onTodoListCreate: NoneToVoidFunction;
+  onRichInputExpand: NoneToVoidFunction;
   onMenuOpen: NoneToVoidFunction;
   onMenuClose: NoneToVoidFunction;
 };
@@ -73,6 +77,7 @@ const AttachMenu = ({
   threadId,
   isButtonVisible,
   canAttachMedia,
+  canAttachFiles,
   canAttachPolls,
   canAttachToDoLists,
   canSendPhotos,
@@ -89,14 +94,17 @@ const AttachMenu = ({
   messageListType,
   paidMessagesStars,
   canInsertDate,
+  canExpandRichInput,
+  menuPositionX,
   onFileSelect,
   onDateInsert,
   onMenuOpen,
   onMenuClose,
-  onPollCreate,
   onTodoListCreate,
+  onRichInputExpand,
 }: OwnProps) => {
   const {
+    openPollModal,
     updateAttachmentSettings,
   } = getActions();
   const [isAttachMenuOpen, openAttachMenu, closeAttachMenu] = useFlag();
@@ -190,6 +198,11 @@ const AttachMenu = ({
     openDateModal();
   });
 
+  const handlePollCreate = useLastCallback(() => {
+    closeAttachMenu();
+    openPollModal({ chatId, threadId, messageListType });
+  });
+
   if (!isButtonVisible && !isDateModalOpen) {
     return undefined;
   }
@@ -232,7 +245,7 @@ const AttachMenu = ({
             id="attach-menu-controls"
             isOpen={isMenuOpen}
             autoClose
-            positionX="right"
+            positionX={menuPositionX}
             positionY="bottom"
             onClose={closeAttachMenu}
             className="AttachMenu--menu fluid"
@@ -253,7 +266,7 @@ const AttachMenu = ({
                   : 'DescriptionRestrictedMedia')}
               </MenuItem>
             )}
-            {canAttachMedia && (
+            {canAttachMedia && canAttachFiles && (
               <>
                 {canSendVideoOrPhoto && !isFile && (
                   <MenuItem icon="photo" onClick={handleQuickSelect}>
@@ -275,7 +288,7 @@ const AttachMenu = ({
               </>
             )}
             {canAttachPolls && !editingMessage && (
-              <MenuItem icon="poll" onClick={onPollCreate}>{oldLang('Poll')}</MenuItem>
+              <MenuItem icon="poll" onClick={handlePollCreate}>{lang('Poll')}</MenuItem>
             )}
             {canAttachToDoLists && !editingMessage && (
               <MenuItem icon="select" onClick={onTodoListCreate}>{lang('TitleToDoList')}</MenuItem>
@@ -283,17 +296,25 @@ const AttachMenu = ({
             {canInsertDate && !editingMessage && (
               <MenuItem icon="calendar" onClick={handleDateMenuClick}>{lang('GiftInfoDate')}</MenuItem>
             )}
+            {canExpandRichInput && (
+              <MenuItem icon="article" onClick={onRichInputExpand}>{lang('AttachmentMenuArticle')}</MenuItem>
+            )}
 
-            {!editingMessage && !canEditMedia && !isScheduled && bots?.map((bot) => (
-              <AttachBotItem
-                bot={bot}
-                chatId={chatId}
-                threadId={threadId}
-                theme={theme}
-                onMenuOpened={markAttachmentBotMenuOpen}
-                onMenuClosed={unmarkAttachmentBotMenuOpen}
-              />
-            ))}
+            {!editingMessage && !canEditMedia && !isScheduled && Boolean(bots?.length) && (
+              <>
+                <MenuSeparator />
+                {bots.map((bot) => (
+                  <AttachBotItem
+                    bot={bot}
+                    chatId={chatId}
+                    threadId={threadId}
+                    theme={theme}
+                    onMenuOpened={markAttachmentBotMenuOpen}
+                    onMenuClosed={unmarkAttachmentBotMenuOpen}
+                  />
+                ))}
+              </>
+            )}
           </Menu>
         </>
       )}

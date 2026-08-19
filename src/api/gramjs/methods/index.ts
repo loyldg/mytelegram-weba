@@ -1,6 +1,7 @@
 export {
   destroy, disconnect, downloadMedia, fetchCurrentUser, repairFileReference, abortChatRequests, abortRequestGroup,
   setForceHttpTransport, setShouldDebugExportedSenders, setAllowHttpTransport, requestChannelDifference,
+  setOpenedChannelIds,
 } from './client';
 
 export {
@@ -19,6 +20,8 @@ export * from './chats';
 export * from './messages';
 
 export * from './users';
+
+export * from './topPeers';
 
 export * from './symbols';
 
@@ -47,5 +50,7 @@ export * from './fragment';
 export * from './stars';
 
 export * from './forum';
+
+export * from './communities';
 
 export * from './misc';
