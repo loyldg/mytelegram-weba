@@ -268,7 +268,7 @@ function MoreChannels({
       </div>
       <div className={styles.badge}>
         <span className={styles.membersCount}>{`+${channelsCount}`}</span>
-        {!isCurrentUserPremium && <Icon name="lock-badge" className={styles.icon} />}
+        {!isCurrentUserPremium && <Icon name="lock-filled" className={styles.icon} />}
       </div>
       <span className={styles.channelTitle}>{lang('MoreSimilar')}</span>
     </div>

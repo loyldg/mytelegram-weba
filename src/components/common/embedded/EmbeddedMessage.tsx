@@ -61,7 +61,7 @@ type OwnProps = {
   pictogramActionIcon?: IconName;
   observeIntersectionForLoading?: ObserveFn;
   observeIntersectionForPlaying?: ObserveFn;
-  onClick: ((e: React.MouseEvent) => void);
+  onClick?: ((e: React.MouseEvent) => void);
   onPictogramClick?: ((e: React.MouseEvent) => void);
 };
 
@@ -235,13 +235,19 @@ const EmbeddedMessage = ({
     }
 
     if (!senderTitle && !forwardSendersTitle) {
-      return NBSP;
+      // Keep the sender subtree structure stable while the peer is still loading — replacing
+      // a bare text node with an element subtree later makes WebKit shift `scrollTop`
+      return (
+        <span className="embedded-sender-wrapper">
+          <span className="embedded-sender">{NBSP}</span>
+        </span>
+      );
     }
 
     let icon: IconName | undefined;
     if (senderChat) {
       if (isChatChannel(senderChat)) {
-        icon = 'channel-filled';
+        icon = 'megaphone-filled';
       }
 
       if (isChatGroup(senderChat)) {

@@ -1,3 +1,5 @@
+import type { TeactNode } from '../../lib/teact/teact';
+
 import type { IconName } from '../../types/icons';
 
 import { IS_TEST } from '../../config';
@@ -12,9 +14,9 @@ import Icon from '../common/icons/Icon';
 import './MenuItem.scss';
 
 export type MenuItemProps = {
-  customIcon?: React.ReactNode;
+  customIcon?: TeactNode;
   className?: string;
-  children: React.ReactNode;
+  children: TeactNode;
   href?: string;
   rel?: string;
   target?: string;
@@ -24,6 +26,7 @@ export type MenuItemProps = {
   ariaLabel?: string;
   withWrap?: boolean;
   withPreventDefaultOnMouseDown?: boolean;
+  hasIconPremiumBadge?: boolean;
   clickArg?: number;
   onClick?: (e: React.SyntheticEvent<HTMLDivElement | HTMLAnchorElement>, arg?: number) => void;
   onContextMenu?: (e: React.UIEvent) => void;
@@ -34,6 +37,11 @@ export type MenuItemProps = {
   icon?: IconName;
   isCharIcon?: false;
 });
+
+type TextProps = {
+  children: TeactNode;
+  className?: string;
+};
 
 const MenuItem = (props: MenuItemProps) => {
   const {
@@ -51,6 +59,7 @@ const MenuItem = (props: MenuItemProps) => {
     withWrap,
     rel = 'noopener noreferrer',
     withPreventDefaultOnMouseDown,
+    hasIconPremiumBadge,
     clickArg,
     onClick,
     onContextMenu,
@@ -97,7 +106,11 @@ const MenuItem = (props: MenuItemProps) => {
   const content = (
     <>
       {!customIcon && icon && (
-        <Icon name={isCharIcon ? 'char' : icon} character={isCharIcon ? icon : undefined} />
+        <Icon
+          name={isCharIcon ? 'char' : icon}
+          character={isCharIcon ? icon : undefined}
+          hasPremiumBadge={hasIconPremiumBadge}
+        />
       )}
       {customIcon}
       {children}
@@ -142,4 +155,16 @@ const MenuItem = (props: MenuItemProps) => {
   );
 };
 
+function MenuItemTitle({ children, className }: TextProps) {
+  return <span className={buildClassName('menuItemTitle', className)}>{children}</span>;
+}
+
+function MenuItemSubtitle({ children, className }: TextProps) {
+  return <span className={buildClassName('menuItemSubtitle', className)}>{children}</span>;
+}
+
 export default MenuItem;
+export {
+  MenuItemTitle,
+  MenuItemSubtitle,
+};

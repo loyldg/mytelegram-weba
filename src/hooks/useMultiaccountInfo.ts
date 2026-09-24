@@ -9,6 +9,7 @@ import { selectIsSynced } from '../global/selectors';
 import { preloadImage } from '../util/files';
 import { resizeImage } from '../util/imageResize';
 import { ACCOUNT_SLOT, getAccountsInfo, storeAccountData } from '../util/multiaccount';
+import { addSessionStoreChangeListener } from '../util/passcode/sessionStore';
 import useSelector from './data/useSelector';
 import useInterval from './schedulers/useInterval';
 import useLastCallback from './useLastCallback';
@@ -90,6 +91,8 @@ export default function useMultiaccountInfo(currentUser?: ApiUser) {
       window.removeEventListener('storage', handleStorageChange);
     };
   }, [refresh]);
+
+  useEffect(() => addSessionStoreChangeListener(refresh), [refresh]);
 
   return accountsInfo;
 }

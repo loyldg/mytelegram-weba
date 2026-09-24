@@ -12,6 +12,7 @@ import {
   selectCanScheduleUntilOnline,
   selectChat,
   selectIsChatWithSelf,
+  selectIsStoryViewerOpen,
   selectPeerPaidMessagesStars,
   selectTabState,
 } from '../../../../global/selectors';
@@ -54,11 +55,13 @@ type StateProps = {
   isInScheduledList?: boolean;
   chat?: ApiChat;
   paidMessagesStars?: number;
-  isPaymentMessageConfirmDialogOpen?: boolean;
+  paymentMessageConfirmDialogKey?: string;
   starsBalance: number;
   isStarsBalanceModalOpen?: boolean;
+  isStoryViewerOpen?: boolean;
 };
 
+const PAYMENT_DIALOG_KEY = 'aiMessageEditor';
 const INDEX_TO_TAB_ID = ['translate', 'style', 'fix'] as const;
 
 const TAB_TRANSLATE = 0;
@@ -78,9 +81,10 @@ const AiMessageEditorModal = ({
   isInScheduledList,
   chat,
   paidMessagesStars,
-  isPaymentMessageConfirmDialogOpen,
+  paymentMessageConfirmDialogKey,
   starsBalance,
   isStarsBalanceModalOpen,
+  isStoryViewerOpen,
 }: OwnProps & StateProps) => {
   const {
     closeAiMessageEditorModal,
@@ -113,7 +117,9 @@ const AiMessageEditorModal = ({
     dialogHandler: confirmModalPayForMessageHandler,
     shouldAutoApprove: shouldPaidMessageAutoApprove,
     setAutoApprove: setShouldPaidMessageAutoApprove,
-  } = usePaidMessageConfirmation(starsForMessage, Boolean(isStarsBalanceModalOpen), starsBalance, true);
+  } = usePaidMessageConfirmation(
+    PAYMENT_DIALOG_KEY, starsForMessage, Boolean(isStarsBalanceModalOpen), starsBalance, true,
+  );
 
   useEffect(() => {
     if (!isCustomSendMenuOpen) {
@@ -156,13 +162,16 @@ const AiMessageEditorModal = ({
       case 'translate':
         composeWithAiMessageEditor({
           translateToLang: translateTab?.selectedLanguage,
-          changeTone: translateTab?.selectedTone,
+          tone: translateTab?.selectedTone,
           isEmojify: translateTab?.shouldEmojify,
         });
         break;
       case 'style':
         if (styleTab?.selectedTone) {
-          composeWithAiMessageEditor({ changeTone: styleTab.selectedTone, isEmojify: styleTab?.shouldEmojify });
+          composeWithAiMessageEditor({
+            tone: styleTab.selectedTone,
+            isEmojify: styleTab?.shouldEmojify,
+          });
         }
         break;
       case 'fix':
@@ -263,7 +272,7 @@ const AiMessageEditorModal = ({
       title={lang('AiMessageEditor')}
       hasCloseButton
       onClose={closeAiMessageEditorModal}
-      className={styles.modal}
+      className={buildClassName(styles.modal, isStoryViewerOpen && 'component-theme-dark')}
       headerClassName="modal-header-condensed-wide"
       dialogClassName={styles.modalDialog}
       contentClassName={styles.modalContent}
@@ -280,17 +289,17 @@ const AiMessageEditorModal = ({
       )}
       isSlim
     >
-      <div className={styles.tabListWrapper}>
-        <TabList
-          tabs={tabs}
-          activeTab={activeTabIndex}
-          onSwitchTab={handleTabChange}
-          className={styles.tabList}
-          tabClassName={styles.tab}
-          stretched
-          itemAlignment="vertical"
-        />
-      </div>
+      <TabList
+        tabs={tabs}
+        activeTab={activeTabIndex}
+        withFadeMask
+        fadeMaskClassName={styles.fadeMask}
+        className={styles.tabList}
+        tabClassName={styles.tab}
+        stretched
+        itemAlignment="vertical"
+        onSwitchTab={handleTabChange}
+      />
 
       <div className={styles.transitionWrapper}>
         <Transition
@@ -355,7 +364,7 @@ const AiMessageEditorModal = ({
       </div>
       {calendar}
       <PaymentMessageConfirmDialog
-        isOpen={Boolean(isPaymentMessageConfirmDialogOpen)}
+        isOpen={paymentMessageConfirmDialogKey === PAYMENT_DIALOG_KEY}
         onClose={closeConfirmModalPayForMessage}
         userName={chat ? getPeerTitle(lang, chat) : undefined}
         messagePriceInStars={paidMessagesStars || 0}
@@ -388,9 +397,10 @@ export default memo(withGlobal<OwnProps>(
       isInScheduledList: currentMessageList?.type === 'scheduled',
       chat,
       paidMessagesStars,
-      isPaymentMessageConfirmDialogOpen: tabState.isPaymentMessageConfirmDialogOpen,
+      paymentMessageConfirmDialogKey: tabState.paymentMessageConfirmDialogKey,
       starsBalance,
       isStarsBalanceModalOpen,
+      isStoryViewerOpen: selectIsStoryViewerOpen(global),
     };
   },
 )(AiMessageEditorModal));

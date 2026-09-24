@@ -1,7 +1,6 @@
 import { IS_TAURI } from './browser/globalEnvironment';
 import { createCallbackManager } from './callbacks';
 import { ESTABLISH_BROADCAST_CHANNEL_NAME } from './multiaccount';
-import { getPasscodeHash, setPasscodeHash } from './passcode';
 
 import Deferred from './Deferred';
 
@@ -24,7 +23,6 @@ type EstablishMessage = {
   collectedTokens: Set<number>;
   masterToken?: number;
   tokenDied?: number;
-  currentPasscodeHash?: ArrayBuffer;
   reestablishToken?: number;
   shouldGiveUpMaster?: boolean;
   hasGaveUpMaster?: boolean;
@@ -32,10 +30,6 @@ type EstablishMessage = {
 
 const handleMessage = ({ data }: { data: EstablishMessage }) => {
   if (!data) return;
-
-  if (data.currentPasscodeHash) {
-    setPasscodeHash(data.currentPasscodeHash);
-  }
 
   if (data.hasGaveUpMaster && isWaitingForMaster) {
     masterToken = token;
@@ -48,7 +42,7 @@ const handleMessage = ({ data }: { data: EstablishMessage }) => {
   if (data.shouldGiveUpMaster) {
     if (masterToken === token) {
       runCallbacks(false);
-      channel.postMessage({ currentPasscodeHash: getPasscodeHash(), hasGaveUpMaster: true });
+      channel.postMessage({ hasGaveUpMaster: true });
     }
     masterToken = data.masterToken;
     return;
@@ -163,13 +157,9 @@ export function signalTokenDead() {
   if (isChannelClosed) return;
   runCallbacksTokenDied(token);
   channel.removeEventListener('message', handleMessage);
-  channel.postMessage({ tokenDied: token, currentPasscodeHash: getPasscodeHash() });
+  channel.postMessage({ tokenDied: token });
   channel.close();
   isChannelClosed = true;
-}
-
-export function signalPasscodeHash() {
-  channel.postMessage({ currentPasscodeHash: getPasscodeHash() });
 }
 
 export function getCurrentTabId() {

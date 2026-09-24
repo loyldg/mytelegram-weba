@@ -1,10 +1,11 @@
 import type { ApiMessage, StatefulMediaContent } from '../../../../api/types';
+import type { MessageListType, ThreadId } from '../../../../types';
 import type { IconName } from '../../../../types/icons';
+import type { ClipboardTextFormat, MessageCopyRequest } from '../../../../types/messageCopy';
 import { ApiMediaFormat } from '../../../../api/types';
 
 import {
   getMessageContact,
-  getMessageHtmlId,
   getMessagePhoto,
   getMessageText,
   getPhotoMediaHash,
@@ -12,33 +13,32 @@ import {
   getWebPageVideo,
   hasMediaLocalBlobUrl,
 } from '../../../../global/helpers';
-import { getMessageTextWithSpoilers } from '../../../../global/helpers/messageSummary';
 import { IS_SAFARI } from '../../../../util/browser/windowEnvironment';
 import {
   CLIPBOARD_ITEM_SUPPORTED,
-  copyHtmlToClipboard,
   copyImageToClipboard,
   copyTextToClipboard,
 } from '../../../../util/clipboard';
-import getMessageIdsForSelectedText from '../../../../util/getMessageIdsForSelectedText';
-import { getTranslationFn } from '../../../../util/localization';
 import * as mediaLoader from '../../../../util/mediaLoader';
-import { renderMessageText } from '../../../common/helpers/renderMessageText';
+import { captureMessageCopyRequest } from './getSelectionAsFormattedText';
 
 type ICopyOptions = {
   label: string;
   icon: IconName;
-  handler: () => void;
+  canCopyWithFormat?: boolean;
+  handler: (textFormat?: ClipboardTextFormat) => void;
 }[];
 
 export function getMessageCopyOptions(
   message: ApiMessage,
   statefulContent: StatefulMediaContent | undefined,
+  threadId: ThreadId,
+  messageListType: MessageListType,
   href?: string,
   canCopy?: boolean,
   afterEffect?: () => void,
   onCopyLink?: () => void,
-  onCopyMessages?: (messageIds: number[]) => void,
+  onCopyMessages?: (request: MessageCopyRequest, textFormat?: ClipboardTextFormat) => void,
   onCopyNumber?: () => void,
 ): ICopyOptions {
   const { webPage } = statefulContent || {};
@@ -75,7 +75,7 @@ export function getMessageCopyOptions(
         afterEffect?.();
       },
     });
-  } else if (canCopy && text) {
+  } else if (canCopy && (text || message.content.richMessage)) {
     // Detect if the user has selection in the current message
     const hasSelection = Boolean((
       selection?.anchorNode?.parentNode
@@ -87,25 +87,27 @@ export function getMessageCopyOptions(
     options.push({
       label: getCopyLabel(hasSelection),
       icon: 'copy',
-      handler: () => {
-        const messageIds = getMessageIdsForSelectedText();
-        if (messageIds?.length && onCopyMessages) {
-          onCopyMessages(messageIds);
-        } else if (hasSelection) {
-          document.execCommand('copy');
-        } else {
-          const clipboardText = renderMessageText(
-            { message, shouldRenderAsHtml: true },
-          ) as string[];
-          if (clipboardText) {
-            copyHtmlToClipboard(
-              clipboardText.join(''),
-              getMessageTextWithSpoilers(getTranslationFn(), message, statefulContent)!,
-            );
-          }
+      canCopyWithFormat: !hasSelection,
+      handler: (textFormat) => {
+        if (!onCopyMessages) return;
+
+        const selectionRequest = hasSelection
+          ? captureMessageCopyRequest(message.chatId, threadId, messageListType)
+          : undefined;
+        if (selectionRequest && (
+          selectionRequest.type === 'messages' || selectionRequest.messageId === message.id
+        )) {
+          onCopyMessages(selectionRequest, textFormat);
+          return;
         }
 
-        afterEffect?.();
+        onCopyMessages({
+          type: 'messages',
+          chatId: message.chatId,
+          threadId,
+          messageListType,
+          messageIds: [message.id],
+        }, textFormat);
       },
     });
   }
@@ -136,7 +138,7 @@ function checkMessageHasSelection(message: ApiMessage): boolean {
   const selection = window.getSelection();
   const selectionParentNode = selection?.anchorNode?.parentNode as HTMLElement;
   const selectedMessageElement = selectionParentNode?.closest<HTMLDivElement>('.Message.message-list-item');
-  return getMessageHtmlId(message.id) === selectedMessageElement?.id;
+  return String(message.id) === selectedMessageElement?.dataset.messageId;
 }
 function getCopyLabel(hasSelection: boolean): string {
   if (hasSelection) {

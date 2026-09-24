@@ -1,9 +1,10 @@
-import { memo, useEffect, useMemo, useRef } from '@teact';
+import { memo, useEffect, useLayoutEffect, useMemo, useRef } from '@teact';
 import { getActions, withGlobal } from '../../global';
 
 import type { ApiChatFolder, ApiChatlistExportedInvite } from '../../api/types';
 import { LeftColumnContent, SettingsScreens } from '../../types';
 
+import { requestMeasure, requestMutation } from '../../lib/fasterdom/fasterdom';
 import { selectTabState } from '../../global/selectors';
 import { selectCurrentLimit } from '../../global/selectors/limits';
 import { IS_TAURI } from '../../util/browser/globalEnvironment';
@@ -13,6 +14,7 @@ import buildClassName from '../../util/buildClassName';
 import useFolderTabs from '../../hooks/useFolderTabs';
 import useLang from '../../hooks/useLang';
 import useLastCallback from '../../hooks/useLastCallback';
+import useResizeObserver from '../../hooks/useResizeObserver';
 import useScrolledState from '../../hooks/useScrolledState';
 
 import MainMenuDropdown from '../common/MainMenuDropdown';
@@ -55,6 +57,7 @@ const FoldersSidebar = ({
   } = getActions();
 
   const tabsRef = useRef<HTMLDivElement>();
+  const pillRef = useRef<HTMLDivElement>();
 
   useEffect(() => {
     loadChatFolders();
@@ -82,14 +85,45 @@ const FoldersSidebar = ({
     handleScroll,
     isAtBeginning,
     isAtEnd,
+    updateScrollState,
   } = useScrolledState();
+
+  const handleResize = useLastCallback(() => {
+    updateScrollState(tabsRef.current);
+  });
+
+  useResizeObserver(tabsRef, handleResize);
 
   const lang = useLang();
 
-  const handleSwitchTab = useLastCallback((index: number) => {
+  useLayoutEffect(() => {
+    const tabsEl = tabsRef.current;
+    if (!tabsEl) return;
+
+    requestMeasure(() => {
+      const activeEl = tabsEl.children[activeChatFolder] as HTMLElement | undefined;
+      if (!activeEl || activeEl === pillRef.current) return;
+
+      const top = activeEl.offsetTop;
+      const height = activeEl.offsetHeight;
+
+      requestMutation(() => {
+        tabsEl.style.setProperty('--pill-offset', `${top}px`);
+        tabsEl.style.setProperty('--pill-height', `${height}px`);
+      });
+    });
+  }, [activeChatFolder, folderTabs]);
+
+  const openFolder = useLastCallback((index: number) => {
     openLeftColumnContent({ contentKey: LeftColumnContent.ChatList });
     openSettingsScreen({ screen: undefined });
-    setActiveChatFolder({ activeChatFolder: index }, { forceOnHeavyAnimation: true });
+    if (activeChatFolder !== index) {
+      setActiveChatFolder({ activeChatFolder: index }, { forceOnHeavyAnimation: true });
+    }
+  });
+
+  const handleSwitchTab = useLastCallback((index: number) => {
+    openFolder(index);
     if (activeChatFolder === index) {
       scrollChatListToTop();
     }
@@ -120,7 +154,7 @@ const FoldersSidebar = ({
         className={buildClassName(isOpen ? 'active' : '', styles.menuButton)}
         onClick={onTrigger}
         ariaLabel={lang('AriaLabelOpenMenu')}
-        iconName="menu"
+        iconName="hamburger"
         iconClassName={styles.icon}
       />
     );
@@ -154,6 +188,7 @@ const FoldersSidebar = ({
             badgeCount={tab.badgeCount}
             isBadgeActive={tab.isBadgeActive}
             onClick={handleSwitchTab}
+            onFileHoverOpen={openFolder}
             clickArg={i}
             contextActions={tab.contextActions}
             contextRootElementSelector="#FoldersSidebar"
@@ -161,6 +196,7 @@ const FoldersSidebar = ({
             className={styles.tab}
           />
         ))}
+        <div ref={pillRef} className={styles.pill} />
       </div>
       {!isAtEnd && <div className={styles.divider} />}
       <Button

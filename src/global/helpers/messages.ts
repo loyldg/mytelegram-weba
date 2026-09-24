@@ -2,15 +2,17 @@ import type { TeactNode } from '../../lib/teact/teact';
 
 import type {
   ApiAttachment,
-  ApiInputMessageReplyInfo,
   ApiMessage,
   ApiMessageEntityTextUrl,
   ApiPeer,
+  ApiRestrictionReason,
+  ApiRichMessage,
   ApiStory,
   ApiTypeStory,
 } from '../../api/types';
 import type {
-  ApiFormattedText, ApiMessagePoll, ApiReplyInfo, ApiWebPage, MediaContainer, StatefulMediaContent,
+  ApiFormattedText, ApiInputDraftReplyInfo, ApiMessagePoll, ApiReplyInfo, ApiWebPage,
+  MediaContainer, StatefulMediaContent,
 } from '../../api/types/messages';
 import type { ThreadId } from '../../types';
 import type { LangFn } from '../../util/localization';
@@ -28,11 +30,13 @@ import {
   TME_LINK_PREFIX,
   VERIFICATION_CODES_USER_ID,
   VIDEO_STICKER_MIME_TYPE,
+  WEB_APP_PLATFORM,
 } from '../../config';
 import { areDeepEqual } from '../../util/areDeepEqual';
 import { getRawPeerId, isUserId } from '../../util/entities/ids';
 import { areSortedArraysIntersecting, unique } from '../../util/iteratees';
 import { isLocalMessageId } from '../../util/keys/messageKey';
+import { MEMO_EMPTY_ARRAY } from '../../util/memo';
 import { getServerTime } from '../../util/serverTime';
 import { getGlobal } from '../index';
 import {
@@ -42,6 +46,7 @@ import {
   selectWebPageFromMessage,
 } from '../selectors';
 import { selectThreadIdFromMessage } from '../selectors/threads';
+import { getRichMessagePreviewText } from './richMessage';
 import { getMainUsername } from './users';
 
 const RE_LINK = new RegExp(RE_LINK_TEMPLATE, 'i');
@@ -54,6 +59,19 @@ function getNextLocalMessageId(lastMessageId = 0) {
 export function getMessageHtmlId(messageId: number, index?: number) {
   const parts = ['message', messageId.toString().replace('.', '-'), index].filter(Boolean);
   return parts.join('-');
+}
+
+export function getApplicableRestrictionReasons(
+  restrictionReasons?: ApiRestrictionReason[], ignoreRestrictionReasons?: string[],
+): ApiRestrictionReason[] {
+  if (!restrictionReasons?.length) return MEMO_EMPTY_ARRAY;
+
+  return restrictionReasons.filter((reason) => {
+    const isForCurrentPlatform = reason.platform === 'all' || reason.platform === WEB_APP_PLATFORM;
+    if (!isForCurrentPlatform) return false;
+
+    return !ignoreRestrictionReasons?.includes(reason.reason);
+  });
 }
 
 export function getMessageOriginalId(message: ApiMessage) {
@@ -162,7 +180,19 @@ export function pickMatchingTypingDraftMessage<T extends ApiMessage>(
 }
 
 export function getMessageTextWithFallback(lang: LangFn, message: MediaContainer) {
-  return hasMessageText(message) ? message.content.text || { text: lang('MessageUnsupported') } : undefined;
+  if (!hasMessageText(message)) {
+    return undefined;
+  }
+
+  if (message.content.text) {
+    return message.content.text;
+  }
+
+  const richMessageText = message.content.richMessage
+    ? getRichMessagePreviewText(message.content.richMessage)
+    : undefined;
+
+  return { text: richMessageText || lang('MessageUnsupported') };
 }
 
 export function getMessageCustomShape(message: ApiMessage): boolean {
@@ -264,7 +294,7 @@ export function isOwnMessage(message: ApiMessage) {
 }
 
 export function isReplyToMessage(message: ApiMessage) {
-  return Boolean(message.replyInfo?.type === 'message');
+  return Boolean(message.replyInfo?.type === 'message' || message.replyInfo?.type === 'ephemeral');
 }
 
 export function isForwardedMessage(message: ApiMessage) {
@@ -317,7 +347,7 @@ export function isMessageTranslatable(message: ApiMessage, allowOutgoing?: boole
   const isAction = isActionMessage(message);
 
   return Boolean(text?.text.length && !text.emojiOnlyCount && !game && (allowOutgoing || !message.isOutgoing)
-    && !isLocal && !isServiceNotification && !isAction && !message.isScheduled);
+    && !isLocal && !isServiceNotification && !isAction && !message.isScheduled && !message.isEphemeral);
 }
 
 export function getMessageSingleInlineButton(message: ApiMessage) {
@@ -369,7 +399,11 @@ export function mergeIdRanges(ranges: number[][], idsUpdate: number[]): number[]
 
 export function extractMessageText(message: ApiMessage | ApiStory, inChatList = false) {
   const contentText = message.content.text;
-  if (!contentText) return undefined;
+  if (!contentText) {
+    const richMessageText = message.content.richMessage && getRichMessagePreviewText(message.content.richMessage);
+
+    return richMessageText ? { text: richMessageText } : undefined;
+  }
 
   const { text } = contentText;
   let { entities } = contentText;
@@ -574,11 +608,13 @@ export function createApiMessageFromTypingDraft({
   chatId,
   threadId,
   text,
+  richMessage,
 }: {
   lastMessageId: number;
   chatId: string;
   threadId: ThreadId;
-  text: ApiFormattedText;
+  text?: ApiFormattedText;
+  richMessage?: ApiRichMessage;
 }): ApiMessage {
   const localId = getNextLocalMessageId(lastMessageId);
 
@@ -597,6 +633,7 @@ export function createApiMessageFromTypingDraft({
     date: getServerTime(),
     content: {
       text,
+      richMessage,
     },
     isSilent: true,
     isTypingDraft: true,
@@ -626,8 +663,10 @@ export function groupMessageIdsByThreadId(
 }
 
 export function prepareMessageReplyInfo(
-  threadId: ThreadId, additionalReplyInfo?: ApiInputMessageReplyInfo,
-): ApiInputMessageReplyInfo | undefined {
+  threadId: ThreadId, additionalReplyInfo?: ApiInputDraftReplyInfo,
+): ApiInputDraftReplyInfo | undefined {
+  if (additionalReplyInfo?.type === 'ephemeral') return additionalReplyInfo;
+
   const isMainThread = threadId === MAIN_THREAD_ID;
   if (!additionalReplyInfo && isMainThread) return undefined;
 

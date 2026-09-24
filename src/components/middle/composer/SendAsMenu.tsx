@@ -1,4 +1,3 @@
-import type { FC } from '../../../lib/teact/teact';
 import { memo, useEffect, useRef } from '../../../lib/teact/teact';
 import { getActions, getGlobal } from '../../../global';
 
@@ -6,7 +5,6 @@ import type { ApiSendAsPeerId } from '../../../api/types';
 
 import { IS_TOUCH_ENV } from '../../../util/browser/windowEnvironment';
 import buildClassName from '../../../util/buildClassName';
-import setTooltipItemVisible from '../../../util/setTooltipItemVisible';
 
 import useLastCallback from '../../../hooks/useLastCallback';
 import useMouseInside from '../../../hooks/useMouseInside';
@@ -30,14 +28,14 @@ export type OwnProps = {
   onClose: () => void;
 };
 
-const SendAsMenu: FC<OwnProps> = ({
+const SendAsMenu = ({
   isOpen,
   chatId,
   selectedSendAsId,
   sendAsPeerIds,
   isCurrentUserPremium,
   onClose,
-}) => {
+}: OwnProps) => {
   const { saveDefaultSendAs, showNotification } = getActions();
 
   // No need for expensive global updates on users and chats, so we avoid them
@@ -70,7 +68,7 @@ const SendAsMenu: FC<OwnProps> = ({
   });
 
   useEffect(() => {
-    setTooltipItemVisible('.chat-item-clickable', selectedSendAsIndex, containerRef);
+    containerRef.current?.querySelector<HTMLElement>('.focus')?.scrollIntoView({ block: 'nearest' });
   }, [selectedSendAsIndex]);
 
   useEffect(() => {
@@ -81,6 +79,7 @@ const SendAsMenu: FC<OwnProps> = ({
 
   return (
     <Menu
+      ref={containerRef}
       isOpen={isOpen}
       positionX="left"
       positionY="bottom"
@@ -123,7 +122,7 @@ const SendAsMenu: FC<OwnProps> = ({
             onClick={handleClick}
             focus={selectedSendAsIndex === index}
             rightElement={!isCurrentUserPremium && isPremium
-              && <Icon name="lock-badge" className="send-as-icon-locked" />}
+              && <Icon name="lock-filled" className="send-as-icon-locked" />}
           >
             <Avatar
               size="small"

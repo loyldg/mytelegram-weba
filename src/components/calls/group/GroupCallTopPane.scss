@@ -1,7 +1,7 @@
 @use "../../../styles/mixins";
 
 .GroupCallTopPane {
-  @include mixins.middle-header-pane;
+  @include mixins.middle-header-pane-content;
 
   cursor: var(--custom-cursor, pointer);
 
@@ -10,13 +10,21 @@
   align-items: center;
   justify-content: space-between;
 
+  &.standalone-pill {
+    border-radius: var(--border-radius-pane);
+    opacity: 1;
+    box-shadow: var(--shadow-pane);
+  }
+
   .info {
     display: flex;
     flex-direction: column;
+    margin-inline-start: 0.5rem;
     line-height: 1rem;
 
     .title {
       font-size: 0.875rem;
+      font-weight: var(--font-weight-medium);
       color: var(--color-text);
     }
 

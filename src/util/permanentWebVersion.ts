@@ -1,5 +1,3 @@
-import { getActions } from '../global';
-
 import { PRODUCTION_HOSTNAME, WEB_VERSION_BASE } from '../config';
 import { clearWebsync } from './websync';
 
@@ -26,7 +24,6 @@ export function getPermanentWebVersion(): AvailableVersions | undefined {
 export function switchPermanentWebVersion(version: AvailableVersions) {
   setPermanentWebVersion(version);
   clearWebsync();
-  getActions().skipLockOnUnload();
   window.location.assign(`${WEB_VERSION_BASE}${version.toLowerCase()}`);
 }
 

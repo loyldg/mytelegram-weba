@@ -4,7 +4,12 @@ import type {
   GroupCallParticipant,
   VideoRotation,
   VideoState,
-} from '../../lib/secret-sauce';
+} from '../../lib/vibecalls';
+export type ApiPhoneCallConfig = {
+  shouldUseSctp: boolean;
+};
+
+export type ApiPhoneCallCustomParameters = ApiPhoneCallConfig;
 
 export interface ApiGroupCall {
   chatId?: string;
@@ -26,6 +31,8 @@ export interface ApiGroupCall {
   inviteHash?: string;
 
   nextOffset?: string;
+  localSource?: number;
+  localJoinAsId?: string;
   participants: Record<string, GroupCallParticipant>;
   connectionState: GroupCallConnectionState;
   isSpeakerDisabled?: boolean;
@@ -50,6 +57,7 @@ export interface ApiPhoneCall {
   needDebug?: boolean;
   reason?: 'missed' | 'disconnect' | 'hangup' | 'busy';
   duration?: number;
+  customParameters?: ApiPhoneCallCustomParameters;
 
   emojis?: string;
   gA?: number[];

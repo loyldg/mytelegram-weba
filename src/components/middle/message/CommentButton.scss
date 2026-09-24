@@ -106,14 +106,14 @@
       }
     }
 
-    .icon-comments-sticker {
+    .icon-comments {
       display: block;
       margin: 0 auto;
       font-size: 1.5rem;
     }
 
     .recent-repliers,
-    .icon-comments,
+    .icon-message,
     .label,
     .CommentButton_icon-open {
       display: none;
@@ -181,11 +181,11 @@
     width: calc(100% + 1rem);
   }
 
-  .icon-comments-sticker {
+  .icon-comments {
     display: none;
   }
 
-  .icon-comments {
+  .icon-message {
     margin-inline-end: 0.875rem;
     font-size: 1.5625rem;
     line-height: 2rem;

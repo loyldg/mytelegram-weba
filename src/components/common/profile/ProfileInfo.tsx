@@ -63,6 +63,7 @@ import Avatar from '../Avatar.tsx';
 import FullNameTitle from '../FullNameTitle.tsx';
 import Icon from '../icons/Icon.tsx';
 import TopicIcon from '../TopicIcon.tsx';
+import ProfileMusicStrip from './ProfileMusicStrip';
 import ProfilePhoto from './ProfilePhoto';
 import ProfilePinnedGifts from './ProfilePinnedGifts.tsx';
 import RadialPatternBackground from './RadialPatternBackground.tsx';
@@ -72,6 +73,7 @@ import styles from './ProfileInfo.module.scss';
 
 type OwnProps = {
   isExpanded?: boolean;
+  isActive?: boolean;
   peerId: string;
   isForSettings?: boolean;
   canPlayVideo: boolean;
@@ -110,10 +112,10 @@ const MAX_PHOTO_DASH_COUNT = 30;
 const STATUS_UPDATE_INTERVAL = 1000 * 60; // 1 min
 
 const PATTERN_Y_SHIFT = 8 * REM;
-const PATTERN_PLAIN_Y_SHIFT = 5.25 * REM;
 
 const ProfileInfo = ({
   isExpanded,
+  isActive,
   isForSettings,
   canPlayVideo,
   user,
@@ -149,6 +151,8 @@ const ProfileInfo = ({
     openProfileRatingModal,
     loadPeerSavedGifts,
   } = getActions();
+
+  const savedMusic = userFullInfo?.savedMusic;
 
   const oldLang = useOldLang();
   const lang = useLang();
@@ -367,7 +371,7 @@ const ProfileInfo = ({
     );
   }
 
-  function renderPhoto(isActive?: boolean) {
+  function renderPhoto(isPhotoActive?: boolean) {
     const photo = photos.length > 0
       ? photos[currentPhotoIndex]
       : undefined;
@@ -379,9 +383,9 @@ const ProfileInfo = ({
         chat={chat}
         photo={photo}
         theme={theme}
-        canPlayVideo={Boolean(isActive && canPlayVideo)}
-        className={buildClassName(isActive && styles.activeProfilePhoto)}
-        style={isActive ? createVtnStyle('avatar', true) : undefined}
+        canPlayVideo={Boolean(isPhotoActive && canPlayVideo)}
+        className={buildClassName(isPhotoActive && styles.activeProfilePhoto)}
+        style={isPhotoActive ? createVtnStyle('avatar', true) : undefined}
         onClick={handleProfilePhotoClick}
       />
     );
@@ -490,6 +494,8 @@ const ProfileInfo = ({
         styles.root,
         !isExpanded && styles.minimized,
         isPlain && styles.plain,
+        hasPatternBackground && styles.withBackground,
+        savedMusic && styles.hasMusic,
       )}
       style={buildStyle(
         profileColorSet && `--rating-outline-color: ${isExpanded ? 'transparent' : profileColorSet?.bgColors[0]}`,
@@ -505,7 +511,7 @@ const ProfileInfo = ({
           patternSize={16}
           withLinearGradient={!collectibleEmojiStatus}
           className={styles.radialPatternBackground}
-          yPosition={isPlain ? PATTERN_PLAIN_Y_SHIFT : PATTERN_Y_SHIFT}
+          yPosition={PATTERN_Y_SHIFT}
         />
       )}
       {Boolean(pinnedGifts?.length) && (
@@ -606,10 +612,21 @@ const ProfileInfo = ({
             onEmojiStatusClick={handleStatusClick}
             noLoopLimit
             canCopyTitle
+            isScrolling
+            isScrollingPaused={!isActive}
           />
         )}
         {renderStatus()}
       </div>
+      {savedMusic && (
+        <ProfileMusicStrip
+          audio={savedMusic}
+          peerId={peerId}
+          isStatic={isForSettings}
+          className={isExpanded ? styles.musicOverlay : undefined}
+          style={createVtnStyle('music', true)}
+        />
+      )}
     </div>
   );
 };

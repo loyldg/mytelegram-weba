@@ -1,0 +1,18 @@
+.root {
+  pointer-events: none;
+
+  display: grid;
+  place-content: center;
+
+  width: 1.25rem;
+  height: 1.25rem;
+  padding: 0.0625rem;
+  border-radius: 50%;
+
+  background-color: var(--accent-color, var(--color-icon-secondary));
+}
+
+.glyph {
+  font-size: 1.125rem;
+  color: var(--color-white);
+}

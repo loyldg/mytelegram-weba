@@ -112,13 +112,13 @@ const CommentButton = ({
       tabIndex={0}
     >
       <Icon
-        name="comments-sticker"
+        name="comments"
         className={buildClassName(
           'CommentButton_icon-comments',
           isLoading && shouldRenderLoading && 'CommentButton_hidden',
         )}
       />
-      {!recentRepliers?.length && <Icon name="comments" />}
+      {!recentRepliers?.length && <Icon name="message" />}
       {renderRecentRepliers()}
       <div className="label" dir="auto">
         {messagesCount ? commentsText : oldLang('LeaveAComment')}

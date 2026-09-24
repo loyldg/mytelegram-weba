@@ -4,9 +4,9 @@
  * @param log
  * @returns {Promise<{authKey: *, timeOffset: *}>}
  */
-
 import type MTProtoPlainSender from './MTProtoPlainSender';
 
+import { compareBuffersConstantTime, concat, copy } from '../../../util/encoding/buffer';
 import { IGE } from '../crypto/IGE';
 import { SERVER_KEYS } from '../crypto/RSA';
 import { SecurityError } from '../errors';
@@ -17,6 +17,8 @@ import { AuthKey } from '../crypto/AuthKey';
 import { Factorizator } from '../crypto/Factorizator';
 import {
   bufferXor,
+  DH_PRIME_BYTES,
+  generateDhPrivateExponent,
   generateKeyDataFromNonce,
   generateRandomBytes,
   getByteArray,
@@ -26,11 +28,21 @@ import {
   sha1,
   sha256,
   toSignedLittleBuffer,
+  validateDhParameters,
+  validateDhPublicValue,
 } from '../Helpers';
 
 const RETRIES = 20;
+const MAX_PQ_BYTES = 8;
+const MAX_PQ = 0x7FFFFFFFFFFFFFFFn;
+const MAX_DH_GEN_ATTEMPTS = 5;
 
-export async function doAuthentication(sender: MTProtoPlainSender, log: any) {
+export async function doAuthentication(
+  sender: MTProtoPlainSender,
+  log: any,
+  dcId: number,
+  isTestServer?: boolean,
+) {
   // Step 1 sending: PQ Request, endianness doesn't matter since it's random
   let bytes = generateRandomBytes(16);
 
@@ -44,26 +56,18 @@ export async function doAuthentication(sender: MTProtoPlainSender, log: any) {
   if (resPQ.nonce !== nonce) {
     throw new SecurityError('Step 1 invalid nonce from server');
   }
-  const pq = readBigIntFromBuffer(resPQ.pq, false, true);
-  log.debug('Finished authKey generation step 1');
-  // Step 2 sending: DH Exchange
-  const { p, q } = Factorizator.factorize(pq);
-
-  const pBuffer = getByteArray(p);
-  const qBuffer = getByteArray(q);
-
-  bytes = generateRandomBytes(32);
-  const newNonce = readBigIntFromBuffer(bytes, true, true);
-  const pqInnerData = new Api.PQInnerData({
-    pq: getByteArray(pq), // unsigned
-    p: pBuffer,
-    q: qBuffer,
-    nonce: resPQ.nonce,
-    serverNonce: resPQ.serverNonce,
-    newNonce,
-  }).getBytes();
-  if (pqInnerData.length > 144) {
-    throw new SecurityError('Step 1 invalid nonce from server');
+  // Limit unauthenticated factorization to the protocol's canonical 63-bit `pq`
+  // https://core.telegram.org/mtproto/auth_key#dh-exchange-initiation
+  if (
+    resPQ.pq.length === 0
+    || resPQ.pq.length > MAX_PQ_BYTES
+    || resPQ.pq[0] === 0
+  ) {
+    throw new SecurityError('Step 1 invalid pq encoding');
+  }
+  const pq = readBigIntFromBuffer(resPQ.pq, false);
+  if (pq > MAX_PQ || pq < 15n || pq % 2n === 0n) {
+    throw new SecurityError('Step 1 invalid pq value');
   }
   let targetFingerprint;
   let targetKey;
@@ -79,22 +83,43 @@ export async function doAuthentication(sender: MTProtoPlainSender, log: any) {
       'Step 2 could not find a valid key for fingerprints',
     );
   }
+  log.debug('Finished authKey generation step 1');
+  // Step 2 sending: DH Exchange
+  const { p, q } = Factorizator.factorize(pq);
+
+  const pBuffer = getByteArray(p);
+  const qBuffer = getByteArray(q);
+
+  bytes = generateRandomBytes(32);
+  const newNonce = readBigIntFromBuffer(bytes, true, true);
+  const pqInnerData = new Api.PQInnerDataDc({
+    pq: getByteArray(pq), // unsigned
+    p: pBuffer,
+    q: qBuffer,
+    nonce: resPQ.nonce,
+    serverNonce: resPQ.serverNonce,
+    newNonce,
+    dc: buildAuthDcId(dcId, isTestServer),
+  }).getBytes();
+  if (pqInnerData.length > 144) {
+    throw new SecurityError('Step 1 invalid nonce from server');
+  }
   // Value should be padded to be made 192 exactly
   const padding = generateRandomBytes(192 - pqInnerData.length);
-  const dataWithPadding = Buffer.concat([pqInnerData, padding]);
-  const dataPadReversed = Buffer.from(dataWithPadding).reverse();
+  const dataWithPadding = concat(pqInnerData, padding);
+  const dataPadReversed = copy(dataWithPadding).reverse();
 
   let encryptedData;
   for (let i = 0; i < RETRIES; i++) {
     const tempKey = generateRandomBytes(32);
-    const shaDigestKeyWithData = await sha256(Buffer.concat([tempKey, dataWithPadding]));
-    const dataWithHash = Buffer.concat([dataPadReversed, shaDigestKeyWithData]);
+    const shaDigestKeyWithData = await sha256(concat(tempKey, dataWithPadding));
+    const dataWithHash = concat(dataPadReversed, shaDigestKeyWithData);
 
-    const ige = new IGE(tempKey, Buffer.alloc(32));
+    const ige = new IGE(tempKey, new Uint8Array(32));
     const aesEncrypted = ige.encryptIge(dataWithHash);
     const tempKeyXor = bufferXor(tempKey, await sha256(aesEncrypted));
 
-    const keyAesEncrypted = Buffer.concat([tempKeyXor, aesEncrypted]);
+    const keyAesEncrypted = concat(tempKeyXor, aesEncrypted);
     const keyAesEncryptedInt = readBigIntFromBuffer(keyAesEncrypted, false, false);
     if (keyAesEncryptedInt >= targetKey.n) {
       log.debug('Aes key greater than RSA. retrying');
@@ -140,16 +165,14 @@ export async function doAuthentication(sender: MTProtoPlainSender, log: any) {
   }
 
   if (serverDhParams instanceof Api.ServerDHParamsFail) {
-    const sh = await sha1(
-      toSignedLittleBuffer(newNonce, 32).slice(4, 20),
-    );
-    const nnh = readBigIntFromBuffer(sh, true, true);
-    if (serverDhParams.newNonceHash !== nnh) {
+    const newNonceHash = (
+      await sha1(toSignedLittleBuffer(newNonce, 32))
+    ).slice(4, 20);
+    const expectedNewNonceHash = readBigIntFromBuffer(newNonceHash, true, true);
+    if (serverDhParams.newNonceHash !== expectedNewNonceHash) {
       throw new SecurityError('Step 2 invalid DH fail nonce from server');
     }
-  }
-  if (!(serverDhParams instanceof Api.ServerDHParamsOk)) {
-    throw new Error(`Step 2.2 answer was ${serverDhParams.className}`);
+    throw new SecurityError('Step 2 server rejected DH parameters');
   }
   log.debug('Finished authKey generation step 2');
   log.debug('Starting authKey generation step 3');
@@ -171,8 +194,12 @@ export async function doAuthentication(sender: MTProtoPlainSender, log: any) {
   if (!(serverDhInner instanceof Api.ServerDHInnerData)) {
     throw new Error(`Step 3 answer was ${serverDhInner}`);
   }
+  const paddingLength = plainTextAnswer.length - reader.tellPosition();
+  if (paddingLength < 0 || paddingLength > 15) {
+    throw new SecurityError('Step 3 invalid encrypted answer padding');
+  }
   const sha1Answer = await sha1(serverDhInner.getBytes());
-  if (!(hash.equals(sha1Answer))) {
+  if (!compareBuffersConstantTime(hash, sha1Answer)) {
     throw new SecurityError('Step 3 Invalid hash answer');
   }
 
@@ -184,110 +211,97 @@ export async function doAuthentication(sender: MTProtoPlainSender, log: any) {
       'Step 3 Invalid server nonce in encrypted answer',
     );
   }
-  if (serverDhInner.g !== 3 || serverDhInner.dhPrime.toString('hex') !== 'c71caeb9c6b1c9048e6c522f70f13'
-    + 'f73980d40238e3e21c14934d037563d930f48198a0aa7c14058229493d22530f4dbfa336f6e0ac925139543aed44cce7c3720fd5'
-    + '1f69458705ac68cd4fe6b6b13abdc9746512969328454f18faf8c595f642477fe96bb2a941d5bcd1d4ac8cc49880708fa9b378e3'
-    + 'c4f3a9060bee67cf9a4a4a695811051907e162753b56b0f6b410dba74d8a84b2a14b3144e0ef1284754fd17ed950d5965b4b9dd4'
-    + '6582db1178d169c6bc465b0d6ff9ca3928fef5b9ae4e418fc15e83ebea0f87fa9ff5eed70050ded2849f47bf959d956850ce9298'
-    + '51f0d8115f635b105ee2e4e15d04b2454bf6f4fadf034b10403119cd8e3b92fcc5b') {
-    throw new SecurityError('Step 3 invalid dhPrime or g');
-  }
-
-  const dhPrime = readBigIntFromBuffer(
+  const dhPrime = validateDhParameters(
     serverDhInner.dhPrime,
-    false,
-    false,
+    serverDhInner.g,
   );
   const ga = readBigIntFromBuffer(serverDhInner.gA, false, false);
   const timeOffset = serverDhInner.serverTime - Math.floor(Date.now() / 1000);
-  const b = readBigIntFromBuffer(
-    generateRandomBytes(256),
-    false,
-    false,
-  );
-  const gb = modExp(BigInt(serverDhInner.g), b, dhPrime);
-  const gab = modExp(ga, b, dhPrime);
+  validateDhPublicValue(ga, dhPrime, 'g_a');
+  let retryId = 0n;
 
-  if (ga <= 1n) {
-    throw new SecurityError('Step 3 failed ga > 1 check');
-  }
+  // A retry uses a fresh `b` and identifies the preceding failed key
+  // https://core.telegram.org/mtproto/auth_key#dh-key-exchange-complete
+  for (let attempt = 0; attempt < MAX_DH_GEN_ATTEMPTS; attempt++) {
+    const b = generateDhPrivateExponent(dhPrime);
+    const gb = modExp(BigInt(serverDhInner.g), b, dhPrime);
+    const gab = modExp(ga, b, dhPrime);
+    validateDhPublicValue(gb, dhPrime, 'g_b');
 
-  if (gb <= 1n) {
-    throw new SecurityError('Step 3 failed gb > 1 check');
-  }
-
-  if (ga >= (dhPrime - 1n)) {
-    throw new SecurityError('Step 3 failed ga < dh_prime - 1 check');
-  }
-
-  const toCheckAgainst = 2n ** (2048n - 64n);
-  if (!(ga > toCheckAgainst && ga < (dhPrime - toCheckAgainst))) {
-    throw new SecurityError('Step 3 failed dh_prime - 2^{2048-64} < ga < 2^{2048-64} check');
-  }
-  if (!(gb > toCheckAgainst && gb < (dhPrime - toCheckAgainst))) {
-    throw new SecurityError('Step 3 failed dh_prime - 2^{2048-64} < gb < 2^{2048-64} check');
-  }
-
-  // Prepare client DH Inner Data
-  const clientDhInner = new Api.ClientDHInnerData({
-    nonce: resPQ.nonce,
-    serverNonce: resPQ.serverNonce,
-    retryId: 0n, // TODO Actual retry ID
-    gB: getByteArray(gb, false),
-  }).getBytes();
-
-  const clientDdhInnerHashed = Buffer.concat([
-    await sha1(clientDhInner),
-    clientDhInner,
-  ]);
-    // Encryption
-
-  const clientDhEncrypted = ige.encryptIge(clientDdhInnerHashed);
-  const dhGen = await sender.send(
-    new Api.SetClientDHParams({
+    const clientDhInner = new Api.ClientDHInnerData({
       nonce: resPQ.nonce,
       serverNonce: resPQ.serverNonce,
-      encryptedData: clientDhEncrypted,
-    }),
-  );
-  const nonceTypes = [Api.DhGenOk, Api.DhGenRetry, Api.DhGenFail];
-  // TS being weird again.
-  const nonceTypesString = ['DhGenOk', 'DhGenRetry', 'DhGenFail'];
-  if (
-    !(
-      dhGen instanceof nonceTypes[0]
-      || dhGen instanceof nonceTypes[1]
-      || dhGen instanceof nonceTypes[2]
-    )
-  ) {
-    throw new Error(`Step 3.1 answer was ${dhGen}`);
-  }
-  const { name } = dhGen.constructor;
-  if (dhGen.nonce !== resPQ.nonce) {
-    throw new SecurityError(`Step 3 invalid ${name} nonce from server`);
-  }
-  if (dhGen.serverNonce !== resPQ.serverNonce) {
-    throw new SecurityError(
-      `Step 3 invalid ${name} server nonce from server`,
+      retryId,
+      gB: readBufferFromBigInt(gb, DH_PRIME_BYTES, false),
+    }).getBytes();
+    const clientDhEncrypted = ige.encryptIge(
+      concat(await sha1(clientDhInner), clientDhInner),
     );
+    const dhGen = await sender.send(
+      new Api.SetClientDHParams({
+        nonce: resPQ.nonce,
+        serverNonce: resPQ.serverNonce,
+        encryptedData: clientDhEncrypted,
+      }),
+    );
+    if (
+      !(
+        dhGen instanceof Api.DhGenOk
+        || dhGen instanceof Api.DhGenRetry
+        || dhGen instanceof Api.DhGenFail
+      )
+    ) {
+      throw new Error(`Step 3.1 answer was ${dhGen}`);
+    }
+    if (dhGen.nonce !== resPQ.nonce) {
+      throw new SecurityError(
+        `Step 3 invalid ${dhGen.className} nonce from server`,
+      );
+    }
+    if (dhGen.serverNonce !== resPQ.serverNonce) {
+      throw new SecurityError(
+        `Step 3 invalid ${dhGen.className} server nonce from server`,
+      );
+    }
+
+    const authKeyBytes = readBufferFromBigInt(gab, DH_PRIME_BYTES, false);
+    const authKeyHash = await sha1(authKeyBytes);
+    const authKey = new AuthKey(authKeyBytes, authKeyHash);
+    let nonceNumber: number;
+    let dhHash: bigint;
+    if (dhGen instanceof Api.DhGenOk) {
+      nonceNumber = 1;
+      dhHash = dhGen.newNonceHash1;
+    } else if (dhGen instanceof Api.DhGenRetry) {
+      nonceNumber = 2;
+      dhHash = dhGen.newNonceHash2;
+    } else {
+      nonceNumber = 3;
+      dhHash = dhGen.newNonceHash3;
+    }
+    if (dhHash !== await authKey.calcNewNonceHash(newNonce, nonceNumber)) {
+      throw new SecurityError('Step 3 invalid new nonce hash');
+    }
+
+    if (dhGen instanceof Api.DhGenOk) {
+      // https://core.telegram.org/mtproto/auth_key#dh-key-exchange-complete
+      const serverSalt = readBigIntFromBuffer(bufferXor(
+        toSignedLittleBuffer(newNonce, 32).slice(0, 8),
+        toSignedLittleBuffer(resPQ.serverNonce, 16).slice(0, 8),
+      ), true, true);
+      log.debug('Finished authKey generation step 3');
+      return { authKey, timeOffset, serverSalt };
+    }
+    if (dhGen instanceof Api.DhGenFail) {
+      throw new SecurityError('Step 3 server rejected DH key');
+    }
+
+    retryId = readBigIntFromBuffer(authKeyHash.slice(0, 8), true, true);
   }
-  const authKey = new AuthKey();
-  await authKey.setKey(getByteArray(gab));
 
-  const nonceNumber = 1 + nonceTypesString.indexOf(dhGen.className);
+  throw new SecurityError('Step 3 DH retry limit exceeded');
+}
 
-  const newNonceHash = await authKey.calcNewNonceHash(newNonce, nonceNumber);
-  // @ts-expect-error
-  const dhHash = dhGen[`newNonceHash${nonceNumber}`] as bigint;
-
-  if (dhHash !== newNonceHash) {
-    throw new SecurityError('Step 3 invalid new nonce hash');
-  }
-
-  if (!(dhGen instanceof Api.DhGenOk)) {
-    throw new Error(`Step 3.2 answer was ${dhGen.className}`);
-  }
-  log.debug('Finished authKey generation step 3');
-
-  return { authKey, timeOffset };
+function buildAuthDcId(dcId: number, isTestServer?: boolean) {
+  return isTestServer ? dcId + 10000 : dcId;
 }

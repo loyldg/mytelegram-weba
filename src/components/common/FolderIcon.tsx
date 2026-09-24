@@ -27,7 +27,7 @@ const FolderIcon = ({
   }
 
   if (!emoji) {
-    return <Icon name="folder-tabs-folder" />;
+    return <Icon name="folder-filled" />;
   }
 
   const iconName = emojiToFolderIcon(emoji);

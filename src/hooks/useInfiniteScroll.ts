@@ -7,7 +7,7 @@ import useForceUpdate from './useForceUpdate';
 import useLastCallback from './useLastCallback';
 import usePreviousDeprecated from './usePreviousDeprecated';
 
-type GetMore = (args: { direction: LoadMoreDirection }) => void;
+type GetMore = (args: { direction: LoadMoreDirection; noScroll?: boolean }) => void;
 type LoadMoreBackwards = (args: { offsetId?: string | number }) => void;
 
 const DEFAULT_LIST_SLICE = 30;
@@ -17,6 +17,7 @@ const useInfiniteScroll = <ListId extends string | number>(
   listIds?: ListId[],
   isDisabled = false,
   listSlice = DEFAULT_LIST_SLICE,
+  initialOffsetId?: ListId,
 ): [ListId[]?, GetMore?, number?] => {
   const requestParamsRef = useRef<{
     direction?: LoadMoreDirection;
@@ -29,7 +30,12 @@ const useInfiniteScroll = <ListId extends string | number>(
       newViewportIds,
       newIsOnTop,
       fromOffset,
-    } = getViewportSlice(listIds, LoadMoreDirection.Forwards, listSlice, listIds[0]);
+    } = getViewportSlice(
+      listIds,
+      LoadMoreDirection.Forwards,
+      listSlice,
+      initialOffsetId !== undefined && listIds.includes(initialOffsetId) ? initialOffsetId : listIds[0],
+    );
     currentStateRef.current = { viewportIds: newViewportIds, isOnTop: newIsOnTop, offset: fromOffset };
   }
 
@@ -41,10 +47,18 @@ const useInfiniteScroll = <ListId extends string | number>(
 
   const prevListIds = usePreviousDeprecated(listIds);
   const prevIsDisabled = usePreviousDeprecated(isDisabled);
-  if (listIds && !isDisabled && (listIds !== prevListIds || isDisabled !== prevIsDisabled)) {
+  const prevInitialOffsetId = usePreviousDeprecated(initialOffsetId);
+  const hasInitialOffsetChanged = initialOffsetId !== prevInitialOffsetId;
+  if (listIds && !isDisabled && (
+    listIds !== prevListIds || isDisabled !== prevIsDisabled || hasInitialOffsetChanged
+  )) {
     const { viewportIds, isOnTop } = currentStateRef.current || {};
+    const shouldAnchorToInitial = initialOffsetId !== undefined && listIds.includes(initialOffsetId)
+      && (hasInitialOffsetChanged || isDisabled !== prevIsDisabled);
     const currentMiddleId = viewportIds && !isOnTop ? viewportIds[Math.round(viewportIds.length / 2)] : undefined;
-    const defaultOffsetId = currentMiddleId && listIds.includes(currentMiddleId) ? currentMiddleId : listIds[0];
+    const defaultOffsetId = shouldAnchorToInitial
+      ? initialOffsetId
+      : currentMiddleId && listIds.includes(currentMiddleId) ? currentMiddleId : listIds[0];
     const { offsetId = defaultOffsetId, direction = LoadMoreDirection.Forwards } = requestParamsRef.current || {};
     const { newViewportIds, newIsOnTop, fromOffset } = getViewportSlice(listIds, direction, listSlice, offsetId);
 

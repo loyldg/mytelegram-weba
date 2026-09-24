@@ -11,10 +11,21 @@ import {
   areSortedArraysEqual, buildCollectionByKey, omit, omitUndefined, pick,
 } from '../../util/iteratees';
 import { selectChatFullInfo } from '../selectors';
+import { clearEphemeralMessages } from './messages';
 import { updateThreadInfoLastMessageId } from './threads';
 import { addUnreadCount, removeUnreadCount } from './unreadCounters';
 
 const DEFAULT_CHAT_LISTS: ChatListType[] = ['active', 'archived'];
+
+export function replacePersonalChannelIds<T extends GlobalState>(global: T, personalChannelIds: string[]): T {
+  return {
+    ...global,
+    chats: {
+      ...global.chats,
+      personalChannelIds,
+    },
+  };
+}
 
 export function replaceChatListIds<T extends GlobalState>(
   global: T,
@@ -299,7 +310,7 @@ function getUpdatedChat<T extends GlobalState>(
   const updatedChat: ApiChat = {
     ...chat,
     ...omit(chatUpdate, omitProps),
-  } as ApiChat;
+  };
 
   if (!updatedChat.id || !updatedChat.type) {
     return undefined;
@@ -378,7 +389,7 @@ export function leaveChat<T extends GlobalState>(global: T, leftChatId: string):
   global = updateChat(global, leftChatId, { isNotJoined: true });
   global = updateChatFullInfo(global, leftChatId, { joinInfo: undefined });
 
-  return global;
+  return clearEphemeralMessages(global, leftChatId);
 }
 
 export function removeChatFromChatLists<T extends GlobalState>(

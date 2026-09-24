@@ -3,7 +3,8 @@ import { memo, useMemo } from '../../../lib/teact/teact';
 
 import type { ApiKeyboardButton } from '../../../api/types';
 
-import { RE_TME_LINK, TME_LINK_PREFIX } from '../../../config';
+import { RE_TME_LINK } from '../../../config';
+import { isButtonUnsupported, isKeyboardButtonUnsupportedForEphemeral } from '../../../global/helpers';
 import buildClassName from '../../../util/buildClassName';
 import renderKeyboardButtonText from '../composer/helpers/renderKeyboardButtonText';
 
@@ -18,23 +19,26 @@ import styles from './InlineButtons.module.scss';
 type OwnProps = {
   className?: string;
   inlineButtons: ApiKeyboardButton[][];
+  isEphemeral?: boolean;
+  isReceipt?: boolean;
   onClick: (payload: ApiKeyboardButton) => void;
 };
 
 const ICON_SIZE = 16;
 
-const InlineButtons = ({ className, inlineButtons, onClick }: OwnProps) => {
+const InlineButtons = ({ className, inlineButtons, isEphemeral, isReceipt, onClick }: OwnProps) => {
   const lang = useLang();
 
   const renderIcon = (button: ApiKeyboardButton) => {
-    const { type } = button;
+    const { type } = button.action;
     switch (type) {
       case 'url': {
-        const { url } = button;
+        const { url } = button.action;
+        const isTelegramLink = RE_TME_LINK.test(url);
 
-        if (url.startsWith(TME_LINK_PREFIX) && url.includes('?startapp')) {
+        if (isTelegramLink && url.includes('?startapp')) {
           return <Icon className={styles.cornerIcon} name="webapp" />;
-        } else if (!RE_TME_LINK.test(url)) {
+        } else if (!isTelegramLink) {
           return <Icon className={styles.cornerIcon} name="arrow-right" />;
         }
 
@@ -43,7 +47,6 @@ const InlineButtons = ({ className, inlineButtons, onClick }: OwnProps) => {
       case 'urlAuth':
         return <Icon className={styles.cornerIcon} name="arrow-right" />;
       case 'buy':
-      case 'receipt':
         return <Icon className={styles.cornerIcon} name="card" />;
       case 'switchBotInline':
         return <Icon className={styles.cornerIcon} name="share-filled" />;
@@ -53,21 +56,21 @@ const InlineButtons = ({ className, inlineButtons, onClick }: OwnProps) => {
       case 'copy':
         return <Icon className={styles.cornerIcon} name="copy" />;
       case 'suggestedMessage':
-        if (button.buttonType === 'suggestChanges') {
+        if (button.action.buttonType === 'suggestChanges') {
           return <Icon className={styles.leftIcon} name="edit" />;
         }
-        if (button.buttonType === 'approve') {
+        if (button.action.buttonType === 'approve') {
           return <Icon className={styles.leftIcon} name="check" />;
         }
-        if (button.buttonType === 'decline') {
+        if (button.action.buttonType === 'decline') {
           return <Icon className={styles.leftIcon} name="close" />;
         }
         break;
       case 'giftOffer':
-        if (button.buttonType === 'accept') {
+        if (button.action.buttonType === 'accept') {
           return <Icon className={styles.leftIcon} name="check" />;
         }
-        if (button.buttonType === 'reject') {
+        if (button.action.buttonType === 'reject') {
           return <Icon className={styles.leftIcon} name="close" />;
         }
         break;
@@ -79,10 +82,10 @@ const InlineButtons = ({ className, inlineButtons, onClick }: OwnProps) => {
   const buttonTexts = useMemo(() => {
     const texts: TeactNode[][] = [];
     inlineButtons.forEach((row) => {
-      texts.push(row.map((button) => renderKeyboardButtonText(lang, button)));
+      texts.push(row.map((button) => renderKeyboardButtonText(lang, button, isReceipt)));
     });
     return texts;
-  }, [lang, inlineButtons]);
+  }, [lang, inlineButtons, isReceipt]);
 
   return (
     <div className={buildClassName(styles.root, className)}>
@@ -96,7 +99,9 @@ const InlineButtons = ({ className, inlineButtons, onClick }: OwnProps) => {
               size="tiny"
               ripple
               noForcedUpperCase
-              disabled={button.type === 'unsupported' || (button.type === 'suggestedMessage' && button.disabled)}
+              disabled={isButtonUnsupported(button.action)
+                || (isEphemeral && isKeyboardButtonUnsupportedForEphemeral(button))
+                || (button.action.type === 'suggestedMessage' && button.action.disabled)}
               onClick={() => onClick(button)}
             >
               {renderIcon(button)}

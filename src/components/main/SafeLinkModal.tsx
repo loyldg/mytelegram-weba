@@ -1,49 +1,144 @@
-import type { FC } from '../../lib/teact/teact';
-import { memo, useCallback } from '../../lib/teact/teact';
+import { memo, useMemo } from '../../lib/teact/teact';
 import { getActions } from '../../global';
 
-import { ensureProtocol } from '../../util/browser/url';
+import convertPunycode from '../../lib/punycode';
+import {
+  ensureProtocol, getSuspiciousDomainCharacters, hasSuspiciousUrlCredentials, isSuspiciousUrl,
+} from '../../util/browser/url';
+import buildClassName from '../../util/buildClassName';
 import renderText from '../common/helpers/renderText';
 
-import useCurrentOrPrev from '../../hooks/useCurrentOrPrev';
 import useLang from '../../hooks/useLang';
+import useLastCallback from '../../hooks/useLastCallback';
 
-import ConfirmDialog from '../ui/ConfirmDialog';
+import Icon from '../common/icons/Icon';
+import Button from '../ui/Button';
+import Modal, {
+  ModalFooterActions,
+  ModalHeader,
+  ModalTitle,
+} from '@gili/modal/Modal';
+
+import styles from './SafeLinkModal.module.scss';
 
 export type OwnProps = {
-  url?: string;
+  modal: string;
+  isOpen: boolean;
 };
 
-const SafeLinkModal: FC<OwnProps> = ({ url }) => {
+const URL_PARTS_PATTERN = /^([a-z][a-z\d+.-]*:\/\/)([^/?#]*@)?(\[[^\]]+\]|[^:/?#]+)(.*)$/i;
+const INVISIBLE_CHARACTER_PATTERN = /[\p{Default_Ignorable_Code_Point}\p{Cc}]/gu;
+
+const SafeLinkModal = ({ modal, isOpen }: OwnProps) => {
   const { toggleSafeLinkModal } = getActions();
 
   const lang = useLang();
+  const renderedUrl = useMemo(() => renderUrl(modal), [modal]);
+  const isSuspicious = useMemo(() => isSuspiciousUrl(modal), [modal]);
 
-  const handleOpen = useCallback(() => {
-    if (!url) {
-      return;
-    }
-
-    window.open(ensureProtocol(url), '_blank', 'noopener noreferrer');
+  const handleOpen = useLastCallback(() => {
+    window.open(ensureProtocol(modal), '_blank', 'noopener noreferrer');
     toggleSafeLinkModal({ url: undefined });
-  }, [toggleSafeLinkModal, url]);
+  });
 
-  const handleDismiss = useCallback(() => {
+  const handleDismiss = useLastCallback(() => {
     toggleSafeLinkModal({ url: undefined });
-  }, [toggleSafeLinkModal]);
+  });
 
-  const renderingUrl = useCurrentOrPrev(url);
+  const header = useMemo(() => (
+    <ModalHeader>
+      <ModalTitle>{lang('OpenUrlTitle')}</ModalTitle>
+    </ModalHeader>
+  ), [lang]);
 
   return (
-    <ConfirmDialog
-      isOpen={Boolean(url)}
+    <Modal
+      isOpen={isOpen}
+      header={header}
+      width="slim"
+      height="auto"
+      ariaLabel={lang('OpenUrlTitle')}
       onClose={handleDismiss}
-      title={lang('OpenUrlTitle')}
-      textParts={renderText(lang('OpenUrlText', { url: renderingUrl }, { withNodes: true, withMarkdown: true }))}
-      confirmLabel={lang('OpenUrlConfirm')}
-      confirmHandler={handleOpen}
-    />
+    >
+      {renderText(lang('OpenUrlText', {
+        url: <span className={styles.url} dir="ltr">{renderedUrl}</span>,
+      }, { withNodes: true, withMarkdown: true }))}
+      {isSuspicious && (
+        <p className={styles.warning}>
+          <Icon className={buildClassName(styles.riskIcon, 'in-text-icon')} name="info-filled" />
+          {lang('OpenUrlWarning')}
+        </p>
+      )}
+      <ModalFooterActions>
+        <Button isText size="smaller" color="primary" fluid onClick={handleDismiss}>
+          {lang('Cancel')}
+        </Button>
+        <Button isText size="smaller" color="primary" fluid autoFocus onClick={handleOpen}>
+          {lang('OpenUrlConfirm')}
+        </Button>
+      </ModalFooterActions>
+    </Modal>
   );
 };
 
 export default memo(SafeLinkModal);
+
+function renderUrl(url: string) {
+  try {
+    // Split the serialized URL so highlighting follows the browser's actual destination
+    const parsedUrl = new URL(ensureProtocol(url));
+    const parts = parsedUrl.href.match(URL_PARTS_PATTERN);
+    if (!parts) return formatUrlPart(parsedUrl.href);
+
+    const [, protocol, credentials, hostname, suffix] = parts;
+    const domain = convertPunycode(hostname);
+
+    return (
+      <>
+        {protocol}
+        {credentials && (
+          <>
+            <span className={hasSuspiciousUrlCredentials(parsedUrl) ? styles.suspicious : undefined}>
+              {formatUrlPart(credentials.slice(0, -1))}
+            </span>
+            @
+          </>
+        )}
+        <span className={styles.domain}>
+          {domain.split('.').map((label, index) => (
+            <>
+              {index > 0 && '.'}
+              {renderDomainLabel(label)}
+            </>
+          ))}
+        </span>
+        {formatUrlPart(suffix)}
+      </>
+    );
+  } catch (err) {
+    return <span className={styles.suspicious}>{formatUrlPart(url)}</span>;
+  }
+}
+
+function renderDomainLabel(label: string) {
+  const suspiciousCharacters = getSuspiciousDomainCharacters(label);
+  if (!suspiciousCharacters.size) return formatUrlPart(label);
+
+  return Array.from(label, (character) => (
+    suspiciousCharacters.has(character)
+      ? <span className={styles.suspicious}>{formatUrlPart(character)}</span>
+      : character
+  ));
+}
+
+function formatUrlPart(part: string) {
+  let decodedPart = part;
+  try {
+    decodedPart = decodeURI(part);
+  } catch (err) {
+    // Malformed escape sequences remain visible
+  }
+
+  // Keep invisible and direction-changing characters visible instead of letting them disguise the URL
+  return decodedPart.replace(INVISIBLE_CHARACTER_PATTERN, encodeURIComponent);
+}

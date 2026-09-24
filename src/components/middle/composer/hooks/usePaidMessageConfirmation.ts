@@ -2,10 +2,12 @@ import { useEffect, useRef, useState } from '../../../../lib/teact/teact';
 import { getActions, getGlobal } from '../../../../global';
 
 import { PAID_MESSAGES_PURPOSE } from '../../../../config';
+import { selectTabState } from '../../../../global/selectors';
 
 import useLastCallback from '../../../../hooks/useLastCallback';
 
 export default function usePaidMessageConfirmation(
+  dialogKey: string,
   starsForAllMessages: number,
   isStarsBalanceModeOpen: boolean,
   starsBalance: number,
@@ -22,6 +24,15 @@ export default function usePaidMessageConfirmation(
   const closeConfirmDialog = useLastCallback(() => {
     getActions().closePaymentMessageConfirmDialogOpen();
   });
+
+  useEffect(() => {
+    return () => {
+      const { paymentMessageConfirmDialogKey } = selectTabState(getGlobal());
+      if (paymentMessageConfirmDialogKey === dialogKey) {
+        getActions().closePaymentMessageConfirmDialogOpen();
+      }
+    };
+  }, [dialogKey]);
 
   useEffect(() => {
     if (isWaitingStarsTopup && !isStarsBalanceModeOpen) {
@@ -65,7 +76,7 @@ export default function usePaidMessageConfirmation(
     if (starsForAllMessages) {
       confirmPaymentHandlerRef.current = () => handler(...args);
       if (!shouldPaidMessageAutoApprove) {
-        getActions().openPaymentMessageConfirmDialogOpen();
+        getActions().openPaymentMessageConfirmDialogOpen({ dialogKey });
         return;
       }
 

@@ -1,13 +1,17 @@
-import type { ApiPhoneCall } from '../../../api/types';
-import type { ApiCallProtocol } from '../../../lib/secret-sauce';
+import type {
+  ApiPhoneCall, ApiPhoneCallConfig, ApiPhoneCallCustomParameters,
+} from '../../../api/types';
+import type { ApiCallProtocol } from '../../../lib/vibecalls';
 import type { ActionReturnType } from '../../types';
 
+import { CALL_PROTOCOL_LIBRARY_VERSIONS, DEBUG_CALLS } from '../../../config';
 import {
   handleUpdateGroupCallConnection,
   handleUpdateGroupCallParticipants,
   joinPhoneCall, processSignalingMessage,
-} from '../../../lib/secret-sauce';
+} from '../../../lib/vibecalls';
 import { ARE_CALLS_SUPPORTED } from '../../../util/browser/windowEnvironment';
+import { logDebugMessage } from '../../../util/debugConsole';
 import { getCurrentTabId } from '../../../util/establishMultitabRole';
 import { omit } from '../../../util/iteratees';
 import * as langProvider from '../../../util/oldLangProvider';
@@ -17,6 +21,29 @@ import { addActionHandler, getGlobal, setGlobal } from '../../index';
 import { updateGroupCall, updateGroupCallParticipant } from '../../reducers/calls';
 import { updateTabState } from '../../reducers/tabs';
 import { selectActiveGroupCall, selectGroupCallParticipant, selectPhoneCallUser } from '../../selectors/calls';
+
+let phoneCallSignalingDataPromise = Promise.resolve();
+let groupCallNegotiationPromise = Promise.resolve();
+
+const DEFAULT_PHONE_CALL_CONFIG: ApiPhoneCallConfig = {
+  shouldUseSctp: true,
+};
+
+type QueuedPhoneCallSignalingData = {
+  callId?: string;
+  data: number[];
+};
+
+function enqueueGroupCallNegotiation(callback: () => Promise<void>) {
+  groupCallNegotiationPromise = groupCallNegotiationPromise
+    .catch(() => undefined)
+    .then(callback)
+    .catch((err) => {
+      logPhoneCallDebug('Failed to process group call negotiation update', {
+        error: err instanceof Error ? err.message : String(err),
+      });
+    });
+}
 
 addActionHandler('apiUpdate', (global, actions, update): ActionReturnType => {
   const { activeGroupCallId } = global.groupCalls;
@@ -48,7 +75,7 @@ addActionHandler('apiUpdate', (global, actions, update): ActionReturnType => {
     case 'updateGroupCallParticipants': {
       const { groupCallId, participants } = update;
       if (activeGroupCallId === groupCallId) {
-        void handleUpdateGroupCallParticipants(participants);
+        enqueueGroupCallNegotiation(() => handleUpdateGroupCallParticipants(participants));
       }
       break;
     }
@@ -58,12 +85,15 @@ addActionHandler('apiUpdate', (global, actions, update): ActionReturnType => {
         if ('leaveGroupCall' in actions) actions.leaveGroupCall({ tabId: getCurrentTabId() });
         break;
       }
-      void handleUpdateGroupCallConnection(update.data, update.presentation);
+      enqueueGroupCallNegotiation(async () => {
+        await handleUpdateGroupCallConnection(update.data, update.presentation);
 
-      const groupCall = selectActiveGroupCall(global);
-      if (groupCall?.participants && Object.keys(groupCall.participants).length > 0) {
-        void handleUpdateGroupCallParticipants(Object.values(groupCall.participants));
-      }
+        global = getGlobal();
+        const groupCall = selectActiveGroupCall(global);
+        if (groupCall?.participants && Object.keys(groupCall.participants).length > 0) {
+          await handleUpdateGroupCallParticipants(Object.values(groupCall.participants));
+        }
+      });
       break;
     }
     case 'updatePhoneCallMediaState':
@@ -78,6 +108,14 @@ addActionHandler('apiUpdate', (global, actions, update): ActionReturnType => {
       if (!ARE_CALLS_SUPPORTED) return undefined;
       const { phoneCall, currentUserId } = global;
 
+      // Another call (P2P or group) is already active - ignore here so we don't show the popup;
+      // the non-async handler discards the new call as busy.
+      const isInOtherPhoneCall = Boolean(phoneCall?.id) && update.call.id !== phoneCall?.id;
+      const isInGroupCall = Boolean(global.groupCalls.activeGroupCallId) && !phoneCall;
+      if (isInOtherPhoneCall || isInGroupCall) {
+        return undefined;
+      }
+
       const call: ApiPhoneCall = {
         ...phoneCall,
         ...update.call,
@@ -91,16 +129,6 @@ addActionHandler('apiUpdate', (global, actions, update): ActionReturnType => {
       };
       setGlobal(global);
       global = getGlobal();
-
-      if (phoneCall && phoneCall.id && call.id !== phoneCall.id) {
-        if (call.state !== 'discarded') {
-          callApi('discardCall', {
-            call,
-            isBusy: true,
-          });
-        }
-        return undefined;
-      }
 
       const {
         accessHash, state, connections, gB,
@@ -128,51 +156,166 @@ addActionHandler('apiUpdate', (global, actions, update): ActionReturnType => {
         }, getCurrentTabId());
       } else if (state === 'accepted' && accessHash && gB) {
         (async () => {
-          const { gA, keyFingerprint, emojis } = await callApi('confirmPhoneCall', [gB, EMOJI_DATA, EMOJI_OFFSETS]);
-
-          global = getGlobal();
-          const newCall = {
-            ...global.phoneCall,
-            emojis,
-          } as ApiPhoneCall;
-
-          global = {
-            ...global,
-            phoneCall: newCall,
-          };
-          setGlobal(global);
-
-          callApi('confirmCall', {
-            call, gA, keyFingerprint,
-          });
-        })();
-      } else if (state === 'active' && connections && phoneCall?.state !== 'active') {
-        if (!isOutgoing) {
-          callApi('receivedCall', { call });
-          (async () => {
-            const { emojis } = await callApi('confirmPhoneCall', [call.gAOrB!, EMOJI_DATA, EMOJI_OFFSETS]);
+          try {
+            const activeCallId = call.id;
+            const result = await callApi('confirmPhoneCall', {
+              gAOrB: gB,
+              emojiData: EMOJI_DATA,
+              emojiOffsets: EMOJI_OFFSETS,
+            });
+            if (!result) {
+              logPhoneCallDebug('Failed to confirm accepted phone call', {
+                callId: activeCallId,
+              });
+              return;
+            }
+            const { gA, keyFingerprint, emojis } = result;
 
             global = getGlobal();
+            if (global.phoneCall?.id !== activeCallId) {
+              return;
+            }
+
+            await callApi('confirmCall', {
+              call, gA, keyFingerprint,
+            });
+
+            global = getGlobal();
+            if (global.phoneCall?.id !== activeCallId) {
+              return;
+            }
+
             const newCall = {
               ...global.phoneCall,
               emojis,
-            } as ApiPhoneCall;
+            };
 
             global = {
               ...global,
               phoneCall: newCall,
             };
             setGlobal(global);
-          })();
-        }
-        void joinPhoneCall(
-          connections,
-          actions.sendSignalingData,
-          isOutgoing,
-          Boolean(call?.isVideo),
-          Boolean(call.isP2pAllowed),
-          actions.apiUpdate,
-        );
+          } catch (err) {
+            logPhoneCallDebug('Failed to confirm accepted phone call', {
+              callId: call.id,
+              error: err instanceof Error ? err.message : String(err),
+            });
+          }
+        })();
+      } else if (state === 'active' && connections && phoneCall?.state !== 'active') {
+        (async () => {
+          try {
+            const activeCallId = call.id;
+            let callConfig = DEFAULT_PHONE_CALL_CONFIG;
+            try {
+              callConfig = await callApi('fetchCallConfig') || DEFAULT_PHONE_CALL_CONFIG;
+            } catch (err) {
+              logPhoneCallDebug('Failed to fetch phone call config', {
+                error: err instanceof Error ? err.message : String(err),
+              });
+            }
+
+            const customParameters: ApiPhoneCallCustomParameters = {
+              shouldUseSctp: call.customParameters?.shouldUseSctp ?? callConfig.shouldUseSctp,
+            };
+            call.customParameters = customParameters;
+            global = getGlobal();
+            if (global.phoneCall?.id === call.id) {
+              global = {
+                ...global,
+                phoneCall: {
+                  ...global.phoneCall,
+                  customParameters,
+                },
+              };
+              setGlobal(global);
+            }
+
+            global = getGlobal();
+            if (global.phoneCall?.id === call.id) {
+              await callApi('setPhoneCallSctpEnabled', customParameters.shouldUseSctp);
+            }
+
+            if (isOutgoing) {
+              if (!call.keyFingerprint) {
+                throw new Error('Missing phone call key fingerprint');
+              }
+
+              await callApi('verifyPhoneCallKeyFingerprint', {
+                expectedKeyFingerprint: call.keyFingerprint,
+              });
+            }
+
+            if (!isOutgoing) {
+              await callApi('receivedCall', { call });
+              global = getGlobal();
+              if (global.phoneCall?.id !== activeCallId) {
+                return;
+              }
+
+              if (!call.gAHash) {
+                throw new Error('Missing phone call gA hash');
+              }
+
+              if (!call.keyFingerprint) {
+                throw new Error('Missing phone call key fingerprint');
+              }
+
+              const result = await callApi(
+                'confirmPhoneCall',
+                {
+                  gAOrB: call.gAOrB!,
+                  emojiData: EMOJI_DATA,
+                  emojiOffsets: EMOJI_OFFSETS,
+                  gAHash: call.gAHash,
+                  expectedKeyFingerprint: call.keyFingerprint,
+                },
+              );
+              if (!result) {
+                logPhoneCallDebug('Failed to confirm phone call', {
+                  callId: activeCallId,
+                });
+                return;
+              }
+              const { emojis } = result;
+
+              global = getGlobal();
+              if (global.phoneCall?.id !== activeCallId) {
+                return;
+              }
+
+              const newCall = {
+                ...global.phoneCall,
+                emojis,
+              };
+
+              global = {
+                ...global,
+                phoneCall: newCall,
+              };
+              setGlobal(global);
+            }
+
+            global = getGlobal();
+            if (global.phoneCall?.id !== activeCallId) {
+              return;
+            }
+
+            await joinPhoneCall(
+              connections,
+              actions.sendSignalingData,
+              isOutgoing,
+              Boolean(call?.isVideo),
+              Boolean(call.isP2pAllowed),
+              actions.apiUpdate,
+            );
+          } catch (err) {
+            logPhoneCallDebug('Failed to start phone call', {
+              error: err instanceof Error ? err.message : String(err),
+              callId: call.id,
+            });
+          }
+        })();
       }
 
       return global;
@@ -202,7 +345,20 @@ addActionHandler('apiUpdate', (global, actions, update): ActionReturnType => {
         break;
       }
 
-      callApi('decodePhoneCallData', [update.data])?.then(processSignalingMessage);
+      const queued: QueuedPhoneCallSignalingData = {
+        callId: phoneCall.id,
+        data: update.data,
+      };
+
+      phoneCallSignalingDataPromise = phoneCallSignalingDataPromise
+        .then(() => processPhoneCallSignalingData(queued))
+        .catch((err) => {
+          logPhoneCallDebug('Failed to process phone call signaling data', {
+            error: err instanceof Error ? err.message : String(err),
+            isSctp: isSctpSignalingData(queued.data),
+            length: queued.data.length,
+          });
+        });
       break;
     }
   }
@@ -211,7 +367,79 @@ addActionHandler('apiUpdate', (global, actions, update): ActionReturnType => {
 });
 
 function verifyPhoneCallProtocol(protocol?: ApiCallProtocol) {
-  return protocol?.libraryVersions.some((version) => {
-    return version === '4.0.0' || version === '4.0.1';
-  });
+  return Boolean(
+    protocol
+    && CALL_PROTOCOL_LIBRARY_VERSIONS.some((version) => protocol.libraryVersions.includes(version)),
+  );
+}
+
+async function processPhoneCallSignalingData(queued: QueuedPhoneCallSignalingData) {
+  const { data } = queued;
+  let global = getGlobal();
+  if (global.phoneCall?.id !== queued.callId) {
+    return;
+  }
+
+  let message;
+  try {
+    message = await callApi('decodePhoneCallData', { data });
+  } catch (err) {
+    logPhoneCallDebug('Failed to decode phone call signaling data', {
+      error: err instanceof Error ? err.message : String(err),
+      isSctp: isSctpSignalingData(data),
+      length: data.length,
+    });
+    return;
+  }
+
+  global = getGlobal();
+  const activeCall = global.phoneCall;
+  if (activeCall?.id !== queued.callId) {
+    return;
+  }
+
+  let packetCount = 0;
+  if (activeCall) {
+    try {
+      const packets = await callApi('drainPhoneCallSignalingData');
+      packetCount = packets?.length || 0;
+      if (packets) {
+        for (const packetData of packets) {
+          await callApi('sendSignalingData', { data: packetData, call: activeCall });
+        }
+      }
+    } catch (err) {
+      logPhoneCallDebug('Failed to drain phone call signaling data', {
+        error: err instanceof Error ? err.message : String(err),
+        isSctp: isSctpSignalingData(data),
+        length: data.length,
+      });
+    }
+  }
+
+  if (Array.isArray(message)) {
+    for (const item of message) {
+      await processSignalingMessage(item);
+    }
+  } else if (message) {
+    await processSignalingMessage(message);
+  } else if (!packetCount && !isSctpSignalingData(data)) {
+    logPhoneCallDebug('Failed to decode phone call signaling data', {
+      length: data.length,
+    });
+  }
+}
+
+function logPhoneCallDebug<Data extends object>(message: string, data: Data) {
+  if (!DEBUG_CALLS) return;
+
+  logDebugMessage('warn', `[PhoneCall] ${message}`, data);
+}
+
+function isSctpSignalingData(data: number[]) {
+  return data.length >= 12
+    && data[0] === 0x13
+    && data[1] === 0x88
+    && data[2] === 0x13
+    && data[3] === 0x88;
 }

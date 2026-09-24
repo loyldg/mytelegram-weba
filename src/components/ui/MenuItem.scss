@@ -54,7 +54,6 @@
   .icon {
     margin-right: 2rem;
     font-size: 1.5rem;
-    color: var(--color-icon-secondary);
   }
 
   .menu-item-name {
@@ -79,10 +78,6 @@
 
   &.destructive {
     color: var(--color-error);
-
-    .icon {
-      color: inherit;
-    }
   }
 
   &:not(.has-ripple):not(.disabled):not(.compact):active {
@@ -133,7 +128,7 @@
     margin: 0.125rem 0.25rem;
     padding: 0.25rem;
     padding-inline-end: 0.75rem; // Icon padding + padding for symmetry
-    border-radius: 0.375rem;
+    border-radius: 0.75rem;
 
     font-size: 0.875rem;
     font-weight: var(--font-weight-medium);
@@ -175,6 +170,48 @@
   &.wrap {
     display: block;
     white-space: normal;
+  }
+
+  &:has(> .menuItemTitle) {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+
+    > .icon {
+      grid-column: 1;
+      grid-row: 1 / span 2;
+    }
+  }
+
+  .menuItemTitle {
+    grid-column: 2;
+    grid-row: 1;
+    min-width: 0;
+    line-height: 1.25;
+  }
+
+  .menuItemSubtitle {
+    grid-column: 2;
+    grid-row: 2;
+
+    min-width: 0;
+    max-width: 15rem;
+    margin-top: 0.125rem;
+
+    font-size: 0.75rem;
+    font-weight: var(--font-weight-normal);
+    line-height: 1rem;
+    color: var(--color-text-secondary);
+    overflow-wrap: anywhere;
+    white-space: normal;
+
+    .icon {
+      margin: 0;
+      font-size: 1em;
+    }
+  }
+
+  &.destructive .menuItemSubtitle {
+    color: inherit;
   }
 
   &.text-only {

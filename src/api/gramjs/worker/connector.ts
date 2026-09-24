@@ -7,6 +7,7 @@ import type { OriginPayload, ThenArg, WorkerMessageEvent } from './types';
 
 import { DEBUG, IGNORE_UNHANDLED_ERRORS } from '../../../config';
 import { IS_TAURI } from '../../../util/browser/globalEnvironment';
+import { IS_SAFARI } from '../../../util/browser/windowEnvironment';
 import { logDebugMessage } from '../../../util/debugConsole';
 import Deferred from '../../../util/Deferred';
 import { getCurrentTabId, subscribeToMasterChange } from '../../../util/establishMultitabRole';
@@ -26,6 +27,7 @@ type EnsurePromise<T> = Promise<Awaited<T>>;
 
 const HEALTH_CHECK_TIMEOUT = 150;
 const HEALTH_CHECK_MIN_DELAY = 5 * 1000; // 5 sec
+const API_DESTROY_TIMEOUT_MS = 3000; // 3 sec
 const NO_QUEUE_BEFORE_INIT = new Set(['destroy']);
 
 let worker: Worker | undefined;
@@ -35,16 +37,7 @@ const requestStatesByCallback = new Map<AnyToVoidFunction, RequestState>();
 
 let pendingPayloads: OriginPayload[] = [];
 
-const savedLocalDb: LocalDb = {
-  chats: {},
-  users: {},
-  documents: {},
-  stickerSets: {},
-  photos: {},
-  webDocuments: {},
-  commonBoxState: {},
-  channelPtsById: {},
-};
+let savedLocalDb = createSavedLocalDb();
 
 let isMasterTab = true;
 subscribeToMasterChange((isMasterTabNew) => {
@@ -99,18 +92,22 @@ export function initApi(onUpdate: OnApiUpdate, initialArgs: ApiInitialArgs) {
 
     worker = new Worker(new URL('./worker.ts', import.meta.url), {
       name: params.toString(),
+      type: 'module',
     });
     subscribeToWorker(onUpdate);
 
-    if (initialArgs.platform === 'iOS' || (initialArgs.platform === 'macOS' && IS_TAURI)) {
+    if (IS_SAFARI || (initialArgs.platform === 'macOS' && IS_TAURI)) {
       setupHealthCheck();
     }
   }
 
+  const currentWorker = worker;
   return makeRequest({
     type: 'initApi',
     args: [initialArgs, savedLocalDb],
   }).then(() => {
+    if (worker !== currentWorker) return;
+
     isInited = true;
 
     apiRequestsQueue.forEach((request) => {
@@ -129,12 +126,73 @@ export function initApi(onUpdate: OnApiUpdate, initialArgs: ApiInitialArgs) {
   });
 }
 
+function destroyApi() {
+  worker?.terminate();
+  worker = undefined;
+  resetApi();
+}
+
+function resetApi() {
+  isInited = false;
+  pendingPayloads = [];
+
+  requestStates.forEach(({ resolve }) => resolve(undefined));
+  requestStates.clear();
+  requestStatesByCallback.clear();
+
+  [...localApiRequestsQueue, ...apiRequestsQueue]
+    .forEach(({ deferred }) => deferred.resolve(undefined));
+  localApiRequestsQueue = [];
+  apiRequestsQueue = [];
+}
+
+export async function closeApi(shouldClearLocalDb: boolean) {
+  const currentWorker = worker;
+  if (isInited) {
+    const isDestroyed = await Promise.race([
+      callApiLocal('destroy', true, !shouldClearLocalDb).then(() => true).catch(() => false),
+      pause(API_DESTROY_TIMEOUT_MS).then(() => false),
+    ]);
+    if (worker !== currentWorker) return false;
+
+    if (isDestroyed) {
+      resetApi();
+    } else {
+      destroyApi();
+    }
+  } else {
+    destroyApi();
+  }
+  if (shouldClearLocalDb) savedLocalDb = createSavedLocalDb();
+
+  return true;
+}
+
+export async function reconnectApi() {
+  if (!await closeApi(false)) return;
+
+  updateCallback({ '@type': 'requestReconnectApi' });
+}
+
 export function updateLocalDb(name: keyof LocalDb, prop: string, value: any) {
   savedLocalDb[name][prop] = value;
 }
 
 export function updateFullLocalDb(initial: LocalDb) {
   Object.assign(savedLocalDb, initial);
+}
+
+function createSavedLocalDb(): LocalDb {
+  return {
+    chats: {},
+    users: {},
+    documents: {},
+    stickerSets: {},
+    photos: {},
+    webDocuments: {},
+    commonBoxState: {},
+    channelPtsById: {},
+  };
 }
 
 export function callApiOnMasterTab(payload: any) {
@@ -442,8 +500,7 @@ async function ensureWorkerPing() {
     console.error(err);
 
     if (Date.now() - startedAt >= HEALTH_CHECK_MIN_DELAY) {
-      worker?.terminate();
-      worker = undefined;
+      destroyApi();
       updateCallback({ '@type': 'requestReconnectApi' });
     }
   } finally {

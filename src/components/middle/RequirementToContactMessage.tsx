@@ -55,7 +55,7 @@ function RequirementToContactMessage({
             color={patternColor}
             className={styles.animatedUnlock}
           />
-          <Icon name="comments-sticker" className={styles.commentsIcon} />
+          <Icon name="comments" className={styles.commentsIcon} />
         </div>
         <span className={styles.description}>
           {

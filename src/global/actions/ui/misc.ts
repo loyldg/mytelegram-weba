@@ -18,7 +18,9 @@ import { refreshFromCache } from '../../../util/localization';
 import * as langProvider from '../../../util/oldLangProvider';
 import updateIcon from '../../../util/updateIcon';
 import { setPageTitle, setPageTitleInstant } from '../../../util/updatePageTitle';
-import { canEditMediaInEditor, getAllowedAttachmentOptions, getChatTitle } from '../../helpers';
+import {
+  canEditMediaInEditor, getAllowedAttachmentOptions, getChatTitle, runForFocusedTabs,
+} from '../../helpers';
 import { addTabStateResetterAction } from '../../helpers/meta';
 import {
   addActionHandler, getActions, getGlobal, setGlobal,
@@ -41,7 +43,6 @@ import {
   selectTopic,
 } from '../../selectors';
 import { selectSharedSettings } from '../../selectors/sharedState';
-import { selectDraft, selectEditingId } from '../../selectors/threads';
 
 import { getIsMobile, getIsTablet } from '../../../hooks/useAppLayout';
 
@@ -866,11 +867,26 @@ addActionHandler('closeCollectibleInfoModal', (global, actions, payload): Action
   }, tabId);
 });
 
+addActionHandler('openQrCodeModal', (global, actions, payload): ActionReturnType => {
+  const { peerId, tabId = getCurrentTabId() } = payload;
+  return updateTabState(global, {
+    qrCodeModal: {
+      peerId,
+    },
+  }, tabId);
+});
+
+addTabStateResetterAction('closeQrCodeModal', 'qrCodeModal');
+
 addActionHandler('openBirthdaySetupModal', (global, actions, payload): ActionReturnType => {
-  const { currentBirthday, tabId = getCurrentTabId() } = payload || {};
+  const {
+    currentBirthday, suggestForUserId, isFromSuggestion, tabId = getCurrentTabId(),
+  } = payload || {};
   return updateTabState(global, {
     birthdaySetupModal: {
       currentBirthday,
+      suggestForUserId,
+      isFromSuggestion,
     },
   }, tabId);
 });
@@ -902,9 +918,7 @@ addActionHandler('processPremiumFloodWait', (global, actions, payload): ActionRe
   }
   if (lastNotifiedAt && Date.now() < lastNotifiedAt + bandwidthPremiumNotifyPeriod * 1000) return undefined;
 
-  const unblurredTabIds = Object.values(global.byTabId).filter((l) => !l.isBlurred).map((l) => l.id);
-
-  unblurredTabIds.forEach((tabId) => {
+  runForFocusedTabs(global, (tabId) => {
     actions.showNotification({
       title: langProvider.oldTranslate(isUpload ? 'UploadSpeedLimited' : 'DownloadSpeedLimited'),
       message: langProvider.oldTranslate(
@@ -967,6 +981,16 @@ addActionHandler('openLeaveGroupModal', (global, actions, payload): ActionReturn
 
 addTabStateResetterAction('closeLeaveGroupModal', 'leaveGroupModal');
 
+addActionHandler('openAutoDeleteTimerModal', (global, actions, payload): ActionReturnType => {
+  const { chatId, tabId = getCurrentTabId() } = payload;
+
+  return updateTabState(global, {
+    autoDeleteTimerModal: { chatId },
+  }, tabId);
+});
+
+addTabStateResetterAction('closeAutoDeleteTimerModal', 'autoDeleteTimerModal');
+
 addActionHandler('openTwoFaCheckModal', (global, actions, payload): ActionReturnType => {
   const { tabId = getCurrentTabId() } = payload || {};
 
@@ -997,23 +1021,17 @@ addActionHandler('openCocoonModal', (global, actions, payload): ActionReturnType
 addTabStateResetterAction('closeCocoonModal', 'isCocoonModalOpen');
 
 addActionHandler('requestMessageMediaEditor', (global, actions, payload): ActionReturnType => {
-  const { tabId = getCurrentTabId() } = payload || {};
-  const currentMessageList = selectCurrentMessageList(global, tabId);
-  if (!currentMessageList) return;
+  const { chatId, messageId, tabId = getCurrentTabId() } = payload;
 
-  const draft = selectDraft(global, currentMessageList.chatId, currentMessageList.threadId);
-  const replyToMessage = draft?.replyInfo
-    ? selectChatMessage(global, currentMessageList.chatId, draft.replyInfo.replyToMsgId)
-    : undefined;
-  const editingId = selectEditingId(global, currentMessageList.chatId, currentMessageList.threadId);
-  const editingMessage = editingId ? selectChatMessage(global, currentMessageList.chatId, editingId) : undefined;
-
-  const message = replyToMessage || editingMessage;
+  const message = selectChatMessage(global, chatId, messageId);
   if (!message || !canEditMediaInEditor(message)) return;
 
   return updateTabState(global, {
-    shouldOpenMessageMediaEditor: true,
+    messageMediaEditorRequest: {
+      chatId: message.chatId,
+      messageId: message.id,
+    },
   }, tabId);
 });
 
-addTabStateResetterAction('resetMessageMediaEditorRequest', 'shouldOpenMessageMediaEditor');
+addTabStateResetterAction('resetMessageMediaEditorRequest', 'messageMediaEditorRequest');

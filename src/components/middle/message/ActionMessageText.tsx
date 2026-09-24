@@ -30,7 +30,7 @@ import {
 import { selectThreadIdFromMessage } from '../../../global/selectors/threads';
 import { ensureProtocol } from '../../../util/browser/url';
 import {
-  formatDateTimeToString, formatScheduledDateTime, formatShortDuration,
+  formatCountdown, formatDateTimeToString, formatScheduledDateTime, formatShortDuration,
 } from '../../../util/dates/oldDateFormat';
 import { convertTonFromNanos, formatCurrency } from '../../../util/formatCurrency';
 import { formatCurrencyAmountAsText, formatStarsAsText, formatTonAsText } from '../../../util/localization/format';
@@ -227,6 +227,19 @@ const ActionMessageText = ({
         const { chatId: originalChatId, title } = action;
         const originalChatLink = renderPeerLink(originalChatId, title || chatFallbackText, asPreview);
         return lang('ActionMigratedFrom', { chat: originalChatLink }, { withNodes: true });
+      }
+
+      case 'changeCommunity': {
+        const { communityId } = action;
+        if (!communityId) {
+          return lang('ActionRemovedFromCommunity', { from: senderLink }, { withNodes: true });
+        }
+
+        const community = selectChat(global, communityId);
+        const communityLink = renderPeerLink(
+          communityId, community ? getPeerTitle(lang, community)! : chatFallbackText, asPreview,
+        );
+        return lang('ActionAddedToCommunity', { from: senderLink, community: communityLink }, { withNodes: true });
       }
 
       case 'topicCreate': {
@@ -763,6 +776,15 @@ const ActionMessageText = ({
         return translateWithYou(lang, 'ActionSuggestedPhoto', isOutgoing, { user: actionPeerLink });
       }
 
+      case 'suggestBirthday': {
+        const actionPeer = (isOutgoing ? chat : sender)!;
+        const actionPeerLink = renderPeerLink(
+          actionPeer.id, getPeerTitle(lang, actionPeer) || userFallbackText, asPreview,
+        );
+
+        return translateWithYou(lang, 'ActionSuggestedBirthday', isOutgoing, { user: actionPeerLink });
+      }
+
       case 'webViewDataSent':
         return lang('ActionWebviewDataDone', { text: action.text });
 
@@ -776,6 +798,45 @@ const ActionMessageText = ({
 
       case 'historyClear':
         return lang('ActionHistoryCleared');
+
+      case 'setMessagesTtl': {
+        const { period, autoSettingFromId } = action;
+
+        if (period === 0) {
+          if (isChannel) return lang('ActionTTLChannelDisabled');
+
+          return isOutgoing
+            ? lang('ActionTTLYouDisabled')
+            : lang('ActionTTLDisabled', { from: senderLink }, { withNodes: true });
+        }
+
+        const time = formatCountdown(lang, period);
+        if (autoSettingFromId) {
+          if (autoSettingFromId === currentUserId) {
+            return lang('AutoDeleteGlobalActionFromYou', { time });
+          }
+
+          const autoSettingFrom = selectPeer(global, autoSettingFromId);
+          const autoSettingFromTitle = autoSettingFrom && getPeerTitle(lang, autoSettingFrom);
+          const autoSettingFromLink = renderPeerLink(
+            autoSettingFrom?.id,
+            autoSettingFromTitle || userFallbackText,
+            asPreview,
+          );
+
+          return lang(
+            'AutoDeleteGlobalAction',
+            { from: autoSettingFromLink, time },
+            { withNodes: true },
+          );
+        }
+
+        if (isChannel) return lang('ActionTTLChannelChanged', { time });
+
+        return isOutgoing
+          ? lang('ActionTTLYouChanged', { time })
+          : lang('ActionTTLChanged', { from: senderLink, time }, { withNodes: true });
+      }
 
       case 'screenshotTaken':
         return translateWithYou(lang, 'ActionScreenshotTaken', isOutgoing, { from: senderLink });
@@ -889,7 +950,7 @@ const ActionMessageText = ({
           const userLink = renderPeerLink(replyMessageSender?.id, replyPeerTitle || userFallbackText, asPreview);
 
           const currency = replyMessage?.suggestedPostInfo?.price?.currency || STARS_CURRENCY_CODE;
-          const currencyName = currency === TON_CURRENCY_CODE ? lang('CurrencyTon') : lang('CurrencyStars');
+          const currencyName = currency === TON_CURRENCY_CODE ? lang('CurrencyGram') : lang('CurrencyStars');
 
           return lang('SuggestedPostBalanceTooLow', {
             peer: userLink,

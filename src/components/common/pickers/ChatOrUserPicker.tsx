@@ -4,24 +4,25 @@ import {
 } from '../../../lib/teact/teact';
 import { getActions, getGlobal, withGlobal } from '../../../global';
 
-import type { ApiTopic } from '../../../api/types';
 import type { GlobalState } from '../../../global/types';
 import type { AnimationLevel, ThreadId } from '../../../types';
 
 import { PEER_PICKER_ITEM_HEIGHT_PX } from '../../../config';
 import {
-  getCanPostInChat, getGroupStatus, getUserStatus, isUserOnline,
+  getCanPostInChat, getGroupStatus, getOrderedTopics, getUserStatus, isUserOnline,
 } from '../../../global/helpers';
 import { isApiPeerChat } from '../../../global/helpers/peers';
 import {
   selectMonoforumChannel,
   selectPeer,
   selectTabState,
-  selectTopics,
+  selectTopicsInfo,
   selectUserStatus,
 } from '../../../global/selectors';
 import { selectAnimationLevel } from '../../../global/selectors/sharedState';
+import { selectThread } from '../../../global/selectors/threads';
 import buildClassName from '../../../util/buildClassName';
+import { mapTruthyValues, mapValues } from '../../../util/iteratees';
 import {
   buildChatSelectionKey,
   type ChatSelectionKey,
@@ -31,7 +32,7 @@ import { resolveTransitionName } from '../../../util/resolveTransitionName';
 import { REM } from '../helpers/mediaDimensions';
 import renderText from '../helpers/renderText';
 
-import useSelector from '../../../hooks/data/useSelector';
+import useSelector, { useShallowSelector } from '../../../hooks/data/useSelector';
 import useInfiniteScroll from '../../../hooks/useInfiniteScroll';
 import useInputFocusOnOpen from '../../../hooks/useInputFocusOnOpen';
 import useKeyboardListNavigation from '../../../hooks/useKeyboardListNavigation';
@@ -60,6 +61,7 @@ export type OwnProps = {
   search: string;
   className?: string;
   isLowStackPriority?: boolean;
+  isNativeDialog?: boolean;
   listActiveKey?: number;
   subheader?: TeactNode;
   renderSearchRow?: (props: SearchRowRenderProps) => TeactNode;
@@ -101,6 +103,7 @@ const ChatOrUserPicker = ({
   searchPlaceholder,
   className,
   isLowStackPriority,
+  isNativeDialog,
   subheader,
   renderSearchRow,
   footer,
@@ -135,15 +138,25 @@ const ChatOrUserPicker = ({
   useInputFocusOnOpen(searchRef, isOpen && activeKey === CHAT_LIST_SLIDE, resetSearch);
   useInputFocusOnOpen(topicSearchRef, isOpen && activeKey === TOPIC_LIST_SLIDE);
 
-  const selectTopicsById = useCallback((global: GlobalState) => {
+  const selectForumTopicsInfo = useCallback((global: GlobalState) => {
     if (!forumId) {
       return undefined;
     }
 
-    return selectTopics(global, forumId);
+    return selectTopicsInfo(global, forumId);
   }, [forumId]);
 
-  const forumTopicsById = useSelector(selectTopicsById);
+  const topicsInfo = useSelector(selectForumTopicsInfo);
+
+  const selectTopicThreads = useCallback((global: GlobalState) => {
+    if (!forumId) {
+      return undefined;
+    }
+
+    return mapTruthyValues(topicsInfo?.topicsById || {}, (topic) => selectThread(global, forumId, topic.id));
+  }, [forumId, topicsInfo?.topicsById]);
+
+  const topicThreads = useShallowSelector(selectTopicThreads);
 
   const [topicIds, topics] = useMemo(() => {
     const global = getGlobal();
@@ -152,27 +165,25 @@ const ChatOrUserPicker = ({
 
     const chat = chatsById[forumId!];
 
-    if (!chat || !forumTopicsById) {
+    if (!chat || !topicsInfo) {
       return [undefined, undefined];
     }
 
     const searchTitle = topicSearch.toLowerCase();
 
-    const result = forumTopicsById
-      ? Object.values(forumTopicsById).reduce((acc, topic) => {
-        if (
-          getCanPostInChat(chat, topic, undefined, chatFullInfoById[forumId!])
-          && (!searchTitle || topic.title.toLowerCase().includes(searchTitle))
-        ) {
-          acc[topic.id] = topic;
-        }
+    const filteredTopics = Object.values(topicsInfo.topicsById).filter((topic) => (
+      getCanPostInChat(chat, topic, undefined, chatFullInfoById[forumId!])
+      && (!searchTitle || topic.title.toLowerCase().includes(searchTitle))
+    ));
+    const topicThreadInfos = topicThreads && mapValues(topicThreads, (topicThread) => topicThread.threadInfo);
+    const orderedTopics = getOrderedTopics(
+      filteredTopics,
+      topicThreadInfos,
+      topicsInfo.orderedPinnedTopicIds,
+    );
 
-        return acc;
-      }, {} as Record<number, ApiTopic>)
-      : forumTopicsById;
-
-    return [Object.keys(result).map(Number), result];
-  }, [forumId, topicSearch, forumTopicsById]);
+    return [orderedTopics.map(({ id }) => id), topicsInfo.topicsById];
+  }, [forumId, topicSearch, topicsInfo, topicThreads]);
 
   const handleHeaderBackClick = useLastCallback(() => {
     setForumId(undefined);
@@ -194,7 +205,7 @@ const ChatOrUserPicker = ({
       const chatId = viewportIds[index === -1 ? 0 : index];
       const chat = chatsById[chatId];
       if (chat?.isForum) {
-        if (!forumTopicsById) loadTopics({ chatId });
+        if (!topicsInfo || topicsInfo.isCache) loadTopics({ chatId });
         setForumId(chatId);
       } else {
         onSelectChatOrUser(chatId);
@@ -218,7 +229,7 @@ const ChatOrUserPicker = ({
     const chatsById = getGlobal().chats.byId;
     const chat = chatsById?.[chatId];
     if (chat?.isForum) {
-      if (!forumTopicsById) loadTopics({ chatId });
+      if (!topicsInfo || topicsInfo.isCache) loadTopics({ chatId });
       setForumId(chatId);
       resetSearch();
     } else {
@@ -267,7 +278,7 @@ const ChatOrUserPicker = ({
 
     const checkboxElement = selectedIds ? (
       <div className={buildClassName('picker-checkbox', (isSelected || hasSelectedTopics) && 'selected')}>
-        {(isSelected || hasSelectedTopics) && <Icon name="check-bold" />}
+        {(isSelected || hasSelectedTopics) && <Icon name="check" />}
         {hasSelectedTopics && (
           <div className="picker-checkbox-count">{selectedTopicsCount}</div>
         )}
@@ -352,7 +363,7 @@ const ChatOrUserPicker = ({
 
               const topicCheckboxElement = isMultiSelect ? (
                 <div className={buildClassName('picker-checkbox', isTopicSelected && 'selected')}>
-                  {isTopicSelected && <Icon name="check-bold" />}
+                  {isTopicSelected && <Icon name="check" />}
                 </div>
               ) : undefined;
 
@@ -460,6 +471,7 @@ const ChatOrUserPicker = ({
       headerClassName="modal-header-condensed-wide"
       className={buildClassName('ChatOrUserPicker', className)}
       isLowStackPriority={isLowStackPriority}
+      isNativeDialog={isNativeDialog}
       onClose={handleModalClose}
       onCloseAnimationEnd={onCloseAnimationEnd}
     >

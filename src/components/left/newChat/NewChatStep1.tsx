@@ -74,7 +74,7 @@ const NewChatStep1: FC<OwnProps & StateProps> = ({
       ]).filter((contactId) => {
         const user = usersById[contactId];
 
-        return user && !user.isSelf && (user.canBeInvitedToGroup || !isUserBot(user));
+        return user && !user.isSelf && (user.canBotBeInvitedToGroup || !isUserBot(user));
       }),
       false,
       selectedMemberIds,

@@ -1,4 +1,3 @@
-import type React from '../../lib/teact/teact';
 import {
   memo, useEffect, useMemo, useState,
 } from '../../lib/teact/teact';
@@ -58,7 +57,7 @@ const OPTIONS: PrivacyOption[] = [{
   name: 'StoryPrivacyOptionEveryone',
   value: 'everybody',
   color: ['#50ABFF', '#007AFF'],
-  icon: 'channel-filled',
+  icon: 'megaphone-filled',
   actions: 'blockUserIds',
 }, {
   name: 'StoryPrivacyOptionContacts',
@@ -70,7 +69,7 @@ const OPTIONS: PrivacyOption[] = [{
   name: 'StoryPrivacyOptionCloseFriends',
   value: 'closeFriends',
   color: ['#88D93A', '#30B73B'],
-  icon: 'favorite-filled',
+  icon: 'star-regular-filled',
   actions: 'closeFriends',
 }, {
   name: 'StoryPrivacyOptionSelectedContacts',

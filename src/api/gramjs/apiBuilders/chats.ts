@@ -31,6 +31,7 @@ import { toJSNumber } from '../../../util/numbers';
 import { getServerTime } from '../../../util/serverTime';
 import { addPhotoToLocalDb, addUserToLocalDb } from '../helpers/localDb';
 import { serializeBytes } from '../helpers/misc';
+import { buildApiBotCommand } from './bots';
 import {
   buildApiFormattedText, buildApiPhoto, buildApiUsernames,
 } from './common';
@@ -60,6 +61,7 @@ function buildApiChatFieldsFromPeerEntity(
 ): PeerEntityApiChatFields {
   const user = peerEntity instanceof GramJs.User ? peerEntity : undefined;
   const channel = peerEntity instanceof GramJs.Channel ? peerEntity : undefined;
+  const community = peerEntity instanceof GramJs.Community ? peerEntity : undefined;
 
   const userOrChannel = user || channel;
 
@@ -79,7 +81,7 @@ function buildApiChatFieldsFromPeerEntity(
   const creationDate = 'date' in peerEntity ? peerEntity.date : undefined;
   const membersCount = 'participantsCount' in peerEntity ? peerEntity.participantsCount : undefined;
   const isProtected = 'noforwards' in peerEntity && peerEntity.noforwards;
-  const isCreator = 'creator' in peerEntity && peerEntity.creator;
+  const isOwner = 'creator' in peerEntity && peerEntity.creator;
 
   // User and channel shared fields
   const isScam = userOrChannel?.scam;
@@ -92,6 +94,7 @@ function buildApiChatFieldsFromPeerEntity(
   const profileColor = userOrChannel?.profileColor ? buildApiPeerColor(userOrChannel.profileColor) : undefined;
   const emojiStatus = userOrChannel?.emojiStatus ? buildApiEmojiStatus(userOrChannel.emojiStatus) : undefined;
   const paidMessagesStars = userOrChannel?.sendPaidMessagesStars;
+  const linkedCommunityId = userOrChannel?.linkedCommunityId;
   const isVerified = userOrChannel?.verified;
   const isForum = channel?.forum || user?.botForumView;
 
@@ -112,7 +115,7 @@ function buildApiChatFieldsFromPeerEntity(
     ...(membersCount !== undefined && { membersCount }),
     isProtected,
     isSupport: isSupport || undefined,
-    isCreator,
+    isOwner,
     fakeType: isScam ? 'scam' : (isFake ? 'fake' : undefined),
     color,
     profileColor,
@@ -123,6 +126,9 @@ function buildApiChatFieldsFromPeerEntity(
     isMonoforum: channel?.monoforum,
     linkedMonoforumId: channel?.linkedMonoforumId !== undefined
       ? buildApiPeerId(channel.linkedMonoforumId, 'channel') : undefined,
+    linkedCommunityId: linkedCommunityId !== undefined
+      ? buildApiPeerId(linkedCommunityId, 'channel') : undefined,
+    isCollapsedInDialogs: community?.collapsedInDialogs,
     areChannelMessagesAllowed: channel?.broadcastMessagesAllowed,
     areStoriesHidden,
     maxStoryId,
@@ -148,7 +154,7 @@ export function buildApiChatFromDialog(
   peerEntity: GramJs.TypeUser | GramJs.TypeChat,
 ): ApiChat {
   const {
-    peer, folderId, viewForumAsMessages,
+    peer, folderId, viewForumAsMessages, ttlPeriod,
   } = dialog;
 
   return {
@@ -157,6 +163,7 @@ export function buildApiChatFromDialog(
     type: getApiChatTypeFromPeerEntity(peerEntity),
     title: getApiChatTitleFromMtpPeer(peer, peerEntity),
     isForumAsMessages: viewForumAsMessages,
+    ttlPeriod,
     ...buildApiChatFieldsFromPeerEntity(peerEntity),
   };
 }
@@ -180,7 +187,10 @@ function buildApiChatPermissions(peerEntity: GramJs.TypeUser | GramJs.TypeChat):
   currentUserBannedRights?: ApiChatBannedRights;
   defaultBannedRights?: ApiChatBannedRights;
 } {
-  if (!(peerEntity instanceof GramJs.Chat || peerEntity instanceof GramJs.Channel)) {
+  if (!(
+    peerEntity instanceof GramJs.Chat || peerEntity instanceof GramJs.Channel
+    || peerEntity instanceof GramJs.Community
+  )) {
     return {};
   }
 
@@ -207,7 +217,7 @@ function buildApiChatRestrictions(peerEntity: Entity): {
     };
   }
 
-  if (peerEntity instanceof GramJs.ChannelForbidden) {
+  if (peerEntity instanceof GramJs.ChannelForbidden || peerEntity instanceof GramJs.CommunityForbidden) {
     return {
       isRestricted: true,
     };
@@ -244,7 +254,7 @@ function buildApiChatRestrictions(peerEntity: Entity): {
     });
   }
 
-  if (peerEntity instanceof GramJs.Channel) {
+  if (peerEntity instanceof GramJs.Channel || peerEntity instanceof GramJs.Community) {
     Object.assign(restrictions, {
       // `left` is weirdly set to `true` on all channels never joined before
       isNotJoined: peerEntity.left,
@@ -299,7 +309,7 @@ export function buildApiChatFromPreview(
   };
 }
 
-export function getApiChatTypeFromPeerEntity(peerEntity: GramJs.TypeChat | GramJs.TypeUser) {
+export function getApiChatTypeFromPeerEntity(peerEntity: GramJs.TypeChat | GramJs.TypeUser): ApiChat['type'] {
   if (peerEntity instanceof GramJs.User || peerEntity instanceof GramJs.UserEmpty) {
     return 'chatTypePrivate';
   } else if (
@@ -308,6 +318,11 @@ export function getApiChatTypeFromPeerEntity(peerEntity: GramJs.TypeChat | GramJ
     || peerEntity instanceof GramJs.ChatEmpty
   ) {
     return 'chatTypeBasicGroup';
+  } else if (
+    peerEntity instanceof GramJs.Community
+    || peerEntity instanceof GramJs.CommunityForbidden
+  ) {
+    return 'chatTypeCommunity';
   } else {
     return peerEntity.megagroup ? 'chatTypeSuperGroup' : 'chatTypeChannel';
   }
@@ -502,10 +517,7 @@ export function buildApiChatBotCommands(botInfos: GramJs.BotInfo[]) {
     const botId = buildApiPeerId(botInfo.userId!, 'user');
 
     if (botInfo.commands) {
-      botCommands = botCommands.concat(botInfo.commands.map((mtpCommand) => ({
-        botId,
-        ...omitVirtualClassFields(mtpCommand),
-      })));
+      botCommands = botCommands.concat(botInfo.commands.map((command) => buildApiBotCommand(botId, command)));
     }
 
     return botCommands;

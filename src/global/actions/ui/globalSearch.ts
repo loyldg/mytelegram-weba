@@ -4,6 +4,7 @@ import { GlobalSearchContent } from '../../../types';
 import { getCurrentTabId } from '../../../util/establishMultitabRole';
 import { addActionHandler } from '../../index';
 import { updateGlobalSearch, updateGlobalSearchContent } from '../../reducers';
+import { detachGlobalSearchPlaylist, keepPlayingSearchResults } from '../../reducers/audioPlayer';
 import { selectTabState } from '../../selectors';
 
 const MAX_RECENTLY_FOUND_IDS = 10;
@@ -16,10 +17,15 @@ addActionHandler('setGlobalSearchQuery', (global, actions, payload): ActionRetur
     && currentContent !== GlobalSearchContent.BotApps && currentContent !== GlobalSearchContent.PublicPosts
     ? { chats: !chatId, messages: true } : undefined;
 
+  const resultsByType = query ? undefined : keepPlayingSearchResults(global, tabId);
+  if (query) {
+    global = detachGlobalSearchPlaylist(global, tabId);
+  }
+
   return updateGlobalSearch(global, {
     globalResults: {},
     localResults: {},
-    resultsByType: undefined,
+    resultsByType,
     fetchingStatus,
     query,
   }, tabId);
@@ -71,5 +77,10 @@ addActionHandler('setGlobalSearchContent', (global, actions, payload): ActionRet
 addActionHandler('setGlobalSearchChatId', (global, actions, payload): ActionReturnType => {
   const { id, tabId = getCurrentTabId() } = payload;
 
-  return updateGlobalSearch(global, { chatId: id, query: undefined, resultsByType: undefined }, tabId);
+  const resultsByType = id ? undefined : keepPlayingSearchResults(global, tabId);
+  if (id) {
+    global = detachGlobalSearchPlaylist(global, tabId);
+  }
+
+  return updateGlobalSearch(global, { chatId: id, query: undefined, resultsByType }, tabId);
 });

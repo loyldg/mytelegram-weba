@@ -1,0 +1,71 @@
+@use "../../../styles/mixins";
+
+.root {
+  pointer-events: none;
+
+  position: absolute;
+  z-index: 2;
+  inset-inline: 0;
+  bottom: 0.5rem;
+
+  display: flex;
+  justify-content: center;
+
+  /* stylelint-disable-next-line plugin/no-low-performance-animation-properties */
+  transition: bottom 0.25s;
+
+  @include mixins.with-vt-type('profileAvatar');
+}
+
+.strip {
+  pointer-events: auto;
+
+  display: flex;
+  align-items: center;
+
+  max-width: 85%;
+  padding: 0.0625rem 0.625rem;
+  border-radius: 1rem;
+
+  font-size: 0.75rem;
+  line-height: 1rem;
+  color: var(--color-text);
+  white-space: nowrap;
+
+  background-color: color-mix(in srgb, var(--color-background) 90%, transparent);
+  backdrop-filter: blur(10px);
+
+  transition: color 0.15s, background-color 0.15s;
+}
+
+.interactive {
+  cursor: var(--custom-cursor, pointer);
+
+  &:hover {
+    background-color: color-mix(in srgb, var(--color-background) 70%, transparent);
+  }
+}
+
+.icon {
+  flex-shrink: 0;
+  font-size: 0.875rem;
+  transition: color 0.25s;
+}
+
+.performer {
+  margin-inline-start: 0.125rem;
+  font-weight: var(--font-weight-medium);
+  transition: color 0.25s;
+}
+
+.separator {
+  margin-inline: 0.25rem;
+  transition: color 0.25s;
+}
+
+.title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  opacity: 0.7;
+  transition: color 0.25s;
+}

@@ -52,6 +52,8 @@ export default function setupTauriListeners() {
   };
 
   function handleClick(event: MouseEvent) {
+    if (event.defaultPrevented) return;
+
     const target = event.target as HTMLElement | null;
     const anchor = target?.closest<HTMLAnchorElement>('a[href]');
 
@@ -69,8 +71,9 @@ export default function setupTauriListeners() {
     }
   }
 
-  document.addEventListener('click', handleClick);
-  document.addEventListener('auxclick', handleClick);
+  // Run after Teact's delegated handlers so links can require confirmation
+  window.addEventListener('click', handleClick);
+  window.addEventListener('auxclick', handleClick);
 }
 
 async function openLink(url: string | URL) {

@@ -1,5 +1,3 @@
-import type { FC } from '../../lib/teact/teact';
-import type React from '../../lib/teact/teact';
 import {
   memo, useEffect, useLayoutEffect,
   useMemo,
@@ -21,7 +19,7 @@ import useDerivedState from '../../hooks/useDerivedState';
 import useFlag from '../../hooks/useFlag';
 import useLastCallback from '../../hooks/useLastCallback';
 import useOldLang from '../../hooks/useOldLang';
-import useControlsSignal from './hooks/useControlsSignal';
+import useControlsSignal, { isMouseInsideControls, registerControlsElement } from './hooks/useControlsSignal';
 
 import AnimatedFileSize from '../common/AnimatedFileSize';
 import Button from '../ui/Button';
@@ -71,7 +69,7 @@ const PLAYBACK_RATES = [
 
 const HIDE_CONTROLS_TIMEOUT_MS = 3000;
 
-const VideoPlayerControls: FC<OwnProps> = ({
+const VideoPlayerControls = ({
   storyboardInfo,
   bufferedRanges,
   bufferedProgress,
@@ -95,12 +93,13 @@ const VideoPlayerControls: FC<OwnProps> = ({
   onPlayPause,
   onSeek,
   onSeekingChange,
-}) => {
+}: OwnProps) => {
   const [isPlaybackMenuOpen, openPlaybackMenu, closePlaybackMenu] = useFlag();
   const [getCurrentTime] = useCurrentTimeSignal();
   const currentTime = useDerivedState(() => Math.trunc(getCurrentTime()), [getCurrentTime]);
   const [getIsSeeking, setIsSeeking] = useSignal(false);
 
+  const rootRef = useRef<HTMLDivElement>();
   const closeTimeoutRef = useRef<number | undefined>();
 
   const { isMobile } = useAppLayout();
@@ -108,14 +107,27 @@ const VideoPlayerControls: FC<OwnProps> = ({
   const isVisible = useDerivedState(getIsVisible);
 
   useEffect(() => {
+    registerControlsElement(rootRef.current);
+    return () => registerControlsElement(undefined);
+  }, []);
+
+  useEffect(() => {
     if (!IS_TOUCH_ENV && !isForceMobileVersion) return undefined;
     if (!isVisible || !isPlaying || isPlaybackMenuOpen || getIsSeeking()) {
       if (closeTimeoutRef.current) window.clearTimeout(closeTimeoutRef.current);
       return undefined;
     }
-    closeTimeoutRef.current = window.setTimeout(() => {
-      setVisibility(false);
-    }, HIDE_CONTROLS_TIMEOUT_MS);
+    const scheduleHide = () => {
+      closeTimeoutRef.current = window.setTimeout(() => {
+        // Keep controls while the mouse is over them
+        if (isMouseInsideControls()) {
+          scheduleHide();
+          return;
+        }
+        setVisibility(false);
+      }, HIDE_CONTROLS_TIMEOUT_MS);
+    };
+    scheduleHide();
     return () => {
       if (closeTimeoutRef.current) window.clearTimeout(closeTimeoutRef.current);
     };
@@ -155,11 +167,12 @@ const VideoPlayerControls: FC<OwnProps> = ({
     if (volume === 0 || isMuted) return 'muted';
     if (volume < 0.3) return 'volume-1';
     if (volume < 0.6) return 'volume-2';
-    return 'volume-3';
+    return 'speaker';
   }, [volume, isMuted]);
 
   return (
     <div
+      ref={rootRef}
       className={buildClassName('VideoPlayerControls', isForceMobileVersion && 'mobile', isVisible && 'active')}
       onClick={stopEvent}
     >

@@ -15,8 +15,8 @@ import type {
   ApiBotMenuButton,
   ApiInlineQueryPeerType,
   ApiInlineResultType,
+  ApiJoinChatBotResult,
   ApiKeyboardButton,
-  ApiKeyboardButtonBase,
   ApiKeyboardButtonStyle,
   ApiMessagesBotApp,
   ApiReplyKeyboard,
@@ -25,14 +25,14 @@ import type {
 } from '../../types';
 
 import { int2hex } from '../../../util/colors';
-import { omitUndefined, pick } from '../../../util/iteratees';
+import { pick } from '../../../util/iteratees';
 import { toJSNumber } from '../../../util/numbers';
 import { addDocumentToLocalDb } from '../helpers/localDb';
-import { serializeBytes } from '../helpers/misc';
+import { buildApiInlineButtonAction, buildApiReplyButtonAction } from './buttons';
 import { buildApiMessageEntity, buildApiPhoto } from './common';
-import { omitVirtualClassFields } from './helpers';
 import {
   buildApiDocument,
+  buildApiRichMessage,
   buildApiWebDocument,
   buildAudioFromDocument,
   buildGeoPoint,
@@ -44,175 +44,33 @@ import { buildStickerFromDocument } from './symbols';
 
 export function buildReplyButtons(
   replyMarkup: GramJs.TypeReplyMarkup | undefined,
-  receiptMessageId?: number,
 ): ApiReplyKeyboard | undefined {
   if (!(replyMarkup instanceof GramJs.ReplyKeyboardMarkup || replyMarkup instanceof GramJs.ReplyInlineMarkup)) {
     return undefined;
   }
 
   const markup = replyMarkup.rows.map(({ buttons }) => {
-    return buttons.map((button): ApiKeyboardButton | undefined => {
-      const { text, style } = button;
-
-      const baseButton = omitUndefined<ApiKeyboardButtonBase>({
-        style: style && buildApiKeyboardButtonStyle(style),
-      });
-
-      if (button instanceof GramJs.KeyboardButton) {
-        return {
-          ...baseButton,
-          type: 'command',
-          text,
-        };
-      }
-
-      if (button instanceof GramJs.KeyboardButtonUrl) {
-        if (button.url.includes('?startgroup=')) {
-          return {
-            ...baseButton,
-            type: 'unsupported',
-            text,
-          };
-        }
-
-        return {
-          ...baseButton,
-          type: 'url',
-          text,
-          url: button.url,
-        };
-      }
-
-      if (button instanceof GramJs.KeyboardButtonCallback) {
-        if (button.requiresPassword) {
-          return {
-            ...baseButton,
-            type: 'unsupported',
-            text,
-          };
-        }
-
-        return {
-          ...baseButton,
-          type: 'callback',
-          text,
-          data: serializeBytes(button.data),
-        };
-      }
-
-      if (button instanceof GramJs.KeyboardButtonRequestPoll) {
-        return {
-          ...baseButton,
-          type: 'requestPoll',
-          text,
-          isQuiz: button.quiz,
-        };
-      }
-
-      if (button instanceof GramJs.KeyboardButtonRequestPhone) {
-        return {
-          ...baseButton,
-          type: 'requestPhone',
-          text,
-        };
-      }
-
-      if (button instanceof GramJs.KeyboardButtonBuy) {
-        if (receiptMessageId) {
-          return {
-            ...baseButton,
-            type: 'receipt',
-            receiptMessageId,
-          };
-        }
-        return {
-          ...baseButton,
-          type: 'buy',
-          text,
-        };
-      }
-
-      if (button instanceof GramJs.KeyboardButtonGame) {
-        return {
-          ...baseButton,
-          type: 'game',
-          text,
-        };
-      }
-
-      if (button instanceof GramJs.KeyboardButtonSwitchInline) {
-        return {
-          ...baseButton,
-          type: 'switchBotInline',
-          text,
-          query: button.query,
-          isSamePeer: button.samePeer,
-        };
-      }
-
-      if (button instanceof GramJs.KeyboardButtonUserProfile) {
-        return {
-          ...baseButton,
-          type: 'userProfile',
-          text,
-          userId: button.userId.toString(),
-        };
-      }
-
-      if (button instanceof GramJs.KeyboardButtonSimpleWebView) {
-        return {
-          ...baseButton,
-          type: 'simpleWebView',
-          text,
-          url: button.url,
-        };
-      }
-
-      if (button instanceof GramJs.KeyboardButtonWebView) {
-        return {
-          ...baseButton,
-          type: 'webView',
-          text,
-          url: button.url,
-        };
-      }
-
-      if (button instanceof GramJs.KeyboardButtonUrlAuth) {
-        return {
-          ...baseButton,
-          type: 'urlAuth',
-          text,
-          url: button.url,
-          buttonId: button.buttonId,
-        };
-      }
-
-      if (button instanceof GramJs.KeyboardButtonCopy) {
-        return {
-          ...baseButton,
-          type: 'copy',
-          text,
-          copyText: button.copyText,
-        };
-      }
-
-      return {
-        ...baseButton,
-        type: 'unsupported',
-        text,
-      };
-    }).filter(Boolean);
+    return buttons.map((button) => buildReplyButton(button));
   });
 
   if (markup.every((row) => !row.length)) return undefined;
 
   return {
     [replyMarkup instanceof GramJs.ReplyKeyboardMarkup ? 'keyboardButtons' : 'inlineButtons']: markup,
-    ...(replyMarkup instanceof GramJs.ReplyKeyboardMarkup && {
-      keyboardPlaceholder: replyMarkup.placeholder,
-      isKeyboardSingleUse: replyMarkup.singleUse,
-      isKeyboardSelective: replyMarkup.selective,
-    }),
+    keyboardPlaceholder: replyMarkup instanceof GramJs.ReplyKeyboardMarkup ? replyMarkup.placeholder : undefined,
+    isKeyboardSingleUse: replyMarkup instanceof GramJs.ReplyKeyboardMarkup ? replyMarkup.singleUse : undefined,
+    isKeyboardSelective: replyMarkup instanceof GramJs.ReplyKeyboardMarkup ? replyMarkup.selective : undefined,
+  };
+}
+
+function buildReplyButton(
+  button: GramJs.KeyboardButton | GramJs.KeyboardInlineButton,
+): ApiKeyboardButton {
+  return {
+    text: button.text,
+    style: button.style && buildApiKeyboardButtonStyle(button.style),
+    action: button instanceof GramJs.KeyboardInlineButton
+      ? buildApiInlineButtonAction(button.type) : buildApiReplyButtonAction(button.type),
   };
 }
 
@@ -289,6 +147,8 @@ export function buildBotInlineMessage(
       currency: sendMessage.currency,
       amount: toJSNumber(sendMessage.totalAmount),
     };
+  } else if (sendMessage instanceof GramJs.BotInlineMessageRichMessage) {
+    content.richMessage = buildApiRichMessage(sendMessage.richMessage);
   }
 
   return {
@@ -425,7 +285,9 @@ export function buildBotAppSettings(settings: GramJs.BotAppSettings): ApiBotAppS
 export function buildApiBotCommand(botId: string, command: GramJs.BotCommand): ApiBotCommand {
   return {
     botId,
-    ...omitVirtualClassFields(command),
+    command: command.command,
+    description: command.description,
+    isEphemeral: command.ephemeral,
   };
 }
 
@@ -441,6 +303,23 @@ export function buildApiBotMenuButton(menuButton?: GramJs.TypeBotMenuButton): Ap
   return {
     type: 'commands',
   };
+}
+
+export function buildApiJoinChatBotResult(result: GramJs.TypeJoinChatBotResult): ApiJoinChatBotResult {
+  if (result instanceof GramJs.JoinChatBotResultApproved) {
+    return { type: 'approved' };
+  }
+  if (result instanceof GramJs.JoinChatBotResultDeclined) {
+    return { type: 'declined' };
+  }
+  if (result instanceof GramJs.JoinChatBotResultWebView) {
+    return { type: 'webView', url: result.url };
+  }
+  if (result instanceof GramJs.JoinChatBotResultQueued) {
+    return { type: 'queued' };
+  }
+
+  return undefined!; // Never reached
 }
 
 export function buildApiBotApp(app: GramJs.TypeBotApp): ApiBotApp | undefined {
@@ -476,7 +355,9 @@ export function buildApiMessagesBotApp(botApp: GramJs.messages.BotApp): ApiMessa
   };
 }
 
-export function buildApiInlineQueryPeerType(peerType: GramJs.TypeInlineQueryPeerType): ApiInlineQueryPeerType {
+export function buildApiInlineQueryPeerType(
+  peerType: GramJs.TypeInlineQueryPeerType,
+): ApiInlineQueryPeerType {
   if (peerType instanceof GramJs.InlineQueryPeerTypeBotPM) return 'bots';
   if (peerType instanceof GramJs.InlineQueryPeerTypePM) return 'users';
   if (peerType instanceof GramJs.InlineQueryPeerTypeChat) return 'chats';

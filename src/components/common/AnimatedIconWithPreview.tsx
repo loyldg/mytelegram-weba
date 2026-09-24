@@ -16,7 +16,12 @@ import styles from './AnimatedIconWithPreview.module.scss';
 
 type OwnProps =
   Partial<AnimatedIconProps>
-  & { previewUrl?: string; thumbDataUri?: string; noPreviewTransition?: boolean; shouldUseTextColor?: boolean };
+  & {
+    previewUrl?: string;
+    thumbDataUri?: string;
+    noPreviewTransition?: boolean;
+    shouldUseTextColor?: boolean;
+  };
 
 const ANIMATION_DURATION = 300;
 
@@ -24,7 +29,7 @@ const loadedPreviewUrls = new Set();
 
 function AnimatedIconWithPreview(props: OwnProps) {
   const {
-    previewUrl, thumbDataUri, className, shouldUseTextColor, ...otherProps
+    previewUrl, thumbDataUri, className, shouldUseTextColor, noPreviewTransition, ...otherProps
   } = props;
 
   const rootRef = useRef<HTMLDivElement>();
@@ -33,7 +38,9 @@ function AnimatedIconWithPreview(props: OwnProps) {
   const [isThumbOpen, , unmarkThumbOpen] = useFlag(Boolean(thumbDataUri));
   const thumbClassNames = useMediaTransitionDeprecated(isThumbOpen);
 
-  const [isPreviewOpen, markPreviewOpen, unmarkPreviewOpen] = useFlag(loadedPreviewUrls.has(previewUrl));
+  const [isPreviewOpen, markPreviewOpen, unmarkPreviewOpen] = useFlag(
+    Boolean(noPreviewTransition) || loadedPreviewUrls.has(previewUrl),
+  );
   const previewClassNames = useMediaTransitionDeprecated(isPreviewOpen);
 
   const [isAnimationReady, markAnimationReady] = useFlag(false);
@@ -60,15 +67,23 @@ function AnimatedIconWithPreview(props: OwnProps) {
       {thumbDataUri && !isAnimationReady && (
         <img src={thumbDataUri} className={buildClassName(styles.preview, thumbClassNames)} draggable={false} />
       )}
-      {previewUrl && !isAnimationReady && (
+      {previewUrl && !isAnimationReady && (shouldUseTextColor ? (
+        <div
+          className={buildClassName(styles.preview, styles.textColorPreview)}
+          style={`mask-image: url(${previewUrl})`}
+        />
+      ) : (
         <img
           src={previewUrl}
-          className={buildClassName(styles.preview, previewClassNames)}
+          className={buildClassName(styles.preview, !noPreviewTransition && previewClassNames)}
           draggable={false}
           onLoad={handlePreviewLoad}
         />
+      ))}
+      {/* Without a color the sticker canvas would paint the original tgs colors before the filter appears */}
+      {(!shouldUseTextColor || customColor) && (
+        <AnimatedIcon {...otherProps} color={customColor} onLoad={handleAnimationReady} />
       )}
-      <AnimatedIcon {...otherProps} color={customColor} onLoad={handleAnimationReady} />
     </div>
   );
 }

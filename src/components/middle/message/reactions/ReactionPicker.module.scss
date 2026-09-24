@@ -1,3 +1,5 @@
+@use "../../../../styles/mixins";
+
 .menu {
   z-index: var(--z-reaction-picker) !important;
 
@@ -55,11 +57,17 @@
 
 .storyMenu {
   --color-background-compact-menu: rgba(0, 0, 0, 0.3);
+  --color-text: #fff;
+  --color-text-rgb: 255, 255, 255;
   --color-text-secondary: #fff;
   --color-text-secondary-rgb: 255, 255, 255;
   --color-default-shadow: rgba(0, 0, 0, 0.3);
 
   transform-origin: 70% 100% !important;
+
+  &:global(.bubble) {
+    --offset-y: calc(100% - 4.0625rem);
+  }
 
   :global(.StickerButton.custom-emoji), :global(.sticker-set-cover) {
     color: #fff;
@@ -67,6 +75,9 @@
 
   @media (max-width: 600px) {
     &:global(.bubble) {
+      --offset-y: calc(var(--composer-min-bottom-reserve) + var(--composer-top-gap));
+
+      position: fixed;
       transform-origin: 30% 100% !important;
     }
   }
@@ -83,4 +94,10 @@
 
 .hidden {
   display: none !important;
+}
+
+.extendedPicker {
+  height: calc(100% + 2rem);
+
+  @include mixins.gradient-border-bottom(calc(2rem + 0.5rem), calc(2rem + 0.0625rem));
 }

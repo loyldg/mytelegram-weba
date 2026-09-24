@@ -1,19 +1,21 @@
+import type { ApiMessage } from '../../../api/types';
+import type { PlaybackMediaType } from '../../../types';
 import type { ActionReturnType } from '../../types';
 import { MAIN_THREAD_ID } from '../../../api/types';
-import { AudioOrigin, MediaViewerOrigin } from '../../../types';
+import { MediaViewerOrigin } from '../../../types';
 
 import { getCurrentTabId } from '../../../util/establishMultitabRole';
 import { omit } from '../../../util/iteratees';
 import { getMessageReplyInfo } from '../../helpers/replies';
 import { addActionHandler } from '../../index';
 import { updateTabState } from '../../reducers/tabs';
-import { selectChatMessage, selectReplyMessage, selectTabState } from '../../selectors';
+import { selectChatMessageOrEphemeral, selectReplyMessage, selectTabState } from '../../selectors';
 import { selectTimestampableMedia } from '../../selectors/media';
 
 addActionHandler('openMediaViewer', (global, actions, payload): ActionReturnType => {
   const {
     chatId, threadId = MAIN_THREAD_ID, messageId, timestamp, mediaIndex, isAvatarView, isSponsoredMessage, origin,
-    withDynamicLoading, standaloneMedia, tabId = getCurrentTabId(),
+    withDynamicLoading, standaloneMedia, pageMedia, tabId = getCurrentTabId(),
   } = payload;
 
   const tabState = selectTabState(global, tabId);
@@ -29,9 +31,11 @@ addActionHandler('openMediaViewer', (global, actions, payload): ActionReturnType
       isSponsoredMessage,
       origin,
       standaloneMedia,
+      pageMedia,
       isHidden: false,
       withDynamicLoading,
       timestamp,
+      shouldLandInMediaEditor: undefined,
     },
     forwardMessages: {},
     isShareMessageModalShown: false,
@@ -39,7 +43,7 @@ addActionHandler('openMediaViewer', (global, actions, payload): ActionReturnType
 });
 
 addActionHandler('closeMediaViewer', (global, actions, payload): ActionReturnType => {
-  const { tabId = getCurrentTabId() } = payload || {};
+  const { shouldLandInMediaEditor, tabId = getCurrentTabId() } = payload || {};
   const {
     volume, isMuted, playbackRate, isHidden,
   } = selectTabState(global, tabId).mediaViewer;
@@ -50,6 +54,7 @@ addActionHandler('closeMediaViewer', (global, actions, payload): ActionReturnTyp
       isMuted,
       isHidden,
       playbackRate,
+      shouldLandInMediaEditor,
     },
   }, tabId);
 });
@@ -59,7 +64,7 @@ addActionHandler('openMediaFromTimestamp', (global, actions, payload): ActionRet
     chatId, messageId, threadId, timestamp, tabId = getCurrentTabId(),
   } = payload;
 
-  const message = selectChatMessage(global, chatId, messageId);
+  const message = selectChatMessageOrEphemeral(global, chatId, messageId);
   if (!message) return;
 
   const replyInfo = getMessageReplyInfo(message);
@@ -75,7 +80,7 @@ addActionHandler('openMediaFromTimestamp', (global, actions, payload): ActionRet
         chatId,
         messageId,
         threadId,
-        origin: MediaViewerOrigin.Inline,
+        origin: message.isEphemeral ? MediaViewerOrigin.Ephemeral : MediaViewerOrigin.Inline,
         timestamp,
         tabId,
       });
@@ -83,10 +88,12 @@ addActionHandler('openMediaFromTimestamp', (global, actions, payload): ActionRet
     }
 
     actions.openAudioPlayer({
-      chatId,
-      messageId,
-      threadId,
-      origin: AudioOrigin.Inline,
+      item: {
+        type: 'message', chatId, threadId: threadId ?? MAIN_THREAD_ID, messageId,
+      },
+      source: {
+        type: 'chat', chatId, threadId: threadId ?? MAIN_THREAD_ID, mediaType: getPlaybackMediaType(message),
+      },
       timestamp,
       tabId,
     });
@@ -110,10 +117,18 @@ addActionHandler('openMediaFromTimestamp', (global, actions, payload): ActionRet
   }
 
   actions.openAudioPlayer({
-    chatId: replyMessage!.chatId,
-    messageId: replyMessage!.id,
-    threadId: replyInfo?.replyToTopId,
-    origin: AudioOrigin.Inline,
+    item: {
+      type: 'message',
+      chatId: replyMessage!.chatId,
+      threadId: replyInfo?.replyToTopId ?? MAIN_THREAD_ID,
+      messageId: replyMessage!.id,
+    },
+    source: {
+      type: 'chat',
+      chatId: replyMessage!.chatId,
+      threadId: replyInfo?.replyToTopId ?? MAIN_THREAD_ID,
+      mediaType: getPlaybackMediaType(replyMessage!),
+    },
     timestamp,
     tabId,
   });
@@ -217,3 +232,9 @@ addActionHandler('setMediaViewerHidden', (global, actions, payload): ActionRetur
     },
   }, tabId);
 });
+
+function getPlaybackMediaType(message: ApiMessage): PlaybackMediaType {
+  const { voice, video } = message.content;
+
+  return voice || video?.isRound ? 'voice' : 'audio';
+}

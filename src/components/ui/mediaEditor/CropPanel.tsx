@@ -1,8 +1,7 @@
 import { memo } from '@teact';
 
+import type { IconName } from '../../../types/icons';
 import type { AspectRatio } from './hooks/useCropper';
-
-import buildClassName from '../../../util/buildClassName';
 
 import useLang from '../../../hooks/useLang';
 import { ASPECT_RATIOS } from './hooks/useCropper';
@@ -17,16 +16,16 @@ type OwnProps = {
   onRatioChange: (ratio: AspectRatio) => void;
 };
 
-const RATIO_ICON_CLASSES: Partial<Record<AspectRatio, string>> = {
-  square: styles.ratio1x1,
-  '3:2': styles.ratio3x2,
-  '2:3': styles.ratio2x3,
-  '4:3': styles.ratio4x3,
-  '3:4': styles.ratio3x4,
-  '5:4': styles.ratio5x4,
-  '4:5': styles.ratio4x5,
-  '16:9': styles.ratio16x9,
-  '9:16': styles.ratio9x16,
+const RATIO_ICONS: Partial<Record<AspectRatio, IconName>> = {
+  square: 'aspect-1-1',
+  '3:2': 'aspect-3-2',
+  '2:3': 'aspect-2-3',
+  '4:3': 'aspect-4-3',
+  '3:4': 'aspect-3-4',
+  '5:4': 'aspect-5-4',
+  '4:5': 'aspect-4-5',
+  '16:9': 'aspect-16-9',
+  '9:16': 'aspect-9-16',
 };
 
 // First 3 ratios are displayed as full-width items
@@ -45,7 +44,7 @@ function CropPanel({ currentRatio, onRatioChange }: OwnProps) {
     if (value === 'original') {
       return <Icon name="photo" className="ListItem-main-icon" />;
     }
-    return <div className={buildClassName('ListItem-main-icon', styles.ratioBox, RATIO_ICON_CLASSES[value])} />;
+    return <Icon name={RATIO_ICONS[value]!} className="ListItem-main-icon" />;
   };
 
   const renderRatioLabel = (option: typeof ASPECT_RATIOS[number]) => {

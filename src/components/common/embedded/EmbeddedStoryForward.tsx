@@ -104,7 +104,7 @@ const EmbeddedStoryForward = ({
       return undefined;
     }
 
-    const icon: IconName | undefined = !isUserId(sender.id) ? 'channel-filled' : 'user-filled';
+    const icon: IconName | undefined = !isUserId(sender.id) ? 'megaphone-filled' : 'user-filled';
 
     return (
       <>

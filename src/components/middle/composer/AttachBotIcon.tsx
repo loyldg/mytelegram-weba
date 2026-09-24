@@ -19,8 +19,10 @@ type OwnProps = {
 };
 
 const ADDITIONAL_STROKE_WIDTH = '0.5px';
-const DARK_THEME_COLOR = 'rgb(170, 170, 170)';
-const LIGHT_THEME_COLOR = 'rgb(112, 117, 121)';
+// The icon is an `<img>` fed a data URI, so it cannot inherit `currentColor` from the menu item.
+// These mirror `--color-text` per theme and have to be updated alongside it
+const DARK_THEME_COLOR = 'rgb(255, 255, 255)';
+const LIGHT_THEME_COLOR = 'rgb(0, 0, 0)';
 const COLOR_REPLACE_PATTERN = /#fff/gi;
 
 const AttachBotIcon: FC<OwnProps> = ({

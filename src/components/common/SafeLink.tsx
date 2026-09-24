@@ -2,10 +2,11 @@ import type { TeactNode } from '../../lib/teact/teact';
 import { getActions } from '../../global';
 
 import type { ThreadId } from '../../types';
-import { ApiMessageEntityTypes } from '../../api/types';
+import { ApiMessageEntityTypes, type LinkContext } from '../../api/types';
 
 import { IS_TAURI } from '../../util/browser/globalEnvironment';
-import { ensureProtocol, getUnicodeUrl, isMixedScriptUrl } from '../../util/browser/url';
+import { ensureProtocol, getUnicodeUrl, isSuspiciousUrl } from '../../util/browser/url';
+import { MouseButton } from '../../util/browser/windowEnvironment';
 import buildClassName from '../../util/buildClassName';
 
 import useLastCallback from '../../hooks/useLastCallback';
@@ -17,6 +18,8 @@ type OwnProps = {
   children?: TeactNode;
   isRtl?: boolean;
   shouldSkipModal?: boolean;
+  tryInstantView?: boolean;
+  previewId?: string;
   chatId?: string;
   messageId?: number;
   threadId?: ThreadId;
@@ -31,6 +34,8 @@ const SafeLink = ({
   children,
   isRtl,
   shouldSkipModal,
+  tryInstantView,
+  previewId,
   chatId,
   messageId,
   threadId,
@@ -43,16 +48,22 @@ const SafeLink = ({
 
   const handleClick = useLastCallback((e: React.MouseEvent<HTMLAnchorElement, MouseEvent>) => {
     if (!url) return true;
+    if (e.button !== MouseButton.Main && e.button !== MouseButton.Auxiliary) return true;
 
     e.preventDefault();
 
-    const isTrustedLink = isRegularLink && !isMixedScriptUrl(url);
+    const shouldOpenInNewTab = e.button === MouseButton.Auxiliary || e.ctrlKey || e.metaKey || e.shiftKey;
+    const isTrustedLink = isRegularLink && !isSuspiciousUrl(url);
+    const linkContext: LinkContext | undefined = chatId && messageId
+      ? { type: 'message', chatId, threadId, messageId }
+      : undefined;
     openUrl({
       url,
       shouldSkipModal: shouldSkipModal || isTrustedLink,
-      ...(chatId && messageId && {
-        linkContext: { type: 'message', chatId, threadId, messageId },
-      }),
+      ignoreDeepLinks: shouldOpenInNewTab,
+      tryInstant: shouldOpenInNewTab ? false : tryInstantView,
+      previewId,
+      linkContext,
     });
 
     return false;
@@ -75,6 +86,7 @@ const SafeLink = ({
       rel="noopener noreferrer"
       className={classNames}
       onClick={handleClick}
+      onAuxClick={handleClick}
       dir={isRtl ? 'rtl' : 'auto'}
       data-entity-type={entityType}
     >

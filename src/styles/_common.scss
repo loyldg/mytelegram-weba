@@ -102,7 +102,7 @@
     height: 0.125rem;
     border-radius: 0.125rem;
 
-    background-color: var(--color-text-secondary);
+    background-color: currentColor;
 
     transition: transform var(--slide-transition);
   }

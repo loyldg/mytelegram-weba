@@ -1,6 +1,5 @@
 import type { ChangeEvent } from 'react';
 import type { FC, TeactNode } from '../../lib/teact/teact';
-import type React from '../../lib/teact/teact';
 import {
   memo,
   useRef,
@@ -51,6 +50,7 @@ type OwnProps = {
   nestedOptionList?: IRadioOption[];
   leftElement?: TeactNode;
   values?: string[];
+  teactExperimentControlled?: boolean;
   onChange?: (e: ChangeEvent<HTMLInputElement>, nestedOptionList?: IRadioOption[]) => void;
   onCheck?: (isChecked: boolean) => void;
   onClickLabel?: (e: React.MouseEvent, value?: string) => void;
@@ -81,22 +81,28 @@ const Checkbox: FC<OwnProps> = ({
   nestedOptionList,
   leftElement,
   values,
+  teactExperimentControlled,
   onChange,
   onCheck,
   onClickLabel,
 }) => {
   const lang = useLang();
   const labelRef = useRef<HTMLLabelElement>();
+  const inputRef = useRef<HTMLInputElement>();
   const [showNested, setShowNested] = useState(false);
   const renderingPeer = useCurrentOrPrev(peer, true);
 
-  const handleChange = useLastCallback((event: ChangeEvent<HTMLInputElement>) => {
+  const handleChange = useLastCallback((
+    event: ChangeEvent<HTMLInputElement>,
+    childNestedOptionList?: IRadioOption[],
+  ) => {
     if (disabled) {
       return;
     }
 
     if (onChange) {
-      onChange(event, nestedOptionList);
+      const isOwnInput = event.target === inputRef.current;
+      onChange(event, isOwnInput ? nestedOptionList : childNestedOptionList);
     }
 
     if (onCheck) {
@@ -143,11 +149,13 @@ const Checkbox: FC<OwnProps> = ({
         ref={labelRef}
       >
         <input
+          ref={inputRef}
           type="checkbox"
           id={id}
           name={name}
           value={value}
           checked={checked}
+          teactExperimentControlled={teactExperimentControlled}
           disabled={disabled}
           tabIndex={tabIndex}
           onChange={handleChange}

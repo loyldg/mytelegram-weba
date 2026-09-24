@@ -2,7 +2,6 @@ import { memo } from '../../../lib/teact/teact';
 import { getActions, getGlobal } from '../../../global';
 
 import type { TabState } from '../../../global/types';
-import { AudioOrigin } from '../../../types';
 
 import { isOwnMessage } from '../../../global/helpers';
 import { selectTheme } from '../../../global/selectors';
@@ -65,7 +64,7 @@ const OneTimeMediaModal = ({
           className={styles.voice}
           theme={theme}
           message={message}
-          origin={AudioOrigin.OneTimeModal}
+          variant="oneTimeModal"
           autoPlay
           onPlay={handlePlayVoice}
           onPause={handleClose}

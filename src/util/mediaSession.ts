@@ -12,7 +12,7 @@ export type MediaSessionHandlers = {
 
   seekbackward?: (details: MediaSessionActionDetails) => void;
   seekforward?: (details: MediaSessionActionDetails) => void;
-  seekTo?: ((details: MediaSessionActionDetails) => void);
+  seekto?: ((details: MediaSessionActionDetails) => void);
 };
 
 interface MediaMetadataParameters {
@@ -30,7 +30,7 @@ const DEFAULT_HANDLERS = {
   previoustrack: undefined,
   nexttrack: undefined,
   stop: undefined,
-  seekTo: undefined,
+  seekto: undefined,
 };
 
 export function registerMediaSession(metadata?: MediaMetadata, handlers?: MediaSessionHandlers) {
@@ -85,7 +85,7 @@ export function setPlaybackState(state: 'none' | 'paused' | 'playing' = 'none') 
 }
 
 export function setPositionState(state?: MediaPositionState) {
-  if (!state || state.position === undefined || state.duration === undefined) return;
+  if (!state || state.position === undefined || !state.duration) return;
   state.position = Math.min(state.position, state.duration);
 
   const { mediaSession } = window.navigator;

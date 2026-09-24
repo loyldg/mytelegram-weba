@@ -2,6 +2,10 @@ import type { BinaryReader } from '../extensions';
 
 import tlContent from './apiTl';
 import {
+    bufferFromHex, concat, writeInt32LE, writeUint32LE,
+} from '../../../util/encoding/buffer';
+
+import {
     type GenerationArgConfig, type GenerationEntryConfig, parseTl, serializeBytes, serializeDate,
 } from './generationHelpers';
 import schemeContent from './schemaTl';
@@ -11,7 +15,10 @@ import { toSignedLittleBuffer } from '../Helpers';
 // eslint-disable-next-line no-restricted-globals
 const CACHING_SUPPORTED = typeof self !== 'undefined' && self.localStorage !== undefined;
 
-const CACHE_KEY = 'GramJs:apiCache';
+const CACHE_KEY = 'GramJs:apiCache:4';
+
+const BOOL_TRUE = bufferFromHex('b5757299');
+const BOOL_FALSE = bufferFromHex('379779bc');
 
 type UnsaveVirtualClass = Record<string, any>;
 
@@ -84,8 +91,8 @@ function extractParams(fileContent: string) {
 function argToBytes(x: any, type: string) {
     switch (type) {
         case 'int': {
-            const i = Buffer.alloc(4);
-            i.writeInt32LE(x, 0);
+            const i = new Uint8Array(4);
+            writeInt32LE(i, x);
             return i;
         }
         case 'long':
@@ -95,16 +102,16 @@ function argToBytes(x: any, type: string) {
         case 'int256':
             return toSignedLittleBuffer(x, 32);
         case 'double': {
-            const d = Buffer.alloc(8);
-            d.writeDoubleLE(x, 0);
+            const d = new Uint8Array(8);
+            new DataView(d.buffer).setFloat64(0, x, true);
             return d;
         }
         case 'string':
             return serializeBytes(x);
         case 'Bool':
-            return x ? Buffer.from('b5757299', 'hex') : Buffer.from('379779bc', 'hex');
+            return x ? BOOL_TRUE : BOOL_FALSE;
         case 'true':
-            return Buffer.alloc(0);
+            return new Uint8Array(0);
         case 'bytes':
             return serializeBytes(x);
         case 'date':
@@ -114,7 +121,9 @@ function argToBytes(x: any, type: string) {
     }
 }
 
-function getArgFromReader(reader: BinaryReader, arg: GenerationArgConfig): any {
+function getArgFromReader(
+    reader: BinaryReader, arg: GenerationArgConfig, classes: Record<string, any>,
+): any {
     if (arg.isVector) {
         if (arg.useVectorId) {
             reader.readInt();
@@ -123,7 +132,7 @@ function getArgFromReader(reader: BinaryReader, arg: GenerationArgConfig): any {
         const len = reader.readInt();
         arg.isVector = false;
         for (let i = 0; i < len; i++) {
-            temp.push(getArgFromReader(reader, arg));
+            temp.push(getArgFromReader(reader, arg, classes));
         }
         arg.isVector = true;
         return temp;
@@ -152,13 +161,16 @@ function getArgFromReader(reader: BinaryReader, arg: GenerationArgConfig): any {
             case 'date':
                 return reader.tgReadDate();
             default:
-                if (!arg.skipConstructorId) {
-                    return reader.tgReadObject();
-                } else {
-                    throw new Error(`Unknown type ${arg}`);
-                }
+                return arg.isBareType
+                    ? classes[arg.type].fromReader(reader)
+                    : reader.tgReadObject();
         }
     }
+}
+
+function serializeArg(value: any, arg: GenerationArgConfig) {
+    const bytes = argToBytes(value, arg.type);
+    return arg.isBareType && typeof value?.getBytes === 'function' ? bytes.subarray(4) : bytes;
 }
 
 function createClasses(classesType: 'constructor' | 'request', params: GenerationEntryConfig[]) {
@@ -214,9 +226,9 @@ function createClasses(classesType: 'constructor' | 'request', params: Generatio
                                 continue;
                             }
 
-                            args[argName] = flagValue ? getArgFromReader(reader, arg) : undefined;
+                            args[argName] = flagValue ? getArgFromReader(reader, arg, classes) : undefined;
                         } else {
-                            args[argName] = getArgFromReader(reader, arg);
+                            args[argName] = getArgFromReader(reader, arg, classes);
                         }
                     }
                 }
@@ -226,9 +238,9 @@ function createClasses(classesType: 'constructor' | 'request', params: Generatio
             getBytes() {
                 // The next is pseudo-code:
                 const idForBytes = this.CONSTRUCTOR_ID;
-                const c = Buffer.alloc(4);
-                c.writeUInt32LE(idForBytes, 0);
-                const buffers = [c];
+                const c = new Uint8Array(4);
+                writeUint32LE(c, idForBytes);
+                const buffers: Uint8Array[] = [c];
                 for (const arg in argsConfig) {
                     if (argsConfig.hasOwnProperty(arg)) {
                         if (argsConfig[arg].isFlag) {
@@ -239,17 +251,17 @@ function createClasses(classesType: 'constructor' | 'request', params: Generatio
                         }
                         if (argsConfig[arg].isVector) {
                             if (argsConfig[arg].useVectorId) {
-                                buffers.push(Buffer.from('15c4b51c', 'hex'));
+                                buffers.push(bufferFromHex('15c4b51c'));
                             }
-                            const l = Buffer.alloc(4);
-                            l.writeInt32LE((this as UnsaveVirtualClass)[arg].length, 0);
-                            buffers.push(l, Buffer.concat((this as UnsaveVirtualClass)[arg].map((x: any) => (
-                                argToBytes(x, argsConfig[arg].type)
+                            const l = new Uint8Array(4);
+                            writeInt32LE(l, (this as UnsaveVirtualClass)[arg].length);
+                            buffers.push(l, concat(...(this as UnsaveVirtualClass)[arg].map((x: any) => (
+                                serializeArg(x, argsConfig[arg])
                             ))));
                         } else if (argsConfig[arg].flagIndicator) {
                             if (!Object.values(argsConfig)
                                 .some((f) => f.isFlag)) {
-                                buffers.push(Buffer.alloc(4));
+                                buffers.push(new Uint8Array(4));
                             } else {
                                 let flagCalculate = 0;
                                 for (const f in argsConfig) {
@@ -262,25 +274,16 @@ function createClasses(classesType: 'constructor' | 'request', params: Generatio
                                         }
                                     }
                                 }
-                                const f = Buffer.alloc(4);
-                                f.writeUInt32LE(flagCalculate, 0);
+                                const f = new Uint8Array(4);
+                                writeUint32LE(f, flagCalculate);
                                 buffers.push(f);
                             }
                         } else {
-                            buffers.push(argToBytes((this as UnsaveVirtualClass)[arg], argsConfig[arg].type));
-
-                            if ((this as UnsaveVirtualClass)[arg]
-                                && typeof (this as UnsaveVirtualClass)[arg].getBytes === 'function') {
-                                const firstChar = (argsConfig[arg].type.charAt(argsConfig[arg].type.indexOf('.') + 1));
-                                const boxed = firstChar === firstChar.toUpperCase();
-                                if (!boxed) {
-                                    buffers.shift();
-                                }
-                            }
+                            buffers.push(serializeArg((this as UnsaveVirtualClass)[arg], argsConfig[arg]));
                         }
                     }
                 }
-                return Buffer.concat(buffers);
+                return concat(...buffers);
             }
 
             readResult(reader: BinaryReader) {

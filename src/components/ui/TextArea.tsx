@@ -1,6 +1,5 @@
 import type { ChangeEvent, FormEvent } from 'react';
 import type { ElementRef, FC } from '../../lib/teact/teact';
-import type React from '../../lib/teact/teact';
 import {
   memo, useCallback, useLayoutEffect, useRef,
 } from '../../lib/teact/teact';
@@ -11,6 +10,8 @@ import buildClassName from '../../util/buildClassName';
 
 import useLastCallback from '../../hooks/useLastCallback';
 import useOldLang from '../../hooks/useOldLang';
+
+import AnimatedCounter from '../common/AnimatedCounter';
 
 type OwnProps = {
   ref?: ElementRef<HTMLTextAreaElement>;
@@ -26,6 +27,7 @@ type OwnProps = {
   autoComplete?: string;
   maxLength?: number;
   maxLengthIndicator?: string;
+  hasLengthIndicator?: boolean;
   tabIndex?: number;
   inputMode?: 'text' | 'none' | 'tel' | 'url' | 'email' | 'numeric' | 'decimal' | 'search';
   onChange?: (e: ChangeEvent<HTMLTextAreaElement>) => void;
@@ -52,6 +54,7 @@ const TextArea: FC<OwnProps> = ({
   inputMode,
   maxLength,
   maxLengthIndicator,
+  hasLengthIndicator,
   tabIndex,
   onChange,
   onInput,
@@ -135,8 +138,12 @@ const TextArea: FC<OwnProps> = ({
       {labelText && (
         <label htmlFor={id}>{labelText}</label>
       )}
-      {maxLengthIndicator && (
-        <div className="max-length-indicator">{maxLengthIndicator}</div>
+      {(maxLengthIndicator || (hasLengthIndicator && maxLength !== undefined)) && (
+        <div className="max-length-indicator">
+          <AnimatedCounter
+            text={maxLengthIndicator || Math.max(0, maxLength! - (value || '').length).toString()}
+          />
+        </div>
       )}
     </div>
   );

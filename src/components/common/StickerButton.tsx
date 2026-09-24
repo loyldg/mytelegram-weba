@@ -1,7 +1,6 @@
 import type { MouseEvent as ReactMouseEvent, ReactNode } from 'react';
 import type {
   ElementRef } from '../../lib/teact/teact';
-import type React from '../../lib/teact/teact';
 import {
   memo, useEffect, useMemo, useRef,
 } from '../../lib/teact/teact';
@@ -94,7 +93,7 @@ const StickerButton = <T extends number | ApiSticker | ApiBotInlineMediaResult |
   onRemoveRecentClick,
   onDismiss,
 }: OwnProps<T>) => {
-  const { openStickerSet, openPremiumModal, setEmojiStatus } = getActions();
+  const { openStickerSet, setEmojiStatus, showNotification } = getActions();
   const ref = useRef<HTMLDivElement>();
   const menuRef = useRef<HTMLDivElement>();
   const lang = useOldLang();
@@ -108,7 +107,7 @@ const StickerButton = <T extends number | ApiSticker | ApiBotInlineMediaResult |
   const isPremium = !sticker.isFree || sticker.hasEffect;
   const isCustomEmoji = sticker.isCustomEmoji || isEffectEmoji;
   const isPremiumSticker = !isCustomEmoji && isPremium;
-  const isLocked = !isCurrentUserPremium && isPremium && !shouldIgnorePremium;
+  const isLocked = !isCurrentUserPremium && isPremium && !shouldIgnorePremium && !isSavedMessages;
 
   const isIntersecting = useIsIntersecting(ref, observeIntersection);
   const shouldLoad = isIntersecting;
@@ -137,14 +136,17 @@ const StickerButton = <T extends number | ApiSticker | ApiBotInlineMediaResult |
   const handleClick = () => {
     if (isContextMenuOpen) return;
     if (isLocked) {
-      if (isEffectEmoji) {
-        openPremiumModal({ initialSection: 'effects' });
-      } else if (isCustomEmoji) {
-        openPremiumModal({ initialSection: 'animated_emoji' });
-      } else {
-        openPremiumModal({ initialSection: 'premium_stickers' });
-      }
-      onDismiss?.();
+      const initialSection = isEffectEmoji ? 'effects' : isCustomEmoji ? 'animated_emoji' : 'premium_stickers';
+      showNotification({
+        message: { key: isCustomEmoji || isEffectEmoji
+          ? 'PremiumUnlockEmoji'
+          : 'PremiumUnlockStickers' },
+        actionText: { key: 'PremiumMore' },
+        action: {
+          action: 'openPremiumModal',
+          payload: { initialSection },
+        },
+      });
       return;
     }
     onClick?.(clickArg);
@@ -227,7 +229,7 @@ const StickerButton = <T extends number | ApiSticker | ApiBotInlineMediaResult |
 
     if (onUnfaveClick) {
       items.push(
-        <MenuItem icon="favorite" onClick={handleContextUnfave}>
+        <MenuItem icon="star-regular" onClick={handleContextUnfave}>
           {lang('Stickers.RemoveFromFavorites')}
         </MenuItem>,
       );
@@ -235,7 +237,7 @@ const StickerButton = <T extends number | ApiSticker | ApiBotInlineMediaResult |
 
     if (onFaveClick) {
       items.push(
-        <MenuItem icon="favorite" onClick={handleContextFave}>
+        <MenuItem icon="star-regular" onClick={handleContextFave}>
           {lang('Stickers.AddToFavorites')}
         </MenuItem>,
       );
@@ -283,7 +285,7 @@ const StickerButton = <T extends number | ApiSticker | ApiBotInlineMediaResult |
       onClick={handleClick}
       onContextMenu={handleContextMenu}
     >
-      {isIntesectingForShowing && (
+      {isIntesectingForShowing ? (
         <StickerView
           containerRef={ref}
           sticker={sticker}
@@ -300,12 +302,19 @@ const StickerButton = <T extends number | ApiSticker | ApiBotInlineMediaResult |
           customColor={customColor}
           forceAlways={forcePlayback}
         />
-      )}
+      ) : (isIntersecting && sticker.thumbnail?.dataUri && (
+        <img
+          src={sticker.thumbnail.dataUri}
+          className="sticker-media"
+          alt=""
+          draggable={false}
+        />
+      ))}
       {!noIcons && !noShowPremium && isLocked && (
         <div
           className="sticker-locked"
         >
-          <Icon name="lock-badge" />
+          <Icon name="lock-filled" />
         </div>
       )}
       {!noIcons && !noShowPremium && isPremiumSticker && !isLocked && (

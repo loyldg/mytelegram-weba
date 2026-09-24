@@ -1,0 +1,106 @@
+.input,
+.itemInput {
+  margin: 0.5rem;
+}
+
+.itemList {
+  display: flex;
+  flex-direction: column;
+}
+
+.itemRowFrame {
+  position: relative;
+}
+
+.itemRow {
+  display: flex;
+  align-items: center;
+  border-radius: var(--border-radius-default);
+}
+
+.itemRowDragging {
+  --custom-cursor: grabbing;
+
+  will-change: transform;
+  cursor: var(--custom-cursor);
+
+  z-index: var(--z-modal-menu);
+
+  contain: content;
+
+  opacity: 0.95;
+  background: var(--color-background);
+  box-shadow: 0 0.25rem 1rem var(--color-default-shadow);
+
+  :global(.form-control) {
+    cursor: var(--custom-cursor);
+  }
+}
+
+.itemRowAdd {
+  color: var(--color-text-secondary);
+}
+
+.itemLeadingIcon {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+
+  width: 1.5rem;
+
+  color: var(--color-text-secondary);
+
+  opacity: 0.72;
+}
+
+.itemLeadingIconAdd {
+  opacity: 0.5;
+}
+
+.itemLeadingIconGlyph {
+  font-size: 1.5rem;
+}
+
+.itemDragHandle {
+  cursor: grab;
+  border-radius: 0.25rem;
+
+  &:active {
+    cursor: grabbing;
+  }
+
+  &:focus-visible {
+    outline: 0.125rem solid var(--color-primary);
+    outline-offset: 0.125rem;
+  }
+
+  @media (pointer: coarse) {
+    touch-action: none;
+  }
+}
+
+.itemInput {
+  flex: 1 1 auto;
+  min-width: 0;
+
+  &:global(.input-group) {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+
+  :global(.form-control) {
+    min-width: 0;
+  }
+}
+
+.itemInputAdd {
+  :global(.form-control)::placeholder {
+    color: var(--color-text-secondary);
+    opacity: 1;
+  }
+}
+
+.itemRemove {
+  flex: 0 0 auto;
+}

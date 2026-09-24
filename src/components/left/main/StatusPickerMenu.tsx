@@ -7,6 +7,9 @@ import { getActions, withGlobal } from '../../../global';
 import type { ApiSticker } from '../../../api/types';
 
 import { selectIsContextMenuTranslucent } from '../../../global/selectors';
+import { IS_TUCK_SUPPORTED } from '../../../util/browser/windowEnvironment';
+
+import useTuckFilter from '../../../hooks/useTuckFilter';
 
 import CustomEmojiPicker from '../../common/CustomEmojiPicker';
 import Menu from '../../ui/Menu';
@@ -26,6 +29,8 @@ interface StateProps {
   isTranslucent?: boolean;
 }
 
+const FILTER_ID = 'status-picker-tuck-filter';
+
 const StatusPickerMenu = ({
   isOpen,
   statusButtonRef,
@@ -37,6 +42,8 @@ const StatusPickerMenu = ({
   const { loadFeaturedEmojiStickers } = getActions();
 
   const transformOriginXRef = useRef<number>(0);
+  const pickerListStyle = useTuckFilter(FILTER_ID);
+
   useEffect(() => {
     if (!statusButtonRef.current) return;
     transformOriginXRef.current = statusButtonRef.current.getBoundingClientRect().right;
@@ -65,9 +72,12 @@ const StatusPickerMenu = ({
       >
         <CustomEmojiPicker
           idPrefix="status-emoji-set-"
+          className={IS_TUCK_SUPPORTED ? styles.extendedPicker : undefined}
+          pickerListStyle={pickerListStyle}
           loadAndPlay={isOpen}
           isHidden={!isOpen}
           isStatusPicker
+          isTuckEnabled={IS_TUCK_SUPPORTED}
           isTranslucent={isTranslucent}
           onDismiss={onClose}
           onCustomEmojiSelect={handleEmojiSelect}

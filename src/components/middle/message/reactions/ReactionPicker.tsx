@@ -1,4 +1,3 @@
-import type { FC } from '../../../../lib/teact/teact';
 import { memo, useMemo, useRef } from '../../../../lib/teact/teact';
 import { getActions, getGlobal, withGlobal } from '../../../../global';
 
@@ -25,6 +24,7 @@ import {
   selectPeerStory,
   selectTabState,
 } from '../../../../global/selectors';
+import { IS_TUCK_SUPPORTED } from '../../../../util/browser/windowEnvironment';
 import buildClassName from '../../../../util/buildClassName';
 import { isUserId } from '../../../../util/entities/ids';
 import parseHtmlAsFormattedText from '../../../../util/parseHtmlAsFormattedText';
@@ -35,6 +35,7 @@ import { getIsMobile } from '../../../../hooks/useAppLayout';
 import useCurrentOrPrev from '../../../../hooks/useCurrentOrPrev';
 import useLastCallback from '../../../../hooks/useLastCallback';
 import useOldLang from '../../../../hooks/useOldLang';
+import useTuckFilter from '../../../../hooks/useTuckFilter';
 
 import CustomEmojiPicker from '../../../common/CustomEmojiPicker';
 import Menu from '../../../ui/Menu';
@@ -63,8 +64,9 @@ interface StateProps {
 const FULL_PICKER_SHIFT_DELTA = { x: -23, y: -64 };
 const LIMITED_PICKER_SHIFT_DELTA = { x: -21, y: -10 };
 const REACTION_SELECTOR_WIDTH = 16.375 * REM;
+const FILTER_ID = 'reaction-picker-tuck-filter';
 
-const ReactionPicker: FC<OwnProps & StateProps> = ({
+const ReactionPicker = ({
   isOpen,
   message,
   story,
@@ -76,7 +78,7 @@ const ReactionPicker: FC<OwnProps & StateProps> = ({
   chatId,
   isForEffects,
   availableEffectById,
-}) => {
+}: OwnProps & StateProps) => {
   const {
     toggleReaction, closeReactionPicker, sendMessage, showNotification, sendStoryReaction, saveEffectInDraft,
     requestEffectInComposer, addLocalPaidReaction, openPaidReactionModal,
@@ -90,6 +92,7 @@ const ReactionPicker: FC<OwnProps & StateProps> = ({
   const renderedStoryId = useCurrentOrPrev(story?.id);
   const storedPosition = useCurrentOrPrev(position, true);
   const menuRef = useRef<HTMLDivElement>();
+  const pickerListStyle = useTuckFilter(FILTER_ID);
   const renderingPosition = useMemo((): IAnchorPosition | undefined => {
     if (!storedPosition) {
       return undefined;
@@ -225,6 +228,8 @@ const ReactionPicker: FC<OwnProps & StateProps> = ({
     }, []);
   }, [message?.reactions?.results]);
 
+  const shouldUseTuck = IS_TUCK_SUPPORTED && Boolean(shouldUseFullPicker || renderedStoryId);
+
   return (
     <Menu
       isOpen={isOpen}
@@ -267,7 +272,12 @@ const ReactionPicker: FC<OwnProps & StateProps> = ({
             isHidden={!isOpen || !(shouldUseFullPicker || renderedStoryId)}
             loadAndPlay={Boolean(isOpen && shouldUseFullPicker)}
             isReactionPicker
-            className={!shouldUseFullPicker && !renderedStoryId ? styles.hidden : undefined}
+            isTuckEnabled={shouldUseTuck}
+            className={buildClassName(
+              !shouldUseFullPicker && !renderedStoryId && styles.hidden,
+              shouldUseTuck && styles.extendedPicker,
+            )}
+            pickerListStyle={shouldUseTuck ? pickerListStyle : undefined}
             selectedReactionIds={selectedReactionIds}
             isTranslucent={isTranslucent}
             onCustomEmojiSelect={renderedStoryId ? handleStoryReactionSelect : handleToggleCustomReaction}

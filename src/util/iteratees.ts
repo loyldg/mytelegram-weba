@@ -223,18 +223,6 @@ function isObject(value: any): value is object {
   return typeof value === 'object' && value !== null;
 }
 
-export function findLast<T>(array: Array<T>, predicate: (value: T, index: number, obj: T[]) => boolean): T | undefined {
-  let cursor = array.length;
-
-  while (cursor--) {
-    if (predicate(array[cursor], cursor, array)) {
-      return array[cursor];
-    }
-  }
-
-  return undefined;
-}
-
 export function compareFields<T>(a: T, b: T) {
   return Number(b) - Number(a);
 }

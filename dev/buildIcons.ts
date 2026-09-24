@@ -13,6 +13,7 @@ const PREVIEW_DIR = path.join(STYLES_DIR, 'icons');
 const TEMP_DIR = path.join(PROJECT_ROOT, '.cache', 'icons-build');
 const TEMP_INPUT_DIR = path.join(TEMP_DIR, 'input');
 const FONT_NAME = 'icons';
+const FONT_HEIGHT = 1024;
 const DEFAULT_START_CODEPOINT = 0xf101;
 const SAFE_PUBLIC_NAME_PATTERN = /^[a-zA-Z0-9-_]+$/;
 
@@ -134,7 +135,7 @@ async function buildFontHash(iconDefinitions: IconDefinition[]) {
   };
 
   hash.update(FONT_NAME);
-  hash.update('fontHeight:1000');
+  hash.update(`fontHeight:${FONT_HEIGHT}`);
   hash.update('normalize:true');
   hash.update(svgtofontPackage.version || '');
 
@@ -200,7 +201,8 @@ async function buildIcons() {
         previewPath: 'icons/preview.html',
       },
     },
-    dist: STYLES_DIR,
+    // SVG and TTF intermediates stay in the ignored build directory
+    dist: TEMP_DIR,
     excludeFormat: ['eot', 'svg', 'ttf', 'symbol.svg'],
     fontName: FONT_NAME,
     getIconUnicode(name) {
@@ -215,12 +217,18 @@ async function buildIcons() {
     src: TEMP_INPUT_DIR,
     startUnicode: iconDefinitions[0]?.codepoint ?? DEFAULT_START_CODEPOINT,
     styleTemplates: STYLE_TEMPLATES_DIR,
+    // Fixed font timestamps keep the generated binaries deterministic
+    svg2ttf: { ts: 0 },
     svgicons2svgfont: {
-      fontHeight: 1000,
+      fontHeight: FONT_HEIGHT,
       normalize: true,
     },
   });
 
+  await Promise.all(['woff', 'woff2'].map((format) => {
+    const fileName = `${FONT_NAME}.${format}`;
+    return fs.copyFile(path.join(TEMP_DIR, fileName), path.join(STYLES_DIR, fileName));
+  }));
   await writeFontTypes(iconDefinitions);
 }
 

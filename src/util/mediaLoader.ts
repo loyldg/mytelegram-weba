@@ -36,6 +36,8 @@ const fetchPromises = new Map<string, Promise<ApiPreparedMedia | undefined>>();
 const progressCallbacks = new Map<string, Map<string, ApiOnProgress>>();
 const cancellableCallbacks = new Map<string, ApiOnProgress>();
 
+let memoryCacheGeneration = 0;
+
 export function fetch<T extends ApiMediaFormat>(
   url: string,
   mediaFormat: T,
@@ -60,7 +62,8 @@ export function fetch<T extends ApiMediaFormat>(
   }
 
   if (!fetchPromises.has(url)) {
-    const promise = fetchFromCacheOrRemote(url, mediaFormat, isHtmlAllowed)
+    const generation = memoryCacheGeneration;
+    const promise = fetchFromCacheOrRemote(url, mediaFormat, isHtmlAllowed, generation)
       .catch((err) => {
         if (DEBUG) {
           // eslint-disable-next-line no-console
@@ -70,6 +73,7 @@ export function fetch<T extends ApiMediaFormat>(
         return undefined;
       })
       .finally(() => {
+        if (fetchPromises.get(url) !== promise) return;
         fetchPromises.delete(url);
         progressCallbacks.delete(url);
         cancellableCallbacks.delete(url);
@@ -92,6 +96,18 @@ export function fetch<T extends ApiMediaFormat>(
 
 export function getFromMemory(url: string) {
   return memoryCache.get(url) as ApiPreparedMedia;
+}
+
+export function clearMemoryCache() {
+  memoryCacheGeneration += 1;
+  cancellableCallbacks.forEach(cancelApiProgress);
+  memoryCache.forEach((media) => {
+    if (typeof media === 'string' && media.startsWith('blob:')) URL.revokeObjectURL(media);
+  });
+  memoryCache.clear();
+  fetchPromises.clear();
+  progressCallbacks.clear();
+  cancellableCallbacks.clear();
 }
 
 export function cancelProgress(progressCallback: ApiOnProgress) {
@@ -129,8 +145,14 @@ function getDownloadUrl(url: string) {
 }
 
 async function fetchFromCacheOrRemote(
-  url: string, mediaFormat: ApiMediaFormat, isHtmlAllowed: boolean, retryNumber = 0,
+  url: string,
+  mediaFormat: ApiMediaFormat,
+  isHtmlAllowed: boolean,
+  generation: number,
+  retryNumber = 0,
 ): Promise<string> {
+  ensureCurrentMemoryCacheGeneration(generation);
+
   if (!MEDIA_CACHE_DISABLED) {
     const cacheName = url.startsWith('avatar') ? MEDIA_CACHE_NAME_AVATARS : MEDIA_CACHE_NAME;
     const cached = await cacheApi.fetch(cacheName, url, asCacheApiType[mediaFormat]!, isHtmlAllowed);
@@ -144,16 +166,18 @@ async function fetchFromCacheOrRemote(
 
       const prepared = prepareMedia(media);
 
+      ensureCurrentMemoryCacheGeneration(generation, prepared);
       memoryCache.set(url, prepared);
 
       return prepared;
     }
   }
 
-  const onProgress = makeOnProgress(url);
+  const onProgress = makeOnProgress(url, generation);
   cancellableCallbacks.set(url, onProgress);
 
   const remote = await callApi('downloadMedia', { url, mediaFormat, isHtmlAllowed }, onProgress);
+  ensureCurrentMemoryCacheGeneration(generation);
   if (!remote) {
     if (retryNumber >= MAX_MEDIA_RETRIES) {
       throw new Error(`Failed to fetch media ${url}`);
@@ -163,7 +187,7 @@ async function fetchFromCacheOrRemote(
     });
     // eslint-disable-next-line no-console
     if (DEBUG) console.debug(`Retrying to fetch media ${url}`);
-    return fetchFromCacheOrRemote(url, mediaFormat, isHtmlAllowed, retryNumber + 1);
+    return fetchFromCacheOrRemote(url, mediaFormat, isHtmlAllowed, generation, retryNumber + 1);
   }
 
   const { mimeType } = remote;
@@ -176,6 +200,7 @@ async function fetchFromCacheOrRemote(
     prepared = prepareMedia(media);
   }
 
+  ensureCurrentMemoryCacheGeneration(generation, prepared);
   memoryCache.set(url, prepared);
 
   return prepared;
@@ -189,8 +214,13 @@ export async function unload(url: string) {
   }
 }
 
-function makeOnProgress(url: string) {
+function makeOnProgress(url: string, generation: number) {
   const onProgress: ApiOnProgress = (progress: number) => {
+    if (generation !== memoryCacheGeneration) {
+      onProgress.isCanceled = true;
+      return;
+    }
+
     progressCallbacks.get(url)?.forEach((callback) => {
       callback(progress);
       if (callback.isCanceled) {
@@ -201,6 +231,13 @@ function makeOnProgress(url: string) {
   };
 
   return onProgress;
+}
+
+function ensureCurrentMemoryCacheGeneration(generation: number, prepared?: ApiPreparedMedia) {
+  if (generation === memoryCacheGeneration) return;
+
+  if (typeof prepared === 'string' && prepared.startsWith('blob:')) URL.revokeObjectURL(prepared);
+  throw new Error('MEDIA_REQUEST_CANCELED');
 }
 
 function prepareMedia(mediaData: Exclude<ApiParsedMedia, ArrayBuffer>): ApiPreparedMedia {

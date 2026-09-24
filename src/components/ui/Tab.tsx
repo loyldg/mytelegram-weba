@@ -146,7 +146,7 @@ const Tab = ({
         {Boolean(badgeCount) && (
           <span className={buildClassName('badge', isBadgeActive && classNames.badgeActive)}>{badgeCount}</span>
         )}
-        {isBlocked && <Icon name="lock-badge" className="blocked" />}
+        {isBlocked && <Icon name="lock-filled" className="blocked" />}
         <i className="platform" />
       </span>
 

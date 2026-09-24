@@ -30,6 +30,7 @@ export default async function buildAttachment(
   let previewBlobUrl;
   let shouldSendAsFile;
   const shouldSendInHighQuality = options?.shouldSendInHighQuality;
+  const isRoundVideo = options?.isRoundVideo;
 
   if (SUPPORTED_PHOTO_CONTENT_TYPES.has(mimeType)) {
     const img = await preloadImage(blobUrl);
@@ -67,6 +68,8 @@ export default async function buildAttachment(
     } else {
       previewBlobUrl = blobUrl;
     }
+  } else if (isRoundVideo) {
+    previewBlobUrl = await createPosterForVideo(blobUrl);
   } else if (SUPPORTED_VIDEO_CONTENT_TYPES.has(mimeType)) {
     try {
       const { videoWidth: width, videoHeight: height, duration } = await preloadVideo(blobUrl);
@@ -80,15 +83,19 @@ export default async function buildAttachment(
 
     previewBlobUrl = await createPosterForVideo(blobUrl);
   } else if (SUPPORTED_AUDIO_CONTENT_TYPES.has(mimeType)) {
-    const {
-      duration, title, performer, coverUrl,
-    } = await parseAudioMetadata(blobUrl);
-    audio = {
-      duration: duration || 0,
-      title,
-      performer,
-    };
-    previewBlobUrl = coverUrl;
+    try {
+      const {
+        duration, title, performer, coverUrl,
+      } = await parseAudioMetadata(blobUrl);
+      audio = {
+        duration: duration || 0,
+        title,
+        performer,
+      };
+      previewBlobUrl = coverUrl;
+    } catch (err) {
+      shouldSendAsFile = true;
+    }
   }
 
   return {
@@ -122,7 +129,7 @@ export function prepareAttachmentsToSend(
 
     return {
       ...attach,
-      shouldSendAsFile: !(attach.voice || attach.audio) || undefined,
+      shouldSendAsFile: !(attach.voice || attach.audio || attach.isRoundVideo) || undefined,
       shouldSendAsSpoiler: undefined,
     };
   });
@@ -153,5 +160,6 @@ export function buildGifAttachment(gif: ApiVideo): ApiAttachment {
     mimeType,
     size,
     quick: width && height ? { width, height, duration } : undefined,
+    uniqueId: `gif-${gif.id}-${Date.now()}`,
   } satisfies ApiAttachment;
 }

@@ -97,7 +97,7 @@ const DisableSharingAboutModal = ({
       <div className={styles.footer}>
         <Button
           onClick={handleOpenPremium}
-          iconName="unlock-badge"
+          iconName="unlock-filled"
           iconClassName={styles.unlockIcon}
           noForcedUpperCase
         >

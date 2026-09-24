@@ -1,0 +1,26 @@
+.root {
+  pointer-events: none;
+
+  position: absolute;
+  top: -0.625rem;
+  left: -0.625rem;
+
+  width: 4.25rem;
+  height: 4.25rem;
+
+  color: var(--accent-color, var(--color-primary));
+}
+
+.withCutout {
+  mask-image: radial-gradient(circle at 3.21875rem 3.21875rem, transparent 0.75rem, #000 0.8125rem);
+}
+
+.withCutout.rtl {
+  mask-image: radial-gradient(circle at 1.03125rem 3.21875rem, transparent 0.75rem, #000 0.8125rem);
+}
+
+.tick {
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-width: 1.25;
+}

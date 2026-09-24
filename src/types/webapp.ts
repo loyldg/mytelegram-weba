@@ -1,7 +1,5 @@
 import type { ApiInputMessageReplyInfo } from '../api/types';
 
-export type WebAppModalStateType = 'fullScreen' | 'maximized' | 'minimized';
-
 export type WebApp = {
   url: string;
   requestUrl?: string;
@@ -10,6 +8,9 @@ export type WebApp = {
   buttonText: string;
   peerId?: string;
   queryId?: string;
+  isSameOrigin?: true;
+  isJoinChat?: boolean;
+  isJoinChatBroadcast?: boolean;
   slug?: string;
   replyInfo?: ApiInputMessageReplyInfo;
   canSendMessages?: boolean;
@@ -26,12 +27,12 @@ export type WebApp = {
 };
 
 export type PopupOptions = {
-  title: string;
+  title?: string;
   message: string;
   buttons: {
     id: string;
     type: 'default' | 'ok' | 'close' | 'cancel' | 'destructive';
-    text: string;
+    text?: string;
   }[];
 };
 

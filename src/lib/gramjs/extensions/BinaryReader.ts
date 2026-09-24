@@ -1,3 +1,4 @@
+import { bufferToUtf8, readInt32LE, readUint32LE } from '../../../util/encoding/buffer';
 import { TypeNotFoundError } from '../errors';
 import { coreObjects } from '../tl/core';
 
@@ -5,17 +6,16 @@ import { readBigIntFromBuffer } from '../Helpers';
 import { tlobjects } from '../tl/AllTLObjects';
 
 export default class BinaryReader {
-  private readonly stream: Buffer;
+  private readonly stream: Uint8Array;
 
-  private _last?: Buffer;
+  private _last?: Uint8Array;
 
   offset: number;
 
   /**
      * Small utility class to read binary data.
-     * @param data {Buffer}
      */
-  constructor(data: Buffer) {
+  constructor(data: Uint8Array) {
     this.stream = data;
     this._last = undefined;
     this.offset = 0;
@@ -37,14 +37,8 @@ export default class BinaryReader {
      * @param signed {Boolean}
      */
   readInt(signed = true) {
-    let res;
-    if (signed) {
-      res = this.stream.readInt32LE(this.offset);
-    } else {
-      res = this.stream.readUInt32LE(this.offset);
-    }
-    this.offset += 4;
-    return res;
+    const buffer = this.read(4);
+    return signed ? readInt32LE(buffer) : readUint32LE(buffer);
   }
 
   /**
@@ -61,7 +55,8 @@ export default class BinaryReader {
      * @returns {number}
      */
   readFloat() {
-    return this.read(4).readFloatLE(0);
+    const buffer = this.read(4);
+    return new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength).getFloat32(0, true);
   }
 
   /**
@@ -70,7 +65,8 @@ export default class BinaryReader {
      */
   readDouble() {
     // was this a bug ? it should have been <d
-    return this.read(8).readDoubleLE(0);
+    const buffer = this.read(8);
+    return new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength).getFloat64(0, true);
   }
 
   /**
@@ -86,13 +82,26 @@ export default class BinaryReader {
   /**
      * Read the given amount of bytes, or -1 to read all remaining.
      * @param length {number}
-     * @param checkLength {boolean} whether to check if the length overflows or not.
      */
   read(length = -1) {
+    return this.readBuffer(length, true);
+  }
+
+  /**
+   * Creates a bounded reader over the given amount of bytes without copying them.
+   * @param length {number}
+   */
+  createSubReader(length: number) {
+    return new BinaryReader(this.readBuffer(length, false));
+  }
+
+  private readBuffer(length: number, shouldCopy: boolean) {
     if (length === -1) {
       length = this.stream.length - this.offset;
     }
-    const result = this.stream.slice(this.offset, this.offset + length);
+    const result = shouldCopy
+      ? this.stream.slice(this.offset, this.offset + length)
+      : this.stream.subarray(this.offset, this.offset + length);
     this.offset += length;
     if (result.length !== length) {
       throw Error(
@@ -106,7 +115,6 @@ export default class BinaryReader {
 
   /**
      * Gets the byte array representing the current buffer as a whole.
-     * @returns {Buffer}
      */
   getBuffer() {
     return this.stream;
@@ -118,7 +126,6 @@ export default class BinaryReader {
   /**
      * Reads a Telegram-encoded byte array, without the need of
      * specifying its length.
-     * @returns {Buffer}
      */
   tgReadBytes() {
     const firstByte = this.readByte();
@@ -146,7 +153,7 @@ export default class BinaryReader {
      * @returns {string}
      */
   tgReadString() {
-    return this.tgReadBytes().toString('utf-8');
+    return bufferToUtf8(this.tgReadBytes());
   }
 
   /**
@@ -216,12 +223,13 @@ export default class BinaryReader {
         throw error;
       }
     }
-    return clazz.fromReader(this);
+    return typeof clazz.readFrom === 'function'
+      ? clazz.readFrom(this)
+      : clazz.fromReader(this);
   }
 
   /**
      * Reads a vector (a list) of Telegram objects.
-     * @returns {[Buffer]}
      */
   tgReadVector() {
     if (this.readInt(false) !== 0x1cb5c415) {
@@ -241,7 +249,6 @@ export default class BinaryReader {
 
   /**
      * Tells the current position on the stream.
-     * @returns {number}
      */
   tellPosition() {
     return this.offset;
@@ -249,7 +256,6 @@ export default class BinaryReader {
 
   /**
      * Sets the current position on the stream.
-     * @param position
      */
   setPosition(position: number) {
     this.offset = position;
@@ -258,7 +264,6 @@ export default class BinaryReader {
   /**
      * Seeks the stream position given an offset from the current position.
      * The offset may be negative.
-     * @param offset
      */
   seek(offset: number) {
     this.offset += offset;

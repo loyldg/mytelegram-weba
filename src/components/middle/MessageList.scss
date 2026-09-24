@@ -1,22 +1,80 @@
 @use "../../styles/mixins";
 
+@property --message-list-mask-panes-height {
+  inherits: false;
+  initial-value: 0px;
+  syntax: "<length>";
+}
+
+@property --message-list-mask-player-height {
+  inherits: false;
+  initial-value: 0px;
+  syntax: "<length>";
+}
+
 .MessageList {
+  --message-list-top-inset: 0px;
+  --message-list-min-reserve: var(--composer-min-bottom-reserve);
+  --message-list-composer-gap: var(--composer-top-gap);
+  --message-list-base-reserve: calc(var(--message-list-min-reserve) + var(--message-list-composer-gap));
+  --message-list-bottom-inset: var(--message-list-base-reserve);
+  --message-list-fade-floor: rgba(0, 0, 0, 0.24);
+  --message-list-top-fade-ramp: 1.5rem;
+  --message-list-bottom-fade: var(--message-list-min-reserve);
+
+  container-type: size;
   overflow-x: hidden;
   overflow-y: scroll;
   flex: 1;
 
   width: 100%;
-  margin-bottom: 0.5rem;
 
-  /* stylelint-disable-next-line plugin/no-low-performance-animation-properties */
-  transition: bottom 150ms ease-out, transform var(--layer-transition);
+  /* stylelint-disable plugin/no-low-performance-animation-properties */
+  transition:
+    bottom 150ms ease-out,
+    transform var(--layer-transition),
+    --message-list-mask-panes-height var(--middle-header-panes-transition, 0s),
+    --message-list-mask-player-height var(--mask-glide-transition);
+  /* stylelint-enable plugin/no-low-performance-animation-properties */
 
   body.no-page-transitions & {
     transition: none !important;
   }
 
-  .mask-image-enabled & {
-    mask-image: linear-gradient(to top, transparent 0, #000 0.5rem);
+  .messages-layout & {
+    --message-list-header-base: calc(var(--middle-header-height) + var(--middle-panel-inline-padding));
+    --message-list-top-stack: calc(var(--middle-header-player-height, 0px) + var(--message-list-header-base));
+    --message-list-top-inset: calc(var(--message-list-top-stack) + var(--middle-header-panes-height));
+    --message-list-mask-panes-height: var(--middle-header-panes-mask-height, var(--middle-header-panes-height));
+    --message-list-mask-player-height: var(--middle-header-player-height, 0px);
+    --message-list-mask-top-stack: calc(var(--message-list-header-base) + var(--message-list-mask-player-height));
+    --message-list-mask-top-inset: calc(var(--message-list-mask-top-stack) + var(--message-list-mask-panes-height));
+
+    mask-image:
+      linear-gradient(
+        to bottom,
+        var(--message-list-fade-floor) 0,
+        var(--message-list-fade-floor) calc(var(--message-list-mask-top-inset) - var(--message-list-top-fade-ramp)),
+        color-mix(in srgb, #000 8.6%, var(--message-list-fade-floor))
+          calc(var(--message-list-mask-top-inset) - var(--message-list-top-fade-ramp) * 0.8),
+        color-mix(in srgb, #000 33.4%, var(--message-list-fade-floor))
+          calc(var(--message-list-mask-top-inset) - var(--message-list-top-fade-ramp) * 0.6),
+        color-mix(in srgb, #000 66.6%, var(--message-list-fade-floor))
+          calc(var(--message-list-mask-top-inset) - var(--message-list-top-fade-ramp) * 0.4),
+        color-mix(in srgb, #000 91.4%, var(--message-list-fade-floor))
+          calc(var(--message-list-mask-top-inset) - var(--message-list-top-fade-ramp) * 0.2),
+        #000 var(--message-list-mask-top-inset),
+        #000 calc(100% - var(--message-list-bottom-fade)),
+        color-mix(in srgb, #000 91.4%, var(--message-list-fade-floor))
+          calc(100% - var(--message-list-bottom-fade) * 0.8),
+        color-mix(in srgb, #000 66.6%, var(--message-list-fade-floor))
+          calc(100% - var(--message-list-bottom-fade) * 0.6),
+        color-mix(in srgb, #000 33.4%, var(--message-list-fade-floor))
+          calc(100% - var(--message-list-bottom-fade) * 0.4),
+        color-mix(in srgb, #000 8.6%, var(--message-list-fade-floor))
+          calc(100% - var(--message-list-bottom-fade) * 0.2),
+        var(--message-list-fade-floor) 100%
+      );
   }
 
   body.keyboard-visible & {
@@ -37,6 +95,7 @@
   }
 
   &.with-bottom-snap {
+    scroll-padding-bottom: var(--message-list-bottom-inset);
     scroll-snap-type: y proximity;
   }
 
@@ -49,7 +108,7 @@
     max-width: var(--messages-container-width);
     min-height: 100%;
     margin: 0 auto;
-    padding: 1rem 1rem 0 1.125rem;
+    padding: 1rem 1rem var(--message-list-bottom-inset) 1.125rem;
 
     .force-messages-scroll & {
       margin-top: 100vh !important;
@@ -59,49 +118,60 @@
       scroll-snap-align: end;
     }
 
+    .live-tail {
+      overflow-anchor: none;
+      min-height:
+        max(
+          0rem,
+          calc(
+            100cqh - var(--message-list-top-inset) - var(--middle-header-gap) - var(--message-list-bottom-inset)
+          )
+        );
+
+      .message-list-item {
+        animation: live-tail-message-mount 0.2s ease-out;
+
+        &.own {
+          transform-origin: bottom right;
+        }
+
+        body.no-message-sending-animations & {
+          animation: none;
+        }
+      }
+    }
+
     @media (max-width: 600px) {
       width: 100vw;
       // Patch for an issue on Android when rotating device
       margin: 0;
-      padding: 2.75rem 0.5rem 0;
+      padding: 2.75rem 0.5rem var(--message-list-bottom-inset);
     }
   }
 
   .first-message-date-group {
-    padding-top: var(--middle-header-panes-height);
-  }
-
-  &.no-composer {
-    margin-bottom: 0;
-
-    .last-in-list {
-      margin-bottom: 1rem;
-    }
+    padding-top: var(--message-list-top-inset);
   }
 
   &.select-mode-active,
   &.type-pinned,
   &.saved-dialog {
+    --message-list-bottom-inset: var(--message-list-base-reserve);
+    --message-list-bottom-fade: var(--message-list-base-reserve);
+
     margin-bottom: 0;
 
-    .last-in-list {
-      margin-bottom: 5.125rem;
-
-      &.ActionMessage {
-        padding-bottom: 0.125rem;
-      }
-
-      @media (max-width: 600px) {
-        margin-bottom: 4.25rem;
-      }
+    .last-in-list.ActionMessage {
+      padding-bottom: 0.125rem;
     }
+  }
 
-    &:has(.sponsored-media-preview) {
-      margin-bottom: 5.125rem;
+  &.no-footer {
+    --message-list-bottom-inset: 0px;
+    --message-list-bottom-fade: 0px;
 
-      .last-in-list {
-        margin-bottom: 1rem;
-      }
+    .last-in-list {
+      margin-bottom: 1rem;
     }
   }
 
@@ -143,7 +213,7 @@
       transition: none !important;
     }
 
-    &.is-just-added:not(.own) {
+    &.is-just-added {
       transform: none;
     }
 
@@ -301,7 +371,7 @@
 
   &.scrolled:not(.is-animating) .sticky-date {
     position: sticky;
-    top: calc(0.625rem + var(--middle-header-panes-height));
+    top: calc(1rem + var(--message-list-top-inset));
   }
 
   &.is-animating .message-select-control {
@@ -332,6 +402,10 @@
     top: -1rem; // Prevent overlapping with the sponsored message
   }
 
+  &:not(.no-footer) .SponsoredMessage {
+    margin-top: 0.125rem;
+  }
+
   @media (pointer: coarse) {
     user-select: none;
 
@@ -347,28 +421,26 @@
   @media (max-width: 600px) {
     &.with-bottom-shift {
       margin-bottom: 0;
-
-      .last-in-list {
-        margin-bottom: 4.25rem;
-
-        body:not(.keyboard-visible) & {
-          margin-bottom: calc(4.25rem + env(safe-area-inset-bottom));
-        }
-      }
     }
   }
 
   @media (min-width: 1276px) {
     transform: translate3d(0, 0, 0);
     width: 100%;
-    transition: transform var(--layer-transition);
+    transition:
+      transform var(--layer-transition),
+      --message-list-mask-panes-height var(--middle-header-panes-transition, 0s),
+      --message-list-mask-player-height var(--mask-glide-transition);
 
     .messages-container {
       width: calc(100% - var(--right-column-width));
     }
 
     body.no-right-column-animations & {
-      transition: none;
+      /* stylelint-disable-next-line plugin/no-low-performance-animation-properties */
+      transition:
+        --message-list-mask-panes-height var(--middle-header-panes-transition, 0s),
+        --message-list-mask-player-height var(--mask-glide-transition);
     }
 
     #Main.right-column-open & {
@@ -385,7 +457,10 @@
   }
 
   @media (max-width: 600px) {
-    transition: transform var(--layer-transition);
+    transition:
+      transform var(--layer-transition),
+      --message-list-mask-panes-height var(--middle-header-panes-transition, 0s),
+      --message-list-mask-player-height var(--mask-glide-transition);
 
     body.enable-symbol-menu-transforms & {
       transform: translate3d(0, 0, 0);
@@ -395,4 +470,9 @@
       transform: translate3d(0, calc(-1 * (var(--symbol-menu-height))), 0);
     }
   }
+}
+
+@keyframes live-tail-message-mount {
+  from { transform: translateY(2rem); }
+  to { transform: translateY(0); }
 }

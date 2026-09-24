@@ -16,10 +16,16 @@ const runThrottledForScroll = throttle((cb) => cb(), 250, false);
 
 let isScrollingProgrammatically = false;
 
+function getTabsNaturalTop(container: HTMLElement): number {
+  const profileInfo = container.querySelector<HTMLElement>('.profile-info');
+  return profileInfo ? profileInfo.offsetHeight : 0;
+}
+
 export default function useProfileState({
   containerRef,
   tabType,
   profileState,
+  hasProfileInfo,
   onProfileStateChange,
   forceScrollProfileTab = false,
   allowAutoScrollToTabs = false,
@@ -28,6 +34,7 @@ export default function useProfileState({
   containerRef: ElementRef<HTMLDivElement>;
   tabType: ProfileTabType;
   profileState: ProfileState;
+  hasProfileInfo: boolean;
   forceScrollProfileTab?: boolean;
   allowAutoScrollToTabs?: boolean;
   onProfileStateChange: (state: ProfileState) => void;
@@ -37,9 +44,9 @@ export default function useProfileState({
   useEffectWithPrevDeps(([prevTabType]) => {
     if ((prevTabType && prevTabType !== tabType && allowAutoScrollToTabs) || (tabType && forceScrollProfileTab)) {
       const container = containerRef.current!;
-      const tabsEl = container.querySelector<HTMLDivElement>('.SquareTabList')!;
+      const tabsEl = container.querySelector<HTMLDivElement>('.shared-media-tabs')!;
       handleStopAutoScrollToTabs();
-      if (container.scrollTop < tabsEl.offsetTop) {
+      if (container.scrollTop < getTabsNaturalTop(container)) {
         onProfileStateChange(getStateFromTabType(tabType));
         isScrollingProgrammatically = true;
         animateScroll({
@@ -69,8 +76,8 @@ export default function useProfileState({
       return;
     }
 
-    const tabListEl = container.querySelector<HTMLDivElement>('.SquareTabList');
-    if (!tabListEl || tabListEl.offsetTop > container.scrollTop) {
+    const tabsEl = container.querySelector<HTMLDivElement>('.shared-media-tabs');
+    if (!tabsEl || !hasProfileInfo || getTabsNaturalTop(container) > container.scrollTop) {
       return;
     }
 
@@ -86,7 +93,7 @@ export default function useProfileState({
     setTimeout(() => {
       isScrollingProgrammatically = false;
     }, PROGRAMMATIC_SCROLL_TIMEOUT_MS);
-  }, [profileState, containerRef]);
+  }, [profileState, containerRef, hasProfileInfo]);
 
   const determineProfileState = useLastCallback(() => {
     const container = containerRef.current;
@@ -94,13 +101,12 @@ export default function useProfileState({
       return;
     }
 
-    const tabListEl = container.querySelector<HTMLDivElement>('.SquareTabList');
-    if (!tabListEl) {
+    if (!container.querySelector('.shared-media-tabs')) {
       return;
     }
 
     let state: ProfileState = ProfileState.Profile;
-    if (Math.ceil(container.scrollTop) >= tabListEl.offsetTop) {
+    if (Math.ceil(container.scrollTop) >= getTabsNaturalTop(container)) {
       state = getStateFromTabType(tabType);
     }
 

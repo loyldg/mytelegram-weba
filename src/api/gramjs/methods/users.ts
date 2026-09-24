@@ -1,15 +1,17 @@
 import { Api as GramJs } from '../../../lib/gramjs';
 
 import type {
-  ApiEmojiStatusType, ApiFormattedText, ApiPeer, ApiUser,
+  ApiBirthday, ApiEmojiStatusType, ApiFormattedText, ApiPeer, ApiUser,
 } from '../../types';
 
 import { toJSNumber } from '../../../util/numbers';
 import { buildApiChatFromPreview } from '../apiBuilders/chats';
 import { buildApiPhoto } from '../apiBuilders/common';
+import { buildApiAudioFromDocument } from '../apiBuilders/media';
 import { buildApiPeerId } from '../apiBuilders/peers';
 import { buildApiUser, buildApiUserFullInfo, buildApiUserStatuses } from '../apiBuilders/users';
 import {
+  buildInputBirthday,
   buildInputContact,
   buildInputEmojiStatus,
   buildInputPeer,
@@ -19,7 +21,7 @@ import {
   DEFAULT_PRIMITIVES,
   getEntityTypeById,
 } from '../gramjsBuilders';
-import { addPhotoToLocalDb, addUserToLocalDb } from '../helpers/localDb';
+import { addDocumentToLocalDb, addPhotoToLocalDb, addSavedMusicRepairInfo, addUserToLocalDb } from '../helpers/localDb';
 import localDb from '../localDb';
 import { sendApiUpdate } from '../updates/apiUpdateEmitter';
 import { invokeRequest } from './client';
@@ -109,6 +111,30 @@ export async function fetchCommonChats({ user, maxId }: { user: ApiUser; maxId?:
   return { chatIds, count };
 }
 
+export async function fetchSavedMusic({ user, offset, limit }: {
+  user: ApiUser;
+  offset: number;
+  limit: number;
+}) {
+  const result = await invokeRequest(new GramJs.users.GetSavedMusic({
+    id: buildInputUser(user.id, user.accessHash),
+    offset,
+    limit,
+    hash: DEFAULT_PRIMITIVES.BIGINT,
+  }));
+
+  if (!(result instanceof GramJs.users.SavedMusic)) {
+    return undefined;
+  }
+
+  const audios = result.documents.map((document) => {
+    addDocumentToLocalDb(addSavedMusicRepairInfo(document, user.id));
+    return document instanceof GramJs.Document ? buildApiAudioFromDocument(document) : undefined;
+  }).filter(Boolean);
+
+  return { audios, count: result.count };
+}
+
 export async function fetchPaidMessagesStarsAmount(user: ApiUser) {
   const result = await invokeRequest(new GramJs.users.GetRequirementsToContact({
     id: [buildInputUser(user.id, user.accessHash)],
@@ -130,25 +156,6 @@ export async function fetchNearestCountry() {
   const dcInfo = await invokeRequest(new GramJs.help.GetNearestDc());
 
   return dcInfo?.country;
-}
-
-export async function fetchTopUsers() {
-  const topPeers = await invokeRequest(new GramJs.contacts.GetTopPeers({
-    correspondents: true,
-    offset: DEFAULT_PRIMITIVES.INT,
-    limit: DEFAULT_PRIMITIVES.INT,
-    hash: DEFAULT_PRIMITIVES.BIGINT,
-  }));
-  if (!(topPeers instanceof GramJs.contacts.TopPeers)) {
-    return undefined;
-  }
-
-  const users = topPeers.users.map(buildApiUser).filter((user): user is ApiUser => Boolean(user) && !user.isSelf);
-  const ids = users.map(({ id }) => id);
-
-  return {
-    ids,
-  };
 }
 
 export async function fetchContactList() {
@@ -231,6 +238,21 @@ export function updateContact({
     phone: phoneNumber,
     addPhonePrivacyException: shouldSharePhoneNumber || undefined,
     note: note ? buildInputTextWithEntities(note) : undefined,
+  }), {
+    shouldReturnTrue: true,
+  });
+}
+
+export function suggestBirthday({
+  user,
+  birthday,
+}: {
+  user: ApiUser;
+  birthday: ApiBirthday;
+}) {
+  return invokeRequest(new GramJs.users.SuggestBirthday({
+    id: buildInputUser(user.id, user.accessHash),
+    birthday: buildInputBirthday(birthday),
   }), {
     shouldReturnTrue: true,
   });

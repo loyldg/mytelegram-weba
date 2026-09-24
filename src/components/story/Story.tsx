@@ -1,5 +1,3 @@
-import type { FC } from '../../lib/teact/teact';
-import type React from '../../lib/teact/teact';
 import {
   memo, useEffect, useMemo, useRef, useState,
 } from '../../lib/teact/teact';
@@ -561,8 +559,8 @@ function Story({
     });
   }, [oldLang, isDeletedStory]);
 
-  const MenuButton: FC<{ onTrigger: () => void; isOpen?: boolean }> = useMemo(() => {
-    return ({ onTrigger, isOpen }) => {
+  const MenuButton = useMemo(() => {
+    return ({ onTrigger, isOpen }: { onTrigger: () => void; isOpen?: boolean }) => {
       return (
         <Button
           round
@@ -599,11 +597,11 @@ function Story({
   function renderStoryPrivacyButton() {
     if (!isUserStory) return undefined;
 
-    let privacyIcon: IconName = 'channel-filled';
+    let privacyIcon: IconName = 'megaphone-filled';
     const gradient: Record<string, [string, string]> = {
-      'channel-filled': ['#50ABFF', '#007AFF'],
+      'megaphone-filled': ['#50ABFF', '#007AFF'],
       'user-filled': ['#C36EFF', '#8B60FA'],
-      'favorite-filled': ['#88D93A', '#30B73B'],
+      'star-regular-filled': ['#88D93A', '#30B73B'],
       'group-filled': ['#FFB743', '#F69A36'],
     };
 
@@ -612,13 +610,13 @@ function Story({
 
       switch (visibility) {
         case 'everybody':
-          privacyIcon = 'channel-filled';
+          privacyIcon = 'megaphone-filled';
           break;
         case 'contacts':
           privacyIcon = 'user-filled';
           break;
         case 'closeFriends':
-          privacyIcon = 'favorite-filled';
+          privacyIcon = 'star-regular-filled';
           break;
         case 'nobody':
           privacyIcon = 'group-filled';
@@ -629,7 +627,7 @@ function Story({
       }
 
       privacyIcon = story.isForCloseFriends
-        ? 'favorite-filled'
+        ? 'star-regular-filled'
         : (story.isForContacts ? 'user-filled' : 'group-filled');
     }
 
@@ -954,7 +952,7 @@ export default memo(withGlobal<OwnProps>((global, {
     mapModal,
     reportModal,
     giftInfoModal,
-    isPaymentMessageConfirmDialogOpen,
+    paymentMessageConfirmDialogKey,
     storyStealthModal,
   } = tabState;
   const { isOpen: isPremiumModalOpen } = premiumModal || {};
@@ -962,7 +960,7 @@ export default memo(withGlobal<OwnProps>((global, {
   const story = selectPeerStory(global, peerId, storyId);
   const isLoadedStory = story && 'content' in story;
   const shouldForcePause = Boolean(
-    isPaymentMessageConfirmDialogOpen
+    paymentMessageConfirmDialogKey
     || viewModal || forwardedStoryId || tabState.reactionPicker?.storyId || reportModal || isPrivacyModalOpen
     || isPremiumModalOpen || isDeleteModalOpen || safeLinkModalUrl || isStealthModalOpen || mapModal || giftInfoModal,
   );

@@ -9,6 +9,7 @@ import {
 
 import { NSFW_RESTRICTION_REASON } from '../../config';
 import {
+  getApplicableRestrictionReasons,
   getMessageAudio,
   getMessageContent,
   getMessageDocument,
@@ -26,11 +27,7 @@ import {
   getWebPageVideo,
 } from '../helpers';
 import { selectChat } from './chats';
-import {
-  selectActiveRestrictionReasons,
-  selectReplyMessage,
-  selectWebPageFromMessage,
-} from './messages';
+import { selectReplyMessage, selectWebPageFromMessage } from './messages';
 import { selectSettingsKeys } from './settings';
 import { selectAnimatedEmoji, selectCustomEmoji } from './symbols';
 
@@ -39,8 +36,11 @@ export function selectIsMediaNsfw<T extends GlobalState>(global: T, message: Api
   const chat = selectChat(global, message.chatId);
   if (isSensitiveEnabled) return false;
 
-  const chatActiveRestrictions = selectActiveRestrictionReasons(global, chat?.restrictionReasons);
-  const messageActiveRestrictions = selectActiveRestrictionReasons(global, message.restrictionReasons);
+  const { ignoreRestrictionReasons } = global.appConfig;
+  const chatActiveRestrictions = getApplicableRestrictionReasons(chat?.restrictionReasons, ignoreRestrictionReasons);
+  const messageActiveRestrictions = getApplicableRestrictionReasons(
+    message.restrictionReasons, ignoreRestrictionReasons,
+  );
 
   return chatActiveRestrictions.some((reason) => reason.reason === NSFW_RESTRICTION_REASON)
     || messageActiveRestrictions.some((reason) => reason.reason === NSFW_RESTRICTION_REASON);

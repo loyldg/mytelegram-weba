@@ -5,6 +5,8 @@ import { NewChatMembersProgress, RightColumnContent } from '../../types';
 
 import { IS_SNAP_EFFECT_SUPPORTED } from '../../util/browser/windowEnvironment';
 import { getCurrentTabId } from '../../util/establishMultitabRole';
+import { getActionMessageBg } from '../../util/wallpaper';
+import { selectTabBrowserState } from '../helpers/browser';
 import { getMessageVideo, getWebPageVideo } from '../helpers/messageMedia';
 import { selectCurrentManagement } from './management';
 import { selectWebPageFromMessage } from './messages';
@@ -22,10 +24,11 @@ export function selectIsMediaViewerOpen<T extends GlobalState>(
       messageId,
       isAvatarView,
       standaloneMedia,
+      pageMedia,
       isSponsoredMessage,
     },
   } = selectTabState(global, tabId);
-  return Boolean(standaloneMedia || (chatId && (isAvatarView || messageId || isSponsoredMessage)));
+  return Boolean(pageMedia || standaloneMedia || (chatId && (isAvatarView || messageId || isSponsoredMessage)));
 }
 
 export function selectRightColumnContentKey<T extends GlobalState>(
@@ -53,10 +56,6 @@ export function selectRightColumnContentKey<T extends GlobalState>(
     RightColumnContent.BoostStatistics
   ) : tabState.monetizationStatistics ? (
     RightColumnContent.MonetizationStatistics
-  ) : tabState.stickerSearch.query !== undefined ? (
-    RightColumnContent.StickerSearch
-  ) : tabState.gifSearch.query !== undefined ? (
-    RightColumnContent.GifSearch
   ) : tabState.newChatMembersProgress !== NewChatMembersProgress.Closed ? (
     RightColumnContent.AddingMembers
   ) : tabState.chatInfo.isOpen && tabState.messageLists.length ? (
@@ -77,12 +76,12 @@ export function selectTheme<T extends GlobalState>(global: T) {
 }
 
 export function selectThemeValues<T extends GlobalState>(global: T, themeKey: ThemeKey) {
-  return global.settings.themes[themeKey];
+  return selectSharedSettings(global).themes[themeKey];
 }
 
 export function selectActionMessageBg<T extends GlobalState>(global: T) {
   const theme = selectTheme(global);
-  return global.settings.themes[theme]?.patternColor;
+  return getActionMessageBg(theme, selectThemeValues(global, theme));
 }
 
 export function selectIsForumPanelOpen<T extends GlobalState>(
@@ -109,6 +108,20 @@ export function selectIsReactionPickerOpen<T extends GlobalState>(
 ) {
   const { reactionPicker } = selectTabState(global, tabId);
   return Boolean(reactionPicker?.position);
+}
+
+export function selectCommunityPanelId<T extends GlobalState>(
+  global: T,
+  ...[tabId = getCurrentTabId()]: TabArgs<T>
+) {
+  return selectTabState(global, tabId).communityPanelId;
+}
+
+export function selectIsChatListPanelOpen<T extends GlobalState>(
+  global: T,
+  ...[tabId = getCurrentTabId()]: TabArgs<T>
+) {
+  return selectIsForumPanelOpen(global, tabId) || Boolean(selectCommunityPanelId(global, tabId));
 }
 
 export function selectPerformanceSettings<T extends GlobalState>(global: T) {
@@ -168,16 +181,17 @@ export function selectIsSynced<T extends GlobalState>(global: T) {
 export function selectWebApp<T extends GlobalState>(
   global: T, key: string, ...[tabId = getCurrentTabId()]: TabArgs<T>
 ) {
-  return selectTabState(global, tabId).webApps.openedWebApps[key];
+  const tab = selectTabBrowserState(selectTabState(global, tabId)).openedTabs[key];
+  return tab?.type === 'webApp' ? tab.webApp : undefined;
 }
 
 export function selectActiveWebApp<T extends GlobalState>(
   global: T, ...[tabId = getCurrentTabId()]: TabArgs<T>
 ) {
-  const activeWebAppKey = selectTabState(global, tabId).webApps.activeWebAppKey;
-  if (!activeWebAppKey) return undefined;
+  const { activeTabKey } = selectTabBrowserState(selectTabState(global, tabId));
+  if (!activeTabKey) return undefined;
 
-  return selectWebApp(global, activeWebAppKey, tabId);
+  return selectWebApp(global, activeTabKey, tabId);
 }
 
 export function selectLeftColumnContentKey<T extends GlobalState>(

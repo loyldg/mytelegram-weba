@@ -3,22 +3,31 @@ import type { DcId, SharedSessionData } from '../types';
 
 import {
   DC_IDS,
-  DEBUG, IS_SCREEN_LOCKED_CACHE_KEY,
+  DEBUG,
   SESSION_ACCOUNT_PREFIX,
   SESSION_LEGACY_USER_KEY,
+  TEST_SESSION,
 } from '../config';
-import { ACCOUNT_SLOT, storeAccountData, writeSlotSession } from './multiaccount';
+import {
+  isEncryptedSessionStoreEnabled,
+  isSessionStoreLocked,
+  readSessionValue,
+  removeSessionValue,
+  writeSessionValue,
+} from './passcode/sessionStore';
+import {
+  ACCOUNT_SLOT, getAccountSlots, loadSlotSession, storeAccountData, updateSessionStorage,
+} from './multiaccount';
+import { lockPasscodeSessionStore } from './passcode';
 
 export function hasStoredSession() {
-  if (checkSessionLocked()) {
-    return true;
-  }
+  if (checkSessionLocked()) return true;
 
   const slotData = loadSlotSession(ACCOUNT_SLOT);
   if (slotData) return Boolean(slotData.dcId);
 
   if (!ACCOUNT_SLOT) {
-    const legacyAuthJson = localStorage.getItem(SESSION_LEGACY_USER_KEY);
+    const legacyAuthJson = readSessionValue(SESSION_LEGACY_USER_KEY);
     if (legacyAuthJson) {
       try {
         const userAuth = JSON.parse(legacyAuthJson);
@@ -34,26 +43,28 @@ export function hasStoredSession() {
 }
 
 export function storeSession(sessionData: ApiSessionData) {
-  const {
-    mainDcId, keys, isTest,
-  } = sessionData;
+  return updateSessionStorage(() => {
+    const {
+      mainDcId, keys, isTest,
+    } = sessionData;
 
-  const currentSlotData = loadSlotSession(ACCOUNT_SLOT);
-  const newSlotData: SharedSessionData = {
-    ...currentSlotData,
-    dcId: mainDcId,
-    isTest,
-  };
+    const currentSlotData = loadSlotSession(ACCOUNT_SLOT);
+    const newSlotData: SharedSessionData = {
+      ...currentSlotData,
+      dcId: mainDcId,
+      isTest,
+    };
 
-  Object.keys(keys).map(Number).forEach((dcId) => {
-    newSlotData[`dc${dcId as DcId}_auth_key`] = keys[dcId];
+    Object.keys(keys).map(Number).forEach((dcId) => {
+      newSlotData[`dc${dcId as DcId}_auth_key`] = keys[dcId];
+    });
+
+    if (!ACCOUNT_SLOT) {
+      storeLegacySession(sessionData, currentSlotData?.userId);
+    }
+
+    writeSessionValue(`${SESSION_ACCOUNT_PREFIX}${ACCOUNT_SLOT || 1}`, JSON.stringify(newSlotData));
   });
-
-  if (!ACCOUNT_SLOT) {
-    storeLegacySession(sessionData, currentSlotData?.userId);
-  }
-
-  writeSlotSession(ACCOUNT_SLOT, newSlotData);
 }
 
 function storeLegacySession(sessionData: ApiSessionData, currentUserId?: string) {
@@ -61,23 +72,38 @@ function storeLegacySession(sessionData: ApiSessionData, currentUserId?: string)
     mainDcId, keys, isTest,
   } = sessionData;
 
-  localStorage.setItem(SESSION_LEGACY_USER_KEY, JSON.stringify({
+  writeSessionValue(SESSION_LEGACY_USER_KEY, JSON.stringify({
     dcID: mainDcId,
     id: currentUserId,
     test: isTest,
   }));
-  localStorage.setItem('dc', String(mainDcId));
+  writeSessionValue('dc', String(mainDcId));
   Object.keys(keys).map(Number).forEach((dcId) => {
-    localStorage.setItem(`dc${dcId}_auth_key`, JSON.stringify(keys[dcId]));
+    writeSessionValue(`dc${dcId}_auth_key`, JSON.stringify(keys[dcId]));
   });
 }
 
 export function clearStoredSession(slot?: number) {
-  if (!slot) {
-    clearStoredLegacySession();
+  return updateSessionStorage(() => {
+    if (!slot) {
+      clearStoredLegacySession();
+    }
+
+    removeSessionValue(`${SESSION_ACCOUNT_PREFIX}${slot || 1}`);
+  });
+}
+
+// Intentionally does not refresh the sessions vault: used when locking the screen,
+// when the encrypted copy must keep the last good snapshot
+export function clearAllStoredSessions() {
+  if (isEncryptedSessionStoreEnabled()) {
+    lockPasscodeSessionStore();
+    return;
   }
 
-  localStorage.removeItem(`${SESSION_ACCOUNT_PREFIX}${slot || 1}`);
+  clearStoredLegacySession();
+
+  getAccountSlots().forEach((slot) => removeSessionValue(`${SESSION_ACCOUNT_PREFIX}${slot}`));
 }
 
 function clearStoredLegacySession() {
@@ -88,7 +114,7 @@ function clearStoredLegacySession() {
     ...DC_IDS.map((dcId) => `dc${dcId}_hash`),
     ...DC_IDS.map((dcId) => `dc${dcId}_server_salt`),
   ].forEach((key) => {
-    localStorage.removeItem(key);
+    removeSessionValue(key);
   });
 }
 
@@ -124,7 +150,7 @@ function loadStoredLegacySession(): ApiSessionData | undefined {
     return undefined;
   }
 
-  const userAuth = JSON.parse(localStorage.getItem(SESSION_LEGACY_USER_KEY) || 'null');
+  const userAuth = JSON.parse(readSessionValue(SESSION_LEGACY_USER_KEY) || 'null');
   if (!userAuth) {
     return undefined;
   }
@@ -134,7 +160,7 @@ function loadStoredLegacySession(): ApiSessionData | undefined {
 
   DC_IDS.forEach((dcId) => {
     try {
-      const key = localStorage.getItem(`dc${dcId}_auth_key`);
+      const key = readSessionValue(`dc${dcId}_auth_key`);
       if (key) {
         keys[dcId] = JSON.parse(key);
       }
@@ -156,24 +182,12 @@ function loadStoredLegacySession(): ApiSessionData | undefined {
   };
 }
 
-export function loadSlotSession(slot: number | undefined): SharedSessionData | undefined {
-  try {
-    const data = JSON.parse(localStorage.getItem(`${SESSION_ACCOUNT_PREFIX}${slot || 1}`) || '{}') as SharedSessionData;
-    if (!data.dcId) return undefined;
-    return data;
-  } catch (e) {
-    return undefined;
-  }
-}
-
 export function updateSessionUserId(currentUserId: string) {
-  const slotData = loadSlotSession(ACCOUNT_SLOT);
-  if (!slotData) return;
-  storeAccountData(ACCOUNT_SLOT, { userId: currentUserId });
+  return storeAccountData(ACCOUNT_SLOT, { userId: currentUserId });
 }
 
 export function importTestSession() {
-  const sessionJson = process.env.TEST_SESSION!;
+  const sessionJson = TEST_SESSION!;
   try {
     const sessionData = JSON.parse(sessionJson) as ApiSessionData & { userId: string };
     storeLegacySession(sessionData, sessionData.userId);
@@ -186,5 +200,5 @@ export function importTestSession() {
 }
 
 export function checkSessionLocked() {
-  return localStorage.getItem(IS_SCREEN_LOCKED_CACHE_KEY) === 'true';
+  return isSessionStoreLocked();
 }

@@ -9,12 +9,16 @@ import renderText from '../../../common/helpers/renderText';
 
 import Icon from '../../../common/icons/Icon';
 
-export default function renderKeyboardButtonText(lang: LangFn, button: ApiKeyboardButton): TeactNode {
-  if (button.type === 'receipt') {
+export default function renderKeyboardButtonText(
+  lang: LangFn,
+  button: ApiKeyboardButton,
+  isReceipt?: boolean,
+): TeactNode {
+  if (button.action.type === 'buy' && isReceipt) {
     return lang('PaymentReceipt');
   }
 
-  if (button.type === 'buy') {
+  if (button.action.type === 'buy') {
     return replaceWithTeact(button.text, STARS_ICON_PLACEHOLDER, <Icon name="star" />);
   }
 

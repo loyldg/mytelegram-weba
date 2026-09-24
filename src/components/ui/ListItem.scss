@@ -92,10 +92,10 @@
     > .ListItem-main-icon {
       margin-inline-end: 1.75rem;
       font-size: 1.5rem;
-      color: var(--color-text-secondary);
     }
 
-    > .Switcher {
+    > .Switcher,
+    > .Switch {
       margin-inline-start: auto;
     }
 
@@ -181,20 +181,12 @@
   &.destructive {
     .ListItem-button {
       color: var(--color-error);
-
-      .ListItem-main-icon {
-        color: inherit;
-      }
     }
   }
 
   &.primary {
     .ListItem-button {
       color: var(--color-primary);
-
-      .ListItem-main-icon {
-        color: inherit;
-      }
     }
   }
 

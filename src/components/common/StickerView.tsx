@@ -103,6 +103,7 @@ const StickerView = ({
   const previewMediaHash = getStickerMediaHash(sticker, 'preview');
 
   const dpr = useDevicePixelRatio();
+  const randomIdPrefix = useUniqueId();
 
   const filterStyle = useColorFilter(customColor);
 
@@ -119,17 +120,21 @@ const StickerView = ({
   }
 
   const cachedPreview = mediaLoader.getFromMemory(previewMediaHash);
-  const isReadyToMountFullMedia = useMountAfterHeavyAnimation(hasIntersectedForPlayingRef.current);
+  const isMountedAfterHeavyAnimation = useMountAfterHeavyAnimation(hasIntersectedForPlayingRef.current);
+  const isReadyToMountFullMedia = forceOnHeavyAnimation
+    ? hasIntersectedForPlayingRef.current
+    : isMountedAfterHeavyAnimation;
   const shouldForcePreview = !skipPreview && (isUnsupportedVideo || (isStatic ? isSmall : noPlay));
-  const shouldLoadPreview = !skipPreview && !customColor && !cachedPreview
+  const shouldLoadPreview = !skipPreview && (!customColor || shouldForcePreview) && !cachedPreview
     && (!isReadyToMountFullMedia || shouldForcePreview);
   const previewMediaData = useMedia(previewMediaHash, !shouldLoadPreview);
   const withPreview = !skipPreview && (shouldLoadPreview || cachedPreview);
+  const fullMediaHashForLoad = fullMediaHash || getStickerMediaHash(sticker, 'inline');
 
   const shouldSkipLoadingFullMedia = Boolean(shouldForcePreview || (
-    fullMediaHash === previewMediaHash && (cachedPreview || previewMediaData)
+    fullMediaHashForLoad === previewMediaHash && (cachedPreview || previewMediaData)
   ));
-  const fullMediaData = useMedia(fullMediaHash || `sticker${id}`, !shouldLoad || shouldSkipLoadingFullMedia);
+  const fullMediaData = useMedia(fullMediaHashForLoad, !shouldLoad || shouldSkipLoadingFullMedia);
   const shouldRenderFullMedia = isReadyToMountFullMedia && Boolean(fullMediaData) && !isVideoBroken;
   const [isPlayerReady, markPlayerReady] = useFlag();
   const isFullMediaReady = shouldRenderFullMedia && (isStatic || isPlayerReady);
@@ -153,7 +158,6 @@ const StickerView = ({
   // Preload preview for Message Input and local message
   useMedia(previewMediaHash, !shouldLoad || !shouldPreloadPreview);
 
-  const randomIdPrefix = useUniqueId();
   const renderId = useMemo(() => ([
     (withSharedAnimation ? SHARED_PREFIX : randomIdPrefix),
     id,

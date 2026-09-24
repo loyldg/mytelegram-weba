@@ -24,12 +24,13 @@ export interface UserAuthParams {
   phoneCode: (isCodeViaApp?: boolean) => Promise<string>;
   password: (hint?: string, noReset?: boolean) => Promise<string>;
   firstAndLastNames: () => Promise<[string, string?]>;
-  qrCode: (qrCode: { token: Buffer; expires: number }) => Promise<void>;
+  qrCode: (qrCode: { token: Uint8Array; expires: number }) => Promise<void>;
   onError: (err: Error) => void;
   forceSMS?: boolean;
   initialMethod?: 'phoneNumber' | 'qrCode';
   shouldThrowIfUnauthorized?: boolean;
   webAuthToken?: string;
+  webAuthUserId?: string;
   accountIds?: string[];
   hasPasskeySupport?: boolean;
   mockScenario?: string;
@@ -109,30 +110,35 @@ export async function checkAuthorization(client: TelegramClient, shouldThrow = f
 async function signInUserWithWebToken(
   client: TelegramClient, apiCredentials: ApiCredentials, authParams: UserAuthParams,
 ): Promise<Api.TypeUser> {
+  let hasUnsafeAuthorization = false;
   try {
-    const { apiId, apiHash } = apiCredentials;
-    const sendResult = await client.invoke(new Api.auth.ImportWebTokenAuthorization({
-      webAuthToken: authParams.webAuthToken!,
-      apiId,
-      apiHash,
-    }));
-
-    if (sendResult instanceof Api.auth.Authorization) {
-      return sendResult.user;
-    } else {
-      throw new Error('SIGN_UP_REQUIRED');
+    let user: Api.TypeUser;
+    try {
+      const { apiId, apiHash } = apiCredentials;
+      const result = await client.invoke(new Api.auth.ImportWebTokenAuthorization({
+        webAuthToken: authParams.webAuthToken!, apiId, apiHash,
+      }));
+      if (!(result instanceof Api.auth.Authorization)) throw new Error('SIGN_UP_REQUIRED');
+      user = result.user;
+    } catch (err: unknown) {
+      if (!(err instanceof RPCError) || err.errorMessage !== 'SESSION_PASSWORD_NEEDED') throw err;
+      user = await signInWithPassword(client, apiCredentials, authParams, true);
     }
+    if (user.id.toString() !== authParams.webAuthUserId) {
+      hasUnsafeAuthorization = true;
+      await client.invoke(new Api.auth.LogOut());
+      hasUnsafeAuthorization = false;
+      throw new Error('WEB_AUTH_USER_MISMATCH');
+    }
+    return user;
   } catch (err: unknown) {
-    if (err instanceof RPCError && err.errorMessage === 'SESSION_PASSWORD_NEEDED') {
-      return signInWithPassword(client, apiCredentials, authParams, true);
-    } else {
-      client._log.error(`Failed to login with web token: ${String(err)}`);
-      authParams.webAuthTokenFailed();
-      return signInUserWithPreferredMethod(client, apiCredentials, {
-        ...authParams,
-        webAuthToken: undefined,
-      });
+    client._log.error(`Failed to login with web token: ${String(err)}`);
+    authParams.webAuthTokenFailed();
+    if (hasUnsafeAuthorization) {
+      client.destroy();
+      throw new Error('WEB_AUTH_USER_MISMATCH', { cause: err });
     }
+    return signInUserWithPreferredMethod(client, apiCredentials, authParams);
   }
 }
 

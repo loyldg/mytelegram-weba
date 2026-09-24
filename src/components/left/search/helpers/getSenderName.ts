@@ -3,6 +3,7 @@ import type { OldLangFn } from '../../../../hooks/useOldLang';
 
 import {
   getChatTitle,
+  isChatChannel,
   isChatGroup,
 } from '../../../../global/helpers';
 import { getPeerTitle } from '../../../../global/helpers/peers';
@@ -11,22 +12,31 @@ import { isUserId } from '../../../../util/entities/ids';
 export function getSenderName(
   lang: OldLangFn, message: ApiMessage, chatsById: Record<string, ApiChat>, usersById: Record<string, ApiUser>,
 ) {
-  const { senderId } = message;
+  const { senderId, chatId, isOutgoing } = message;
+  const chat = chatsById[chatId];
+  const chatTitle = chat ? getChatTitle(lang, chat) : undefined;
+
+  // Private chat messages and channel posts have no sender, so the chat itself is used instead
   if (!senderId) {
-    return undefined;
+    return isOutgoing && chatTitle ? `${lang('FromYou')} → ${chatTitle}` : chatTitle;
   }
 
   const sender = isUserId(senderId) ? usersById[senderId] : chatsById[senderId];
+  if (!sender) {
+    return chatTitle;
+  }
 
-  let senderName = getPeerTitle(lang, sender);
+  const senderName = getPeerTitle(lang, sender);
+  if (!chat) {
+    return senderName;
+  }
 
-  const chat = chatsById[message.chatId];
-  if (chat) {
-    if ('isSelf' in sender && sender.isSelf) {
-      senderName = `${lang('FromYou')} → ${getChatTitle(lang, chat)}`;
-    } else if (isChatGroup(chat)) {
-      senderName += ` → ${getChatTitle(lang, chat)}`;
-    }
+  if ('isSelf' in sender && sender.isSelf) {
+    return `${lang('FromYou')} → ${chatTitle}`;
+  }
+
+  if ((isChatGroup(chat) || isChatChannel(chat)) && sender.id !== chat.id) {
+    return `${senderName} → ${chatTitle}`;
   }
 
   return senderName;

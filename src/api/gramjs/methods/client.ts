@@ -19,7 +19,7 @@ import type {
 
 import {
   APP_CODE_NAME,
-  DEBUG, DEBUG_GRAMJS, IS_TEST, LANG_PACK, UPLOAD_WORKERS,
+  DEBUG, DEBUG_GRAMJS, IS_TEST, LANG_PACK, TELEGRAM_API_HASH, TELEGRAM_API_ID, UPLOAD_WORKERS,
 } from '../../../config';
 import { pause } from '../../../util/schedulers';
 import { buildWebPage } from '../apiBuilders/messageContent';
@@ -33,10 +33,13 @@ import { buildApiUser, buildApiUserFullInfo } from '../apiBuilders/users';
 import {
   buildInputChannelFromLocalDb,
   buildInputPeerFromLocalDb,
+  buildInputUserFromLocalDb,
   DEFAULT_PRIMITIVES,
   getEntityTypeById,
 } from '../gramjsBuilders';
 import {
+  addDocumentToLocalDb,
+  addSavedMusicRepairInfo,
   addStoryToLocalDb, addUserToLocalDb,
   addWebPageMediaToLocalDb,
 } from '../helpers/localDb';
@@ -51,8 +54,9 @@ import {
   getDifference,
   init as initUpdatesManager,
   processUpdate,
+  requestChannelDifference as requestChannelDifferenceFromUpdates,
   reset as resetUpdatesManager,
-  scheduleGetChannelDifference,
+  setOpenedChannelIds as setOpenedChannelIdsInUpdates,
   updateChannelState,
 } from '../updates/updateManager';
 import {
@@ -94,7 +98,7 @@ export async function init(initialArgs: ApiInitialArgs, onConnected?: NoneToVoid
     userAgent, platform, sessionData, isWebmSupported, maxBufferSize, webAuthToken, dcId,
     mockScenario, shouldForceHttpTransport, shouldAllowHttpTransport,
     shouldDebugExportedSenders, langCode, isTestServerRequested, accountIds,
-    hasPasskeySupport,
+    hasPasskeySupport, webAuthUserId,
   } = initialArgs;
 
   const session = new sessions.CallbackSession(sessionData, onSessionUpdate);
@@ -105,8 +109,8 @@ export async function init(initialArgs: ApiInitialArgs, onConnected?: NoneToVoid
 
   client = new TelegramClient(
     session,
-    Number(process.env.TELEGRAM_API_ID),
-    process.env.TELEGRAM_API_HASH,
+    TELEGRAM_API_ID,
+    TELEGRAM_API_HASH,
     {
       deviceModel: navigator.userAgent || userAgent || DEFAULT_USER_AGENT,
       systemVersion: platform || DEFAULT_PLATFORM,
@@ -121,7 +125,7 @@ export async function init(initialArgs: ApiInitialArgs, onConnected?: NoneToVoid
       langCode,
       systemLangCode: navigator.language,
       isTestServerRequested,
-    } as any,
+    },
   );
 
   client.addEventHandler(handleGramJsUpdate, gramJsUpdateEventBuilder);
@@ -148,6 +152,7 @@ export async function init(initialArgs: ApiInitialArgs, onConnected?: NoneToVoid
         initialMethod: platform === 'iOS' || platform === 'Android' ? 'phoneNumber' : 'qrCode',
         shouldThrowIfUnauthorized: Object.values(sessionData?.keys || {}).length > 0,
         webAuthToken,
+        webAuthUserId,
         webAuthTokenFailed: onWebAuthTokenFailed,
         mockScenario,
         accountIds,
@@ -549,9 +554,39 @@ export async function repairFileReference({
       const result = await repairWebPageMedia(localRepairInfo.url);
       return result;
     }
+
+    if (localRepairInfo.type === 'savedMusic') {
+      const result = await repairSavedMusicMedia(localRepairInfo.peerId, entityId);
+      return result;
+    }
   }
 
   return false;
+}
+
+async function repairSavedMusicMedia(peerId: string, documentId: string) {
+  const id = buildInputUserFromLocalDb(peerId);
+  const document = localDb.documents[documentId];
+  if (!id || !document) return false;
+
+  const result = await invokeRequest(new GramJs.users.GetSavedMusicByID({
+    id,
+    documents: [new GramJs.InputDocument({
+      id: document.id,
+      accessHash: document.accessHash,
+      fileReference: document.fileReference,
+    })],
+  }), {
+    shouldIgnoreErrors: true,
+  });
+
+  if (!(result instanceof GramJs.users.SavedMusic)) return false;
+
+  result.documents.forEach((doc) => {
+    addDocumentToLocalDb(addSavedMusicRepairInfo(doc, peerId));
+  });
+
+  return true;
 }
 
 async function repairMessageMedia(peerId: string, messageId: number) {
@@ -660,5 +695,15 @@ export function setShouldDebugExportedSenders(value: boolean) {
 }
 
 export function requestChannelDifference(channelId: string) {
-  scheduleGetChannelDifference(channelId);
+  requestChannelDifferenceFromUpdates(channelId);
+}
+
+export function setOpenedChannelIds(channelIds: string[]) {
+  setOpenedChannelIdsInUpdates(channelIds);
+}
+
+export function cancelWebTokenAuthorization({ token }: { token: string }): Promise<boolean | undefined> {
+  return invokeRequest(new GramJs.auth.CancelWebTokenAuthorization({ webAuthToken: token }), {
+    shouldIgnoreErrors: true,
+  });
 }

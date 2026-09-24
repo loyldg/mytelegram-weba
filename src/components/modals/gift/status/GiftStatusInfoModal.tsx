@@ -142,7 +142,7 @@ const GiftStatusInfoModal = ({
           onClick={onWearClick}
         >
           {lang('UniqueStatusWearButton')}
-          {!isCurrentUserPremium && <Icon name="lock-badge" className={styles.lockIcon} />}
+          {!isCurrentUserPremium && <Icon name="lock-filled" className={styles.lockIcon} />}
         </Button>
       </div>
     );

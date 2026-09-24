@@ -53,7 +53,7 @@
   "--color-code-own": ["#3c7940", "#FFFFFF"],
   "--color-code-bg": ["#70757914", "#00000080"],
   "--color-code-own-bg": ["#70757914", "#00000050"],
-  "--color-composer-button": ["#707579CC", "#AAAAAACC"],
+  "--color-composer-button": ["#000000", "#FFFFFF"],
   "--color-message-reaction": ["#ebf3fd", "#2b2a35"],
   "--color-message-reaction-hover": ["#c5def9", "#343147"],
   "--color-message-reaction-own": ["#c6eab2", "#675CAF"],

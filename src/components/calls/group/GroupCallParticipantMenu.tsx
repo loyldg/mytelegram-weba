@@ -1,23 +1,20 @@
 import type { ElementRef, FC } from '../../../lib/teact/teact';
-import type React from '../../../lib/teact/teact';
 import { memo, useEffect, useState } from '../../../lib/teact/teact';
 import { getActions, withGlobal } from '../../../global';
 
-import type { GroupCallParticipant } from '../../../lib/secret-sauce';
+import type { GroupCallParticipant } from '../../../lib/vibecalls';
 import type { MenuPositionOptions } from '../../ui/Menu';
 
 import { GROUP_CALL_DEFAULT_VOLUME, GROUP_CALL_VOLUME_MULTIPLIER } from '../../../config';
-import { selectIsAdminInActiveGroupCall } from '../../../global/selectors/calls';
+import { selectActiveGroupCall, selectIsAdminInActiveGroupCall } from '../../../global/selectors/calls';
 import buildClassName from '../../../util/buildClassName';
 import { LOCAL_TGS_URLS } from '../../common/helpers/animatedAssets';
 
-import useFlag from '../../../hooks/useFlag';
 import useLastCallback from '../../../hooks/useLastCallback';
 import useOldLang from '../../../hooks/useOldLang';
 import useRunThrottled from '../../../hooks/useRunThrottled';
 
 import AnimatedIcon from '../../common/AnimatedIcon';
-import DeleteMemberModal from '../../right/DeleteMemberModal';
 import Menu from '../../ui/Menu';
 import MenuItem from '../../ui/MenuItem';
 
@@ -38,6 +35,7 @@ type OwnProps =
 
 type StateProps = {
   isAdmin: boolean;
+  chatId?: string;
 };
 
 const VOLUME_ZERO = 0;
@@ -55,6 +53,7 @@ const GroupCallParticipantMenu: FC<OwnProps & StateProps> = ({
   onClose,
   isDropdownOpen,
   isAdmin,
+  chatId,
   menuRef,
   ...menuPositionOptions
 }) => {
@@ -64,14 +63,14 @@ const GroupCallParticipantMenu: FC<OwnProps & StateProps> = ({
     toggleGroupCallPanel,
     openChat,
     requestToSpeak,
+    openDeleteMemberModal,
   } = getActions();
 
   const lang = useOldLang();
-  const [isDeleteUserModalOpen, openDeleteUserModal, closeDeleteUserModal] = useFlag();
 
   const id = participant?.id;
   const {
-    isMutedByMe, isMuted, isSelf, canSelfUnmute,
+    isMutedByMe, isMuted, isSelf, canSelfUnmute, isUser,
   } = participant || {};
   const isRaiseHand = Boolean(participant?.raiseHandRating);
   const shouldRaiseHand = !canSelfUnmute && isMuted;
@@ -108,7 +107,9 @@ const GroupCallParticipantMenu: FC<OwnProps & StateProps> = ({
 
   const handleRemove = useLastCallback((e: React.SyntheticEvent<any>) => {
     e.stopPropagation();
-    openDeleteUserModal();
+    if (id && chatId && isUser) {
+      openDeleteMemberModal({ chatId, peerId: id });
+    }
     onClose();
   });
 
@@ -221,7 +222,7 @@ const GroupCallParticipantMenu: FC<OwnProps & StateProps> = ({
           {!isSelf && (
             // TODO cross mic
             <MenuItem
-              icon={isMuted ? (isAdmin && shouldRaiseHand ? 'allow-speak' : 'microphone-alt') : 'microphone-alt'}
+              icon={isMuted ? (isAdmin && shouldRaiseHand ? 'allow-speak' : 'microphone') : 'microphone'}
               onClick={handleMute}
             >
               {isAdmin
@@ -229,7 +230,7 @@ const GroupCallParticipantMenu: FC<OwnProps & StateProps> = ({
                 : lang(isMutedByMe ? 'VoipGroupUnmuteForMe' : 'VoipGroupMuteForMe')}
             </MenuItem>
           )}
-          {!isSelf && isAdmin && (
+          {!isSelf && isAdmin && isUser && (
             // TODO replace with hand
             <MenuItem icon="delete-user" destructive onClick={handleRemove}>
               {lang('VoipGroupUserRemove')}
@@ -237,14 +238,6 @@ const GroupCallParticipantMenu: FC<OwnProps & StateProps> = ({
           )}
         </div>
       </Menu>
-
-      {!isSelf && isAdmin && (
-        <DeleteMemberModal
-          isOpen={isDeleteUserModalOpen}
-          userId={id}
-          onClose={closeDeleteUserModal}
-        />
-      )}
     </div>
   );
 };
@@ -253,6 +246,7 @@ export default memo(withGlobal<OwnProps>(
   (global): Complete<StateProps> => {
     return {
       isAdmin: selectIsAdminInActiveGroupCall(global),
+      chatId: selectActiveGroupCall(global)?.chatId,
     };
   },
 )(GroupCallParticipantMenu));

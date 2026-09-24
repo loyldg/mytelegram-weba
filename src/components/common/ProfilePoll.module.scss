@@ -1,0 +1,51 @@
+.root {
+  --poll-card-inline-padding: 0.5rem;
+
+  position: relative;
+
+  display: flex;
+  flex-direction: column;
+
+  // Bottom spacing comes from the `Poll` own margin reserved for message meta
+  padding: 0.5rem var(--poll-card-inline-padding) 0;
+  border-radius: var(--border-radius-messages);
+
+  &.hasMenuOpen {
+    background-color: var(--color-chat-hover);
+  }
+
+  // Fills the card like in a message bubble, so narrow media is centered over its blurred background
+  > :global(.media-inner) {
+    width: calc(100% + var(--poll-card-inline-padding) * 2);
+    max-width: calc(100% + var(--poll-card-inline-padding) * 2);
+    margin-inline: calc(var(--poll-card-inline-padding) * -1);
+  }
+}
+
+.header {
+  display: flex;
+  gap: 0.5rem;
+  align-items: baseline;
+  justify-content: space-between;
+
+  margin-bottom: 0.25rem;
+
+  line-height: 1.25rem;
+}
+
+.sender {
+  overflow: hidden;
+
+  font-size: calc(var(--message-text-size, 1rem) - 0.125rem);
+  font-weight: var(--font-weight-medium);
+  color: var(--accent-color);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.date {
+  flex-shrink: 0;
+  margin-inline-start: auto;
+  font-size: 0.875rem;
+  color: var(--color-text-secondary);
+}

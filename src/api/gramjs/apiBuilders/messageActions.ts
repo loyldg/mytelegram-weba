@@ -10,6 +10,7 @@ import { buildApiStarGift } from './gifts';
 import { buildPollAnswer, buildTodoItem } from './messageContent';
 import { buildApiCurrencyAmount } from './payments';
 import { buildApiPeerId, getApiChatIdFromMtpPeer } from './peers';
+import { buildApiBirthday } from './users';
 
 const UNSUPPORTED_ACTION: ApiMessageAction = {
   mediaType: 'action',
@@ -98,6 +99,14 @@ export function buildApiMessageAction(action: GramJs.TypeMessageAction): ApiMess
       chatId: buildApiPeerId(chatId, 'chat'),
     };
   }
+  if (action instanceof GramJs.MessageActionChangeCommunity) {
+    const { communityId } = action;
+    return {
+      mediaType: 'action',
+      type: 'changeCommunity',
+      communityId: communityId !== undefined ? buildApiPeerId(communityId, 'channel') : undefined,
+    };
+  }
   if (action instanceof GramJs.MessageActionPinMessage) {
     return {
       mediaType: 'action',
@@ -108,6 +117,16 @@ export function buildApiMessageAction(action: GramJs.TypeMessageAction): ApiMess
     return {
       mediaType: 'action',
       type: 'historyClear',
+    };
+  }
+  if (action instanceof GramJs.MessageActionSetMessagesTTL) {
+    const { period, autoSettingFrom } = action;
+
+    return {
+      mediaType: 'action',
+      type: 'setMessagesTtl',
+      period,
+      autoSettingFromId: autoSettingFrom?.toString(),
     };
   }
   if (action instanceof GramJs.MessageActionGameScore) {
@@ -294,6 +313,13 @@ export function buildApiMessageAction(action: GramJs.TypeMessageAction): ApiMess
       mediaType: 'action',
       type: 'suggestProfilePhoto',
       photo: buildApiPhoto(photo),
+    };
+  }
+  if (action instanceof GramJs.MessageActionSuggestBirthday) {
+    return {
+      mediaType: 'action',
+      type: 'suggestBirthday',
+      birthday: buildApiBirthday(action.birthday),
     };
   }
   if (action instanceof GramJs.MessageActionGiftCode) {
