@@ -1,5 +1,5 @@
 import type { FC } from '../../../lib/teact/teact';
-import { memo, useRef, useState } from '../../../lib/teact/teact';
+import { memo, useEffect, useRef, useState } from '../../../lib/teact/teact';
 import { getActions } from '../../../global';
 
 import type { ApiSticker, ApiVideo } from '../../../api/types';
@@ -9,7 +9,9 @@ import { EDITABLE_INPUT_CSS_SELECTOR, EDITABLE_INPUT_MODAL_CSS_SELECTOR } from '
 import buildClassName from '../../../util/buildClassName';
 
 import useFlag from '../../../hooks/useFlag';
+import useLang from '../../../hooks/useLang';
 import useLastCallback from '../../../hooks/useLastCallback';
+import useMouseInside from '../../../hooks/useMouseInside';
 
 import Icon from '../../common/icons/Icon';
 import Button from '../../ui/Button';
@@ -81,8 +83,6 @@ const SymbolMenuButton: FC<OwnProps> = ({
   closeSendAsMenu,
 }) => {
   const {
-    setStickerSearchQuery,
-    setGifSearchQuery,
     addRecentEmoji,
     addRecentCustomEmoji,
   } = getActions();
@@ -91,6 +91,19 @@ const SymbolMenuButton: FC<OwnProps> = ({
 
   const [isSymbolMenuLoaded, onSymbolMenuLoadingComplete] = useFlag();
   const [contextMenuAnchor, setContextMenuAnchor] = useState<IAnchorPosition | undefined>(undefined);
+
+  const lang = useLang();
+
+  const isMenuOpen = isSymbolMenuOpen || Boolean(isSymbolMenuForced);
+  const [handleMouseEnter, handleMouseLeave, markMouseInside] = useMouseInside(
+    isMenuOpen, closeSymbolMenu, undefined, isMobile,
+  );
+
+  useEffect(() => {
+    if (isMenuOpen) {
+      markMouseInside();
+    }
+  }, [isMenuOpen, markMouseInside]);
 
   const symbolMenuButtonClassName = buildClassName(
     'composer-action-button mobile-symbol-menu-button',
@@ -108,16 +121,6 @@ const SymbolMenuButton: FC<OwnProps> = ({
     if (!triggerEl) return;
     const { x, y } = triggerEl.getBoundingClientRect();
     setContextMenuAnchor({ x, y });
-  });
-
-  const handleSearchOpen = useLastCallback((type: 'stickers' | 'gifs') => {
-    if (type === 'stickers') {
-      setStickerSearchQuery({ query: '' });
-      setGifSearchQuery({ query: undefined });
-    } else {
-      setGifSearchQuery({ query: '' });
-      setStickerSearchQuery({ query: undefined });
-    }
   });
 
   const handleSymbolMenuOpen = useLastCallback(() => {
@@ -144,31 +147,6 @@ const SymbolMenuButton: FC<OwnProps> = ({
 
   return (
     <>
-      {isMobile ? (
-        <Button
-          className={symbolMenuButtonClassName}
-          round
-          color="translucent"
-          onClick={isSymbolMenuOpen ? closeSymbolMenu : handleSymbolMenuOpen}
-          ariaLabel="Choose emoji, sticker or GIF"
-        >
-          <Icon name="smile" />
-          <Icon name="keyboard" />
-          {isSymbolMenuOpen && !isSymbolMenuLoaded && <Spinner color="gray" />}
-        </Button>
-      ) : (
-        <ResponsiveHoverButton
-          className={buildClassName('composer-action-button symbol-menu-button', isSymbolMenuOpen && 'activated')}
-          round
-          color="translucent"
-          onActivate={handleActivateSymbolMenu}
-          ariaLabel="Choose emoji, sticker or GIF"
-        >
-          <div ref={triggerRef} className="symbol-menu-trigger" />
-          <Icon name="smile" />
-        </ResponsiveHoverButton>
-      )}
-
       <SymbolMenu
         chatId={chatId}
         threadId={threadId}
@@ -185,7 +163,6 @@ const SymbolMenuButton: FC<OwnProps> = ({
         onGifSelect={onGifSelect}
         onGifAddCaption={onGifAddCaption}
         onRemoveSymbol={onRemoveSymbol}
-        onSearchOpen={handleSearchOpen}
         addRecentEmoji={addRecentEmoji}
         addRecentCustomEmoji={addRecentCustomEmoji}
         isAttachmentModal={isAttachmentModal}
@@ -196,7 +173,36 @@ const SymbolMenuButton: FC<OwnProps> = ({
         getRootElement={isAttachmentModal ? getRootElement : undefined}
         getMenuElement={isAttachmentModal ? getMenuElement : undefined}
         getLayout={isAttachmentModal ? getLayout : undefined}
+        onMouseEnter={handleMouseEnter}
+        onMouseLeave={handleMouseLeave}
       />
+
+      {isMobile ? (
+        <Button
+          className={symbolMenuButtonClassName}
+          round
+          color="translucent"
+          onClick={isSymbolMenuOpen ? closeSymbolMenu : handleSymbolMenuOpen}
+          ariaLabel={lang('AriaOpenSymbolMenu')}
+        >
+          <Icon name="smile" />
+          <Icon name="keyboard" />
+          {isSymbolMenuOpen && !isSymbolMenuLoaded && <Spinner color="gray" />}
+        </Button>
+      ) : (
+        <ResponsiveHoverButton
+          className={buildClassName('composer-action-button symbol-menu-button', isSymbolMenuOpen && 'activated')}
+          round
+          color="translucent"
+          onActivate={handleActivateSymbolMenu}
+          ariaLabel={lang('AriaOpenSymbolMenu')}
+          onMouseEnter={handleMouseEnter}
+          onMouseLeave={isMenuOpen ? handleMouseLeave : undefined}
+        >
+          <div ref={triggerRef} className="symbol-menu-trigger" />
+          <Icon name="smile" />
+        </ResponsiveHoverButton>
+      )}
     </>
   );
 };

@@ -8,6 +8,7 @@ import useHistoryBack from '../../../../hooks/useHistoryBack';
 import useLang from '../../../../hooks/useLang';
 
 import AnimatedIconWithPreview from '../../../common/AnimatedIconWithPreview';
+import Island, { IslandDescription } from '../../../gili/layout/Island';
 import Button from '../../../ui/Button';
 
 import lockPreviewUrl from '../../../../assets/lock.png';
@@ -34,18 +35,17 @@ const SettingsPasscodeStart: FC<OwnProps> = ({
           size={STICKER_SIZE_PASSCODE}
           className="settings-content-icon"
         />
-
-        <p className="settings-item-description" dir="auto">
-          {lang('SettingsPasscodeStart1', undefined, { withNodes: true, renderTextFilters: ['br'] })}
-        </p>
-        <p className="settings-item-description mb-3" dir="auto">
-          {lang('SettingsPasscodeStart2', undefined, { withNodes: true, renderTextFilters: ['br'] })}
-        </p>
       </div>
 
-      <div className="settings-item settings-group">
+      <Island>
         <Button onClick={onStart}>{lang('EnablePasscode')}</Button>
-      </div>
+      </Island>
+      <IslandDescription dir="auto">
+        {lang('SettingsPasscodeStart1', undefined, { withNodes: true, renderTextFilters: ['br'] })}
+      </IslandDescription>
+      <IslandDescription dir="auto">
+        {lang('SettingsPasscodeStart2', undefined, { withNodes: true, renderTextFilters: ['br'] })}
+      </IslandDescription>
     </div>
   );
 };

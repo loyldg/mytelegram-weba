@@ -1,4 +1,3 @@
-import type { FC } from '../../lib/teact/teact';
 import { memo } from '../../lib/teact/teact';
 
 import type { ApiMessageOutgoingStatus } from '../../api/types';
@@ -16,7 +15,7 @@ enum Keys {
   failed, pending, succeeded, read,
 }
 
-const MessageOutgoingStatus: FC<OwnProps> = ({ status }) => {
+const MessageOutgoingStatus = ({ status }: OwnProps) => {
   return (
     <div className="MessageOutgoingStatus">
       <Transition name="reveal" activeKey={Keys[status]}>
@@ -24,7 +23,7 @@ const MessageOutgoingStatus: FC<OwnProps> = ({ status }) => {
           <div className="MessageOutgoingStatus--failed">
             <Icon name="message-failed" />
           </div>
-        ) : <Icon name={`message-${status}`} />}
+        ) : <Icon name={status === 'succeeded' ? 'check' : `message-${status}`} />}
       </Transition>
     </div>
   );

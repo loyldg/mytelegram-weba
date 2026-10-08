@@ -1,4 +1,3 @@
-import type { FC } from '../../../lib/teact/teact';
 import {
   memo, useCallback, useRef, useState,
 } from '../../../lib/teact/teact';
@@ -19,9 +18,9 @@ export type OwnProps = {
   isOpen?: boolean;
 };
 
-const RatePhoneCallModal: FC<OwnProps> = ({
+const RatePhoneCallModal = ({
   isOpen,
-}) => {
+}: OwnProps) => {
   const { closeCallRatingModal, setCallRating } = getActions();
 
   const inputRef = useRef<HTMLInputElement>();
@@ -55,7 +54,7 @@ const RatePhoneCallModal: FC<OwnProps> = ({
           const isFilled = rating !== undefined && rating >= i;
           return (
             <Icon
-              name={isFilled ? 'favorite-filled' : 'favorite'}
+              name={isFilled ? 'star-regular-filled' : 'star-regular'}
               className={buildClassName(
                 isFilled && styles.isFilled,
                 styles.star,

@@ -2,6 +2,7 @@ import type { ActionReturnType } from '../../types';
 
 import { SERVICE_NOTIFICATIONS_USER_ID } from '../../../config';
 import { applyLangPackDifference, getTranslationFn, requestLangPackDifference } from '../../../util/localization';
+import { isChatChannel, selectTabBrowserState } from '../../helpers';
 import { getPeerTitle } from '../../helpers/peers';
 import { addActionHandler, setGlobal } from '../../index';
 import {
@@ -22,6 +23,7 @@ import {
 import { updateTabState } from '../../reducers/tabs';
 import { updateThreadInfo } from '../../reducers/threads';
 import {
+  selectChat,
   selectPeer,
   selectPeerStories,
   selectPeerStory,
@@ -80,6 +82,10 @@ addActionHandler('apiUpdate', (global, actions, update): ActionReturnType => {
 
     case 'updateConfig':
       actions.loadConfig();
+      break;
+
+    case 'updateAiComposeTones':
+      actions.loadAiComposeTones();
       break;
 
     case 'updateNewAuthorization': {
@@ -148,14 +154,65 @@ addActionHandler('apiUpdate', (global, actions, update): ActionReturnType => {
 
     case 'updateWebViewResultSent':
       Object.values(global.byTabId).forEach((tabState) => {
-        Object.entries(tabState.webApps.openedWebApps).forEach(([webAppKey, webApp]) => {
-          if (webApp.queryId === update.queryId) {
+        Object.entries(selectTabBrowserState(tabState).openedTabs).forEach(([tabKey, browserTab]) => {
+          if (browserTab.type === 'webApp' && browserTab.webApp.queryId === update.queryId) {
             actions.resetDraftReplyInfo({ tabId: tabState.id });
-            actions.closeWebApp({ key: webAppKey, tabId: tabState.id });
+            actions.closeBrowserTab({ key: tabKey, skipClosingConfirmation: true, tabId: tabState.id });
           }
         });
       });
       break;
+
+    case 'updateJoinChatWebViewDecision': {
+      const { peerId, queryId, result } = update;
+      const chat = selectChat(global, peerId);
+
+      Object.values(global.byTabId).forEach((tabState) => {
+        const tabId = tabState.id;
+        Object.entries(selectTabBrowserState(tabState).openedTabs).forEach(([webAppKey, browserTab]) => {
+          if (browserTab.type !== 'webApp') return;
+          const { webApp } = browserTab;
+          if (webApp.queryId !== queryId) return;
+
+          const isChannel = webApp.isJoinChatBroadcast ?? Boolean(chat && isChatChannel(chat));
+
+          if (result.type === 'webView') {
+            const { botId, peerId: webAppPeerId, isJoinChatBroadcast } = webApp;
+            actions.closeBrowserTab({ key: webAppKey, skipClosingConfirmation: true, tabId });
+            actions.openChatInviteWebView({
+              botId,
+              url: result.url,
+              queryId,
+              peerId: webAppPeerId || peerId,
+              isBroadcast: isJoinChatBroadcast ?? isChannel,
+              tabId,
+            });
+            return;
+          }
+
+          actions.closeBrowserTab({ key: webAppKey, skipClosingConfirmation: true, tabId });
+
+          if (result.type === 'approved') {
+            actions.openChat({ id: peerId, tabId });
+            actions.showNotification({
+              message: { key: isChannel ? 'ActionChannelJoinedByRequestChannelYou' : 'ActionJoinedByRequestYou' },
+              tabId,
+            });
+          } else if (result.type === 'declined') {
+            actions.showNotification({
+              message: { key: isChannel ? 'RequestToJoinChannelDeclined' : 'RequestToJoinGroupDeclined' },
+              tabId,
+            });
+          } else if (result.type === 'queued') {
+            actions.showNotification({
+              message: { key: isChannel ? 'RequestToJoinChannelSentDescription' : 'RequestToJoinGroupSentDescription' },
+              tabId,
+            });
+          }
+        });
+      });
+      break;
+    }
 
     case 'updateWebPage': {
       const { webPage } = update;

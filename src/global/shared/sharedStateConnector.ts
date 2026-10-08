@@ -1,26 +1,17 @@
 import { addCallback, removeCallback } from '../../lib/teact/teactn';
 
 import type { SharedState } from '../types';
-import type { ClientBoundMessageEvent } from './sharedState.worker';
 
-import { APP_NAME } from '../../config';
-import { deepDiff, type DiffObject } from '../../util/deepDiff';
+import { deepDiff } from '../../util/deepDiff';
 import { deepMerge } from '../../util/deepMerge';
 import { throttleWithTickEnd } from '../../util/schedulers';
 import { INITIAL_SHARED_STATE } from '../initialState';
 import { getGlobal, setGlobal } from '..';
-
-interface GetFullStateEvent {
-  type: 'reqGetFullState';
-  localState: SharedState;
-}
-
-interface UpdateStateEvent {
-  type: 'reqUpdateState';
-  update: DiffObject<SharedState>;
-}
-
-export type WorkerBoundMessageEvent = GetFullStateEvent | UpdateStateEvent;
+import {
+  type ClientBoundMessageEvent,
+  createSharedWorker,
+  type WorkerBoundMessageEvent,
+} from './sharedWorker';
 
 let sharedWorker: SharedWorker | undefined;
 
@@ -29,7 +20,7 @@ let synced = false;
 let lastSharedState: SharedState = INITIAL_SHARED_STATE;
 
 export function initSharedState(localState: SharedState) {
-  sharedWorker = new SharedWorker(new URL('./sharedState.worker.ts', import.meta.url), { name: APP_NAME });
+  sharedWorker = createSharedWorker();
 
   sharedWorker.port.addEventListener('message', onMessage);
   sharedWorker.port.start();
@@ -67,7 +58,14 @@ export function destroySharedStatePort() {
   sharedWorker.port.removeEventListener('message', onMessage);
   sharedWorker.port.close();
   sharedWorker = undefined;
+  synced = false;
+  scheduledEvents.clear();
   removeCallback(onGlobalChange);
+}
+
+export function resetSharedStatePort() {
+  sharedWorker?.port.postMessage({ type: 'resetSharedState' } satisfies WorkerBoundMessageEvent);
+  destroySharedStatePort();
 }
 
 function updateSharedState(update: SharedState) {

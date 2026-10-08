@@ -65,6 +65,7 @@ import NoForwardsRequest from './actions/NoForwardsRequest';
 import StarGift from './actions/StarGift';
 import StarGiftPurchaseOffer from './actions/StarGiftPurchaseOffer';
 import StarGiftUnique from './actions/StarGiftUnique';
+import SuggestedBirthday from './actions/SuggestedBirthday';
 import SuggestedPhoto from './actions/SuggestedPhoto';
 import SuggestedPostApproval from './actions/SuggestedPostApproval';
 import SuggestedPostBalanceTooLow from './actions/SuggestedPostBalanceTooLow';
@@ -113,14 +114,16 @@ const SINGLE_LINE_ACTIONS = new Set<ApiMessageAction['type']>([
   'pinMessage',
   'chatEditPhoto',
   'chatDeletePhoto',
+  'unsupported',
+]);
+const HIDDEN_TEXT_ACTIONS = new Set<ApiMessageAction['type']>(['giftCode', 'prizeStars',
+  'suggestProfilePhoto', 'suggestBirthday', 'suggestedPostApproval', 'starGiftPurchaseOffer', 'noForwardsRequest']);
+const WITH_LINK_BREAKS_ACTIONS = new Set<ApiMessageAction['type']>([
   'todoCompletions',
   'todoAppendTasks',
   'pollAppendAnswer',
   'pollDeleteAnswer',
-  'unsupported',
 ]);
-const HIDDEN_TEXT_ACTIONS = new Set<ApiMessageAction['type']>(['giftCode', 'prizeStars',
-  'suggestProfilePhoto', 'suggestedPostApproval', 'starGiftPurchaseOffer', 'noForwardsRequest']);
 
 const ActionMessage = ({
   message,
@@ -179,6 +182,7 @@ const ActionMessage = ({
 
   const isTextHidden = HIDDEN_TEXT_ACTIONS.has(action.type);
   const isSingleLine = SINGLE_LINE_ACTIONS.has(action.type);
+  const withLinkBreaks = WITH_LINK_BREAKS_ACTIONS.has(action.type);
   const isFluidMultiline = IS_FLUID_BACKGROUND_SUPPORTED && !isSingleLine;
   const isClickableText = action.type === 'suggestedPostSuccess';
   const isNarrowMessage = action.type === 'starGiftPurchaseOfferDeclined';
@@ -207,13 +211,11 @@ const ActionMessage = ({
   const giftOfferInlineButtons: KeyboardButtonGiftOffer[][] = useMemo(() => [
     [
       {
-        type: 'giftOffer',
-        buttonType: 'reject',
+        action: { type: 'giftOffer', buttonType: 'reject' },
         text: lang('GiftOfferReject'),
       },
       {
-        type: 'giftOffer',
-        buttonType: 'accept',
+        action: { type: 'giftOffer', buttonType: 'accept' },
         text: lang('GiftOfferAccept'),
       },
     ],
@@ -222,13 +224,11 @@ const ActionMessage = ({
   const noForwardsInlineButtons: KeyboardButtonNoForwardsRequest[][] = useMemo(() => [
     [
       {
-        type: 'noForwardsRequest',
-        buttonType: 'reject',
+        action: { type: 'noForwardsRequest', buttonType: 'reject' },
         text: lang('NoForwardsRequestReject'),
       },
       {
-        type: 'noForwardsRequest',
-        buttonType: 'accept',
+        action: { type: 'noForwardsRequest', buttonType: 'accept' },
         text: lang('NoForwardsRequestAccept'),
       },
     ],
@@ -237,8 +237,8 @@ const ActionMessage = ({
   const [isRejectOfferDialogOpen, openRejectOfferDialog, closeRejectOfferDialog] = useFlag(false);
 
   const handleInlineButtonClick = useLastCallback((button: ApiKeyboardButton) => {
-    if (button.type === 'giftOffer') {
-      if (button.buttonType === 'accept') {
+    if (button.action.type === 'giftOffer') {
+      if (button.action.buttonType === 'accept') {
         if (action.type === 'starGiftPurchaseOffer') {
           openGiftOfferAcceptModal({
             peerId: chatId,
@@ -247,12 +247,12 @@ const ActionMessage = ({
             price: action.price,
           });
         }
-      } else if (button.buttonType === 'reject') {
+      } else if (button.action.buttonType === 'reject') {
         openRejectOfferDialog();
       }
-    } else if (button.type === 'noForwardsRequest') {
+    } else if (button.action.type === 'noForwardsRequest') {
       if (action.type === 'noForwardsRequest') {
-        const isAccept = button.buttonType === 'accept';
+        const isAccept = button.action.buttonType === 'accept';
         toggleNoForwards({
           userId: chatId,
           isEnabled: isAccept ? action.newValue : action.prevValue,
@@ -290,7 +290,7 @@ const ActionMessage = ({
   });
 
   const {
-    isContextMenuOpen, contextMenuAnchor,
+    isContextMenuOpen, contextMenuAnchor, isContextMenuAltKeyPressed,
     handleBeforeContextMenu, handleContextMenu,
     handleContextMenuClose, handleContextMenuHide,
   } = useContextMenuHandlers(
@@ -509,6 +509,14 @@ const ActionMessage = ({
           />
         );
 
+      case 'suggestBirthday':
+        return (
+          <SuggestedBirthday
+            message={message}
+            action={action}
+          />
+        );
+
       case 'prizeStars':
       case 'giftCode':
         return (
@@ -625,6 +633,7 @@ const ActionMessage = ({
         'message-list-item',
         styles.root,
         isSingleLine && styles.singleLine,
+        withLinkBreaks && styles.withLinkBreaks,
         isFluidMultiline && styles.fluidMultiline,
         fullContent && styles.hasFullContent,
         isFocused && !noFocusHighlight && 'focused',
@@ -694,8 +703,10 @@ const ActionMessage = ({
         <ContextMenuContainer
           isOpen={isContextMenuOpen}
           anchor={contextMenuAnchor}
+          isAltKeyPressed={isContextMenuAltKeyPressed}
           message={message}
           messageListType="thread"
+          threadId={threadId}
           className={styles.contextContainer}
           onClose={handleContextMenuClose}
           onCloseAnimationEnd={handleContextMenuHide}

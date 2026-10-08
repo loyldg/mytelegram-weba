@@ -1,4 +1,3 @@
-import type { FC } from '../../lib/teact/teact';
 import {
   memo, useEffect, useMemo, useRef,
 } from '../../lib/teact/teact';
@@ -33,6 +32,7 @@ type OwnProps = {
 
 type StateProps = {
   defaultStickers?: ApiSticker[];
+  areDefaultStickersLoaded: boolean;
   lastMessageId?: number;
   connectionState?: ApiUpdateConnectionStateType;
   currentMessageList?: MessageList;
@@ -40,14 +40,15 @@ type StateProps = {
   user?: ApiUser;
 };
 
-const ContactGreeting: FC<OwnProps & StateProps> = ({
+const ContactGreeting = ({
   defaultStickers,
+  areDefaultStickersLoaded,
   connectionState,
   lastMessageId,
   currentMessageList,
   businessIntro,
   user,
-}) => {
+}: OwnProps & StateProps) => {
   const {
     loadGreetingStickers,
     sendMessage,
@@ -67,12 +68,12 @@ const ContactGreeting: FC<OwnProps & StateProps> = ({
   }, [businessIntro?.sticker, defaultStickers]);
 
   useEffect(() => {
-    if (defaultStickers?.length || connectionState !== 'connectionStateReady') {
+    if (areDefaultStickersLoaded || connectionState !== 'connectionStateReady') {
       return;
     }
 
     loadGreetingStickers();
-  }, [connectionState, loadGreetingStickers, defaultStickers]);
+  }, [connectionState, loadGreetingStickers, areDefaultStickersLoaded]);
 
   useEffect(() => {
     if (connectionState === 'connectionStateReady' && lastMessageId) {
@@ -81,15 +82,12 @@ const ContactGreeting: FC<OwnProps & StateProps> = ({
   }, [connectionState, lastMessageId]);
 
   const handleStickerSelect = useLastCallback(() => {
-    if (!currentMessageList) {
+    if (!currentMessageList || !sticker) {
       return;
     }
 
     sendMessage({
-      sticker: {
-        ...sticker!,
-        isPreloadedGlobally: true,
-      },
+      sticker,
       messageList: currentMessageList,
     });
   });
@@ -125,7 +123,7 @@ const ContactGreeting: FC<OwnProps & StateProps> = ({
 
 export default memo(withGlobal<OwnProps>(
   (global, { userId }): Complete<StateProps> => {
-    const { stickers } = global.stickers.greeting;
+    const { stickers, hash } = global.stickers.greeting;
     const chat = selectChat(global, userId);
     if (!chat) {
       return {} as Complete<StateProps>;
@@ -142,6 +140,7 @@ export default memo(withGlobal<OwnProps>(
 
     return {
       defaultStickers: stickers,
+      areDefaultStickersLoaded: hash !== undefined,
       lastMessageId: unreadCount ? lastMessageId : undefined,
       connectionState: global.connectionState,
       currentMessageList: selectCurrentMessageList(global),

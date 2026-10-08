@@ -81,11 +81,6 @@
         margin: 0 0.75rem;
       }
 
-      &.symbol-search-button {
-        position: absolute;
-        left: 0.25rem;
-      }
-
       &.symbol-delete-button {
         position: absolute;
         right: 0.25rem;
@@ -133,6 +128,13 @@
       left: calc(var(--bot-menu-text-width, 0) + 3rem);
     }
   }
+  .is-pointer-env .Composer.is-chat-composer .message-input-wrapper & > .backdrop,
+  .is-pointer-env .Composer.is-story-composer .message-input-wrapper & > .backdrop {
+    right: 0;
+    left: auto;
+    width: var(--composer-main-button-width);
+    height: auto;
+  }
 
   .bubble {
     --offset-y: 3.5rem;
@@ -141,28 +143,15 @@
 
     width: calc(var(--symbol-menu-width) + var(--scrollbar-width));
     padding: 0;
-    border-radius: 1.25rem;
+    border-radius: 1.625rem;
+
+    background-color: var(--color-background);
 
     transition-duration: 200ms !important;
-
-    body:not(.no-menu-blur) & {
-      background: var(--color-background-compact-menu);
-      backdrop-filter: blur(25px);
-    }
   }
 
   .StickerButton.custom-emoji, .sticker-set-cover {
     color: var(--color-text);
-  }
-
-  .picker-disabled {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-
-    height: var(--symbol-menu-height);
-
-    color: var(--color-text-secondary);
   }
 
   .symbol-close-button {
@@ -210,13 +199,14 @@
 
     &-external {
       margin-right: 0.5rem;
-      color: var(--color-text);
       text-align: start;
     }
   }
 
   &-name {
     overflow: hidden;
+
+    font-weight: var(--font-weight-medium);
     text-align: center;
     text-overflow: ellipsis;
     white-space: nowrap;

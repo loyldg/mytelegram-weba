@@ -62,6 +62,7 @@ type OwnProps = {
   isChatStickerSet?: boolean;
   isTranslucent?: boolean;
   noContextMenus?: boolean;
+  noAddButton?: boolean;
   forcePlayback?: boolean;
   observeIntersection?: ObserveFn;
   observeIntersectionForPlayingItems: ObserveFn;
@@ -106,6 +107,7 @@ const StickerSet = ({
   isChatStickerSet,
   isTranslucent,
   noContextMenus,
+  noAddButton,
   forcePlayback,
   collectibleStatuses,
   observeIntersection,
@@ -141,7 +143,7 @@ const StickerSet = ({
   const [itemsPerRow, setItemsPerRow] = useState(() => getItemsPerRowFallback(windowWidth));
 
   const isIntersecting = useIsIntersecting(ref, observeIntersection ?? observeIntersectionForShowingItems);
-  const transitionClassNames = useMediaTransitionDeprecated(isIntersecting);
+  const transitionClassNames = useMediaTransitionDeprecated(isIntersecting || isNearActive);
 
   // `isNearActive` is set in advance during animation, but it is not reliable for short sets
   const shouldRender = isNearActive || isIntersecting;
@@ -260,7 +262,7 @@ const StickerSet = ({
   const collectibleEmojiIdsSet = useMemo(() => (
     collectibleStatuses ? new Set(collectibleStatuses.map(({ documentId }) => documentId)) : undefined
   ), [collectibleStatuses]);
-  const withAddSetButton = !shouldHideHeader && !isRecent && !isStatusCollectible
+  const withAddSetButton = !noAddButton && !shouldHideHeader && !isRecent && !isStatusCollectible
     && isEmoji && !isPopular && !isChatEmojiSet
     && (!isInstalled || (!isCurrentUserPremium && !isSavedMessages));
   const addSetButtonText = useMemo(() => {
@@ -284,7 +286,7 @@ const StickerSet = ({
       {!shouldHideHeader && (
         <div className="symbol-set-header">
           <p className={buildClassName('symbol-set-title', withAddSetButton && 'symbol-set-title-external')}>
-            {isLocked && <Icon name="lock-badge" className="symbol-set-locked-icon" />}
+            {isLocked && <Icon name="lock-filled" className="symbol-set-locked-icon" />}
             <span className="symbol-set-name">{stickerSet.title}</span>
             {(isChatEmojiSet || isChatStickerSet) && (
               <span className="symbol-set-chat">{lang(isChatEmojiSet ? 'GroupEmoji' : 'GroupStickers')}</span>

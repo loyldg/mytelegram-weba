@@ -11,6 +11,7 @@ import type {
 } from '../../types';
 
 import { toJSNumber } from '../../../util/numbers';
+import { addDocumentToLocalDb, addSavedMusicRepairInfo } from '../helpers/localDb';
 import { buildApiBotInfo } from './bots';
 import { buildApiBusinessIntro, buildApiBusinessLocation, buildApiBusinessWorkHours } from './business';
 import {
@@ -18,6 +19,7 @@ import {
 } from './common';
 import { buildApiDisallowedGiftsSettings } from './gifts';
 import { omitVirtualClassFields } from './helpers';
+import { buildApiAudioFromDocument } from './media';
 import {
   buildApiBotVerification,
   buildApiEmojiStatus,
@@ -36,8 +38,9 @@ export function buildApiUserFullInfo(mtpUserFull: GramJs.users.UserFull): ApiUse
       contactRequirePremium, businessWorkHours, businessLocation, businessIntro,
       birthday, personalChannelId, personalChannelMessage, sponsoredEnabled, stargiftsCount, botVerification,
       botCanManageEmojiStatus, settings, sendPaidMessagesStars, displayGiftsButton, disallowedGifts,
-      starsRating, starsMyPendingRating, starsMyPendingRatingDate, mainTab, note,
-      noforwardsMyEnabled, noforwardsPeerEnabled, unofficialSecurityRisk,
+      starsRating, starsMyPendingRating, starsMyPendingRatingDate, mainTab, savedMusic, note,
+      noforwardsMyEnabled, noforwardsPeerEnabled, unofficialSecurityRisk, privateForwardName,
+      ttlPeriod,
     },
     users,
   } = mtpUserFull;
@@ -46,6 +49,7 @@ export function buildApiUserFullInfo(mtpUserFull: GramJs.users.UserFull): ApiUse
 
   return {
     bio: about,
+    ttlPeriod,
     commonChatsCount,
     pinnedMessageId: pinnedMsgId,
     isBlocked: Boolean(blocked),
@@ -66,6 +70,7 @@ export function buildApiUserFullInfo(mtpUserFull: GramJs.users.UserFull): ApiUse
     personalChannelId: personalChannelId !== undefined
       ? buildApiPeerId(personalChannelId, 'channel') : undefined,
     personalChannelMessageId: personalChannelMessage,
+    privateForwardName,
     botVerification: botVerification && buildApiBotVerification(botVerification),
     areAdsEnabled: sponsoredEnabled,
     starGiftCount: stargiftsCount,
@@ -77,6 +82,7 @@ export function buildApiUserFullInfo(mtpUserFull: GramJs.users.UserFull): ApiUse
     paidMessagesStars: toJSNumber(sendPaidMessagesStars),
     settings: buildApiPeerSettings(settings),
     mainTab: mainTab && buildApiProfileTab(mainTab),
+    savedMusic: savedMusic && buildApiSavedMusic(savedMusic, userId),
     note: note && buildApiFormattedText(note),
     noForwardsMyEnabled: noforwardsMyEnabled,
     noForwardsPeerEnabled: noforwardsPeerEnabled,
@@ -115,8 +121,9 @@ export function buildApiUser(mtpUser: GramJs.TypeUser): ApiUser | undefined {
 
   const {
     id, firstName, lastName, fake, scam, support, closeFriend, storiesUnavailable,
-    bot, botActiveUsers, botVerificationIcon, botInlinePlaceholder, botAttachMenu, botCanEdit,
-    sendPaidMessagesStars, profileColor, botForumView, botForumCanManageTopics,
+    botActiveUsers, botVerificationIcon, botInlinePlaceholder, botAttachMenu, botCanEdit,
+    sendPaidMessagesStars, profileColor, botForumView, botForumCanManageTopics, botGuestchat,
+    botGuard,
   } = mtpUser;
   const storiesMaxId = mtpUser.storiesMaxId?.maxId;
   const hasVideoAvatar = mtpUser.photo instanceof GramJs.UserProfilePhoto ? Boolean(mtpUser.photo.hasVideo) : undefined;
@@ -130,18 +137,18 @@ export function buildApiUser(mtpUser: GramJs.TypeUser): ApiUser | undefined {
     id: buildApiPeerId(id, 'user'),
     isMin: Boolean(mtpUser.min),
     fakeType: scam ? 'scam' : (fake ? 'fake' : undefined),
-    ...(mtpUser.self && { isSelf: true }),
+    isSelf: mtpUser.self || undefined,
     isPremium: Boolean(mtpUser.premium),
-    ...(mtpUser.verified && { isVerified: true }),
-    ...(closeFriend && { isCloseFriend: true }),
-    ...(support && { isSupport: true }),
-    ...((mtpUser.contact || mtpUser.mutualContact) && { isContact: true }),
+    isVerified: mtpUser.verified || undefined,
+    isCloseFriend: closeFriend || undefined,
+    isSupport: support || undefined,
+    isContact: mtpUser.contact || mtpUser.mutualContact || undefined,
     type: userType,
     firstName,
     lastName,
     hasMainMiniApp: Boolean(mtpUser.botHasMainApp),
     canEditBot: botCanEdit,
-    ...(userType === 'userTypeBot' && { canBeInvitedToGroup: !mtpUser.botNochats }),
+    canBotBeInvitedToGroup: userType === 'userTypeBot' ? !mtpUser.botNochats : undefined,
     usernames,
     hasUsername,
     phoneNumber: mtpUser.phone || '',
@@ -153,8 +160,8 @@ export function buildApiUser(mtpUser: GramJs.TypeUser): ApiUser | undefined {
     areStoriesHidden: Boolean(mtpUser.storiesHidden),
     maxStoryId: storiesMaxId,
     hasStories: Boolean(storiesMaxId) && !storiesUnavailable,
-    ...(bot && botInlinePlaceholder && { botPlaceholder: botInlinePlaceholder }),
-    ...(bot && botAttachMenu && { isAttachBot: botAttachMenu }),
+    botPlaceholder: botInlinePlaceholder || undefined,
+    isAttachBot: botAttachMenu || undefined,
     botActiveUsers,
     botVerificationIconId: botVerificationIcon?.toString(),
     color: mtpUser.color && buildApiPeerColor(mtpUser.color),
@@ -162,6 +169,8 @@ export function buildApiUser(mtpUser: GramJs.TypeUser): ApiUser | undefined {
     paidMessagesStars: toJSNumber(sendPaidMessagesStars),
     isBotForum: botForumView,
     canManageBotForumTopics: botForumCanManageTopics,
+    isGuestChatBot: botGuestchat,
+    isGuardBot: botGuard || undefined,
   };
 }
 
@@ -215,4 +224,14 @@ export function buildApiStarsRating(starsRating: GramJs.StarsRating): ApiStarsRa
     stars: toJSNumber(starsRating.stars),
     nextLevelStars: toJSNumber(starsRating.nextLevelStars),
   };
+}
+
+function buildApiSavedMusic(document: GramJs.TypeDocument, peerId: string) {
+  if (!(document instanceof GramJs.Document)) {
+    return undefined;
+  }
+
+  addDocumentToLocalDb(addSavedMusicRepairInfo(document, peerId));
+
+  return buildApiAudioFromDocument(document);
 }

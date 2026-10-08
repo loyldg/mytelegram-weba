@@ -1,12 +1,16 @@
 import { memo, useMemo, useRef, useState } from '../../../../lib/teact/teact';
 import { getActions, withGlobal } from '../../../../global';
 
-import type { ApiAiComposeStyle, ApiComposedMessageWithAI, ApiFormattedText } from '../../../../api/types';
+import type {
+  ApiAiComposeToneType, ApiInputAiComposeTone,
+} from '../../../../api/types';
+import type { AiEditorContent, AiEditorResult } from '../../../../global/types';
 import type { IAnchorPosition } from '../../../../types';
 
 import { SUPPORTED_TRANSLATION_LANGUAGES } from '../../../../config';
+import { compareAiTones, getInputTone } from '../../../../util/aiComposeTones';
 import buildClassName from '../../../../util/buildClassName';
-import { renderTextWithEntities } from '../../../common/helpers/renderTextWithEntities';
+import { MEMO_EMPTY_ARRAY } from '../../../../util/memo';
 
 import useFlag from '../../../../hooks/useFlag';
 import useLang from '../../../../hooks/useLang';
@@ -14,35 +18,34 @@ import useLastCallback from '../../../../hooks/useLastCallback';
 import useTextLanguage from '../../../../hooks/useTextLanguage';
 
 import CheckboxField from '../../../gili/templates/CheckboxField';
-import ExpandableText from '../../../ui/ExpandableText';
 import Menu from '../../../ui/Menu';
 import MenuItem from '../../../ui/MenuItem';
 import TranslationToneSelector from '../../message/TranslationToneSelector';
-import { AiEditorCopyButton, AiEditorErrorMessage, AiEditorResultArea } from './AiEditorShared';
+import {
+  AiEditorCopyButton, AiEditorErrorMessage, AiEditorPreview, AiEditorResultArea, getAiEditorText,
+} from './AiEditorShared';
 
 import sharedStyles from './AiEditorShared.module.scss';
 import modalStyles from './AiMessageEditorModal.module.scss';
 import styles from './AiTextTranslateEditor.module.scss';
 
-const EMPTY_AI_COMPOSE_STYLES: ApiAiComposeStyle[] = [];
-
 type OwnProps = {
-  text?: ApiFormattedText;
+  content?: AiEditorContent;
   selectedLanguage?: string;
-  selectedTone?: string;
+  selectedTone?: ApiInputAiComposeTone;
   shouldEmojify?: boolean;
   isLoading?: boolean;
-  result?: ApiComposedMessageWithAI;
+  result?: AiEditorResult;
   error?: 'floodPremium' | 'aiError' | 'generic';
   isPremium?: boolean;
 };
 
 type StateProps = {
-  aiComposeStyles: ApiAiComposeStyle[];
+  tones: ApiAiComposeToneType[];
 };
 
 const AiTextTranslateEditor = ({
-  text,
+  content,
   selectedLanguage,
   selectedTone,
   shouldEmojify,
@@ -50,7 +53,7 @@ const AiTextTranslateEditor = ({
   result,
   error,
   isPremium,
-  aiComposeStyles,
+  tones,
 }: OwnProps & StateProps) => {
   const {
     setAiMessageEditorTranslateOptions,
@@ -64,7 +67,8 @@ const AiTextTranslateEditor = ({
 
   const triggerRef = useRef<HTMLSpanElement>();
 
-  const detectedLanguage = useTextLanguage(text?.text);
+  const originalText = useMemo(() => content ? getAiEditorText(content) : undefined, [content]);
+  const detectedLanguage = useTextLanguage(originalText);
   const hasError = Boolean(error);
 
   const currentLanguageCode = lang.code;
@@ -96,7 +100,7 @@ const AiTextTranslateEditor = ({
     composeWithAiMessageEditor({
       translateToLang: langCode,
       isEmojify: shouldEmojify,
-      changeTone: selectedTone,
+      tone: selectedTone,
     });
   });
 
@@ -106,7 +110,7 @@ const AiTextTranslateEditor = ({
       composeWithAiMessageEditor({
         translateToLang: selectedLanguage,
         isEmojify: newEmojify,
-        changeTone: selectedTone,
+        tone: selectedTone,
       });
     }
   });
@@ -124,23 +128,23 @@ const AiTextTranslateEditor = ({
   const getMenuElement = useLastCallback(() => document.querySelector('.language-menu .bubble'));
   const getLayout = useLastCallback(() => ({ withPortal: true }));
 
-  const handleToneSelect = useLastCallback((tone?: string) => {
-    setAiMessageEditorTranslateOptions({ selectedTone: tone });
+  const handleToneSelect = useLastCallback((newTone?: ApiInputAiComposeTone) => {
+    setAiMessageEditorTranslateOptions({ selectedTone: newTone });
     if (selectedLanguage) {
       composeWithAiMessageEditor({
         translateToLang: selectedLanguage,
         isEmojify: shouldEmojify,
-        changeTone: tone,
+        tone: newTone,
       });
     }
   });
 
-  const displayResult = result?.resultText;
-
   const languageIndex = SUPPORTED_TRANSLATION_LANGUAGES.indexOf(selectedLanguage || '');
-  const toneIndex = aiComposeStyles.findIndex(({ tone }) => tone === selectedTone);
+  const toneIndex = tones.findIndex(
+    (entry) => compareAiTones(selectedTone, getInputTone(entry)),
+  );
   const totalLanguages = SUPPORTED_TRANSLATION_LANGUAGES.length;
-  const totalTones = aiComposeStyles.length;
+  const totalTones = tones.length;
   const transitionKey = languageIndex
     + (toneIndex + 1) * totalLanguages
     + (shouldEmojify ? totalLanguages * (totalTones + 1) : 0);
@@ -150,10 +154,7 @@ const AiTextTranslateEditor = ({
       return <AiEditorErrorMessage error={error} isPremium={isPremium} />;
     }
 
-    return displayResult && renderTextWithEntities({
-      text: displayResult.text,
-      entities: displayResult.entities,
-    });
+    return <AiEditorPreview content={result} />;
   }
 
   return (
@@ -167,7 +168,7 @@ const AiTextTranslateEditor = ({
             {detectedLanguageName}
           </span>
         </div>
-        <ExpandableText text={text?.text} />
+        <AiEditorPreview content={content} />
       </div>
 
       <div className={sharedStyles.separator} />
@@ -228,8 +229,8 @@ const AiTextTranslateEditor = ({
         {renderResultText()}
       </AiEditorResultArea>
       <AiEditorCopyButton
-        textToCopy={result?.resultText?.text || text?.text}
-        isHidden={isLoading || hasError || !displayResult?.text}
+        content={result}
+        isHidden={isLoading || hasError}
       />
     </div>
   );
@@ -238,7 +239,7 @@ const AiTextTranslateEditor = ({
 export default memo(withGlobal<OwnProps>(
   (global): Complete<StateProps> => {
     return {
-      aiComposeStyles: global.appConfig.aiComposeStyles || EMPTY_AI_COMPOSE_STYLES,
+      tones: global.aiComposeTones?.tones ?? MEMO_EMPTY_ARRAY,
     };
   },
 )(AiTextTranslateEditor));

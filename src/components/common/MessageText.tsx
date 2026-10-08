@@ -2,7 +2,9 @@ import {
   memo, useMemo, useRef,
 } from '../../lib/teact/teact';
 
-import type { ApiFormattedText, ApiMessage, ApiStory } from '../../api/types';
+import type {
+  ApiFormattedText, ApiMessage, ApiMessageEntity, ApiStory,
+} from '../../api/types';
 import type { ObserveFn } from '../../hooks/useIntersectionObserver';
 import type { ThreadId } from '../../types';
 import { ApiMessageEntityTypes } from '../../api/types';
@@ -40,6 +42,7 @@ interface OwnProps {
   canBeEmpty?: boolean;
   maxTimestamp?: number;
   shouldAnimateTyping?: boolean;
+  noInitialTypingAnimation?: boolean;
   canAnimateTextStreaming?: boolean;
   onTypingAnimationEnd?: NoneToVoidFunction;
 }
@@ -68,6 +71,7 @@ function MessageText({
   maxTimestamp,
   threadId,
   shouldAnimateTyping,
+  noInitialTypingAnimation,
   canAnimateTextStreaming,
   onTypingAnimationEnd,
 }: OwnProps) {
@@ -106,15 +110,14 @@ function MessageText({
   }, [text, entitiesWithFocusedQuote]);
 
   const withSharedCanvas = useMemo(() => {
-    const hasSpoilers = entitiesWithFocusedQuote?.some((e) => e.type === ApiMessageEntityTypes.Spoiler);
-    if (hasSpoilers) {
+    if (shouldAnimateTyping) {
       return false;
     }
 
-    const customEmojisCount = entitiesWithFocusedQuote
-      ?.filter((e) => e.type === ApiMessageEntityTypes.CustomEmoji).length || 0;
-    return customEmojisCount >= MIN_CUSTOM_EMOJIS_FOR_SHARED_CANVAS;
-  }, [entitiesWithFocusedQuote]) || 0;
+    const customEmojisCount = countCustomEmojis(entitiesWithFocusedQuote);
+    return customEmojisCount >= MIN_CUSTOM_EMOJIS_FOR_SHARED_CANVAS
+      && !hasSpoileredCustomEmojis(entitiesWithFocusedQuote);
+  }, [entitiesWithFocusedQuote, shouldAnimateTyping]);
 
   const renderText = useLastCallback((t: ApiFormattedText) => {
     return renderTextWithEntities({
@@ -129,8 +132,8 @@ function MessageText({
       observeIntersectionForLoading,
       observeIntersectionForPlaying,
       withTranslucentThumbs,
-      sharedCanvasRef,
-      sharedCanvasHqRef,
+      sharedCanvasRef: withSharedCanvas ? sharedCanvasRef : undefined,
+      sharedCanvasHqRef: withSharedCanvas ? sharedCanvasHqRef : undefined,
       cacheBuster: textCacheBusterRef.current.toString(),
       forcePlayback,
       isInSelectMode,
@@ -162,6 +165,7 @@ function MessageText({
             formattedText={textToRender}
             renderText={renderText}
             shouldAnimateMask={canAnimateTextStreaming}
+            noInitialAnimation={noInitialTypingAnimation}
             shouldRenderPlaceholder={shouldRenderTypingPlaceholder}
             onCompleted={onTypingAnimationEnd}
             completionKey={messageOrStory.id}
@@ -170,6 +174,28 @@ function MessageText({
       ].flat().filter(Boolean)}
     </>
   );
+}
+
+function countCustomEmojis(entities?: ApiMessageEntity[]) {
+  return entities?.filter((entity) => entity.type === ApiMessageEntityTypes.CustomEmoji).length || 0;
+}
+
+function hasSpoileredCustomEmojis(entities?: ApiMessageEntity[]) {
+  const spoilers = entities?.filter((entity) => entity.type === ApiMessageEntityTypes.Spoiler);
+  if (!spoilers?.length) {
+    return false;
+  }
+
+  return Boolean(entities?.some((entity) => {
+    if (entity.type !== ApiMessageEntityTypes.CustomEmoji) {
+      return false;
+    }
+
+    return spoilers.some((spoiler) => {
+      return entity.offset >= spoiler.offset
+        && entity.offset + entity.length <= spoiler.offset + spoiler.length;
+    });
+  }));
 }
 
 export default memo(MessageText);

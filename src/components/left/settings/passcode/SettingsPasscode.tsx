@@ -1,13 +1,13 @@
-import type { FC } from '../../../../lib/teact/teact';
-import { memo, useCallback } from '../../../../lib/teact/teact';
+import { memo } from '../../../../lib/teact/teact';
 import { getActions, withGlobal } from '../../../../global';
 
 import type { GlobalState } from '../../../../global/types';
 import { SettingsScreens } from '../../../../types';
 
-import { decryptSession } from '../../../../util/passcode';
+import { verifyPasscode } from '../../../../util/passcode';
 
-import useOldLang from '../../../../hooks/useOldLang';
+import useLang from '../../../../hooks/useLang';
+import useLastCallback from '../../../../hooks/useLastCallback';
 
 import SettingsPasscodeForm from '../SettingsPasswordForm';
 import SettingsPasscodeCongratulations from './SettingsPasscodeCongratulations';
@@ -25,68 +25,81 @@ export type OwnProps = {
 
 type StateProps = GlobalState['passcode'];
 
-const SettingsPasscode: FC<OwnProps & StateProps> = ({
+const SettingsPasscode = ({
   passcode,
   currentScreen,
   shownScreen,
-  error,
+  errorKey,
   isActive,
   isLoading,
   onSetPasscode,
   onReset,
-}) => {
+}: OwnProps & StateProps) => {
   const {
     setPasscode,
     clearPasscode,
     setPasscodeError,
     clearPasscodeError,
     openSettingsScreen,
+    setupUnlockPasskey,
+    removeUnlockPasskey,
   } = getActions();
 
-  const lang = useOldLang();
+  const lang = useLang();
 
-  const handleStartWizard = useCallback(() => {
+  const handleStartWizard = useLastCallback(() => {
     onSetPasscode('');
     openSettingsScreen({ screen: SettingsScreens.PasscodeNewPasscode });
-  }, [onSetPasscode]);
+  });
 
-  const handleNewPassword = useCallback((value: string) => {
+  const handleNewPassword = useLastCallback((value: string) => {
     onSetPasscode(value);
     openSettingsScreen({ screen: SettingsScreens.PasscodeNewPasscodeConfirm });
-  }, [onSetPasscode]);
+  });
 
-  const handleNewPasswordConfirm = useCallback(() => {
+  const handleNewPasswordConfirm = useLastCallback(() => {
     setPasscode({ passcode });
     onSetPasscode('');
     openSettingsScreen({ screen: SettingsScreens.PasscodeCongratulations });
-  }, [onSetPasscode, passcode]);
+  });
 
-  const handleChangePasswordCurrent = useCallback((currentPasscode: string) => {
+  const handleChangePasswordCurrent = useLastCallback((currentPasscode: string) => {
     onSetPasscode('');
-    decryptSession(currentPasscode).then(() => {
-      openSettingsScreen({ screen: SettingsScreens.PasscodeChangePasscodeNew });
-    }, () => {
-      setPasscodeError({
-        error: lang('PasscodeController.Error.Current'),
-      });
+    verifyPasscode(currentPasscode).then((isValid) => {
+      if (isValid) {
+        openSettingsScreen({ screen: SettingsScreens.PasscodeChangePasscodeNew });
+      } else {
+        setPasscodeError({
+          errorKey: { key: 'PasscodeControllerErrorCurrent' },
+        });
+      }
     });
-  }, [lang, onSetPasscode]);
+  });
 
-  const handleChangePasswordNew = useCallback((value: string) => {
+  const handleChangePasswordNew = useLastCallback((value: string) => {
     onSetPasscode(value);
     openSettingsScreen({ screen: SettingsScreens.PasscodeChangePasscodeConfirm });
-  }, [onSetPasscode]);
+  });
 
-  const handleTurnOff = useCallback((currentPasscode: string) => {
-    decryptSession(currentPasscode).then(() => {
-      clearPasscode();
-      openSettingsScreen({ screen: SettingsScreens.Privacy });
-    }, () => {
-      setPasscodeError({
-        error: lang('PasscodeController.Error.Current'),
-      });
+  const handleTurnOff = useLastCallback((currentPasscode: string) => {
+    verifyPasscode(currentPasscode).then((isValid) => {
+      if (isValid) {
+        clearPasscode();
+      } else {
+        setPasscodeError({
+          errorKey: { key: 'PasscodeControllerErrorCurrent' },
+        });
+      }
     });
-  }, [lang]);
+  });
+
+  const handlePasskeyAdd = useLastCallback((currentPasscode: string) => {
+    setupUnlockPasskey({ passcode: currentPasscode });
+  });
+
+  const handlePasskeyRemove = useLastCallback((currentPasscode: string) => {
+    removeUnlockPasskey({ passcode: currentPasscode });
+  });
 
   switch (currentScreen) {
     case SettingsScreens.PasscodeDisabled:
@@ -148,6 +161,8 @@ const SettingsPasscode: FC<OwnProps & StateProps> = ({
             SettingsScreens.PasscodeChangePasscodeCurrent,
             SettingsScreens.PasscodeChangePasscodeNew,
             SettingsScreens.PasscodeChangePasscodeConfirm,
+            SettingsScreens.PasscodePasskeyAddConfirm,
+            SettingsScreens.PasscodePasskeyRemoveConfirm,
             SettingsScreens.PasscodeCongratulations,
             SettingsScreens.PasscodeTurnOff,
           ].includes(shownScreen)}
@@ -159,9 +174,9 @@ const SettingsPasscode: FC<OwnProps & StateProps> = ({
       return (
         <SettingsPasscodeForm
           shouldDisablePasswordManager
-          error={error}
+          error={errorKey && lang.withRegular(errorKey)}
           onClearError={clearPasscodeError}
-          placeholder={lang('PasscodeController.Current.Placeholder')}
+          placeholder={lang('PasscodeControllerCurrentPlaceholder')}
           onSubmit={handleChangePasswordCurrent}
           isActive={isActive || [
             SettingsScreens.PasscodeChangePasscodeNew,
@@ -191,7 +206,7 @@ const SettingsPasscode: FC<OwnProps & StateProps> = ({
         <SettingsPasscodeForm
           shouldDisablePasswordManager
           expectedPassword={passcode}
-          placeholder={lang('PasscodeController.ReEnterPasscode.Placeholder')}
+          placeholder={lang('PasscodeControllerReEnterPasscodePlaceholder')}
           isLoading={isLoading}
           onSubmit={handleNewPasswordConfirm}
           isActive={isActive || [
@@ -201,13 +216,30 @@ const SettingsPasscode: FC<OwnProps & StateProps> = ({
         />
       );
 
+    case SettingsScreens.PasscodePasskeyAddConfirm:
+    case SettingsScreens.PasscodePasskeyRemoveConfirm:
+      return (
+        <SettingsPasscodeForm
+          shouldDisablePasswordManager
+          error={errorKey && lang.withRegular(errorKey)}
+          isLoading={isLoading}
+          onClearError={clearPasscodeError}
+          placeholder={lang('PasscodeControllerCurrentPlaceholder')}
+          onSubmit={currentScreen === SettingsScreens.PasscodePasskeyAddConfirm
+            ? handlePasskeyAdd
+            : handlePasskeyRemove}
+          isActive={isActive}
+          onReset={onReset}
+        />
+      );
+
     case SettingsScreens.PasscodeTurnOff:
       return (
         <SettingsPasscodeForm
           shouldDisablePasswordManager
-          error={error ? lang(error) : undefined}
+          error={errorKey && lang.withRegular(errorKey)}
           onClearError={clearPasscodeError}
-          placeholder={lang('PasscodeController.Current.Placeholder')}
+          placeholder={lang('PasscodeControllerCurrentPlaceholder')}
           onSubmit={handleTurnOff}
           isActive={isActive}
           onReset={onReset}

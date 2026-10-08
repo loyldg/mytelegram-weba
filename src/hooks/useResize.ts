@@ -30,13 +30,19 @@ export function useResize(
     });
   });
 
+  // Apply directly instead of via `requestMutation` to avoid a one-frame delay
+  // (layout effects already run in the mutation phase)
   useLayoutEffect(() => {
     if (!elementRef.current || !initialWidth) {
       return;
     }
 
-    setElementStyle(initialWidth);
-  }, [cssPropertyName, elementRef, initialWidth, setElementStyle]);
+    const widthPx = `${initialWidth}px`;
+    elementRef.current.style.width = widthPx;
+    if (cssPropertyName) {
+      elementRef.current.style.setProperty(cssPropertyName, widthPx);
+    }
+  }, [cssPropertyName, elementRef, initialWidth]);
 
   function handleMouseUp() {
     requestMutation(() => {
@@ -83,11 +89,9 @@ export function useResize(
       unmarkIsActive();
     }
 
-    /* eslint-disable @eslint-react/web-api/no-leaked-event-listener */
     document.addEventListener('mousemove', handleMouseMove, false);
     document.addEventListener('mouseup', stopDrag, false);
     document.addEventListener('blur', stopDrag, false);
-    /* eslint-enable @eslint-react/web-api/no-leaked-event-listener */
 
     return cleanup;
   }, [initialElementWidth, initialMouseX, elementRef, onResize, isActive, unmarkIsActive, setElementStyle]);

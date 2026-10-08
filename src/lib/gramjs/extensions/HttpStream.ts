@@ -1,24 +1,33 @@
-const closeError = new Error('HttpStream was closed');
-const REQUEST_TIMEOUT = 10000;
+import { concat } from '../../../util/encoding/buffer';
 
-AbortSignal.timeout ??= function timeout(ms) {
-  const ctrl = new AbortController();
-  setTimeout(() => ctrl.abort(), ms);
-  return ctrl.signal;
-};
+const closeError = new Error('HttpStream was closed');
+const REQUEST_TIMEOUT = 30000;
+
+export class HttpStreamError extends Error {
+  readonly status: number;
+
+  constructor(response: Response) {
+    const statusText = response.statusText ? ` ${response.statusText}` : '';
+    super(`HttpStream request failed: ${response.status}${statusText}`);
+    this.name = 'HttpStreamError';
+    this.status = response.status;
+  }
+}
 
 export default class HttpStream {
   private url: string | undefined;
 
   private isClosed: boolean;
 
-  private stream: Buffer<ArrayBuffer>[] = [];
+  private abortController?: AbortController;
+
+  private stream: Uint8Array[] = [];
 
   private canRead: Promise<void> = Promise.resolve();
 
   private resolveRead: VoidFunction | undefined;
 
-  private rejectRead: VoidFunction | undefined;
+  private rejectRead: ((reason?: unknown) => void) | undefined;
 
   private disconnectedCallback: VoidFunction | undefined;
 
@@ -28,11 +37,11 @@ export default class HttpStream {
   }
 
   async readExactly(number: number) {
-    let readData = Buffer.alloc(0);
+    let readData = new Uint8Array(0);
 
     while (true) {
       const thisTime = await this.read();
-      readData = Buffer.concat([readData, thisTime]);
+      readData = concat(readData, thisTime);
       number -= thisTime.length;
       if (number <= 0) {
         return readData;
@@ -41,7 +50,11 @@ export default class HttpStream {
   }
 
   async read() {
-    await this.canRead;
+    const abortController = this.abortController;
+    while (!this.isClosed && this.abortController === abortController && !this.stream.length) {
+      await this.canRead;
+    }
+    if (this.isClosed || this.abortController !== abortController) throw closeError;
 
     const data = this.stream.shift()!;
     if (this.stream.length === 0) {
@@ -49,6 +62,7 @@ export default class HttpStream {
         this.resolveRead = resolve;
         this.rejectRead = reject;
       });
+      void this.canRead.catch(() => undefined);
     }
 
     return data;
@@ -62,62 +76,68 @@ export default class HttpStream {
     }
   }
 
-  async connect(port: number, ip: string, isTestServer = false, isPremium = false) {
+  connect(port: number, ip: string, isTestServer = false, isPremium = false) {
+    this.rejectRead?.(closeError);
+    this.abortController?.abort();
+    this.abortController = new AbortController();
     this.stream = [];
     this.canRead = new Promise((resolve, reject) => {
       this.resolveRead = resolve;
       this.rejectRead = reject;
     });
+    void this.canRead.catch(() => undefined);
     this.url = HttpStream.getURL(ip, port, isTestServer, isPremium);
-
-    await fetch(this.url, {
-      method: 'POST',
-      body: Buffer.from([]),
-      mode: 'cors',
-      signal: AbortSignal.timeout(REQUEST_TIMEOUT),
-    });
-
     this.isClosed = false;
+
+    return Promise.resolve();
   }
 
-  write(data: Buffer<ArrayBuffer>) {
-    if (this.isClosed || !this.url) {
-      this.handleDisconnect();
+  write(data: Uint8Array) {
+    if (this.isClosed || !this.url || !this.abortController) {
       throw closeError;
     }
 
+    const abortController = this.abortController;
+    const requestTimeout = setTimeout(() => abortController.abort(), REQUEST_TIMEOUT);
+
     return fetch(this.url, {
       method: 'POST',
-      body: data,
+      body: new Uint8Array(data),
       mode: 'cors',
-      signal: AbortSignal.timeout(REQUEST_TIMEOUT),
+      signal: abortController.signal,
     }).then(async (response) => {
-      if (this.isClosed) {
-        this.handleDisconnect();
-        return;
-      }
+      if (this.abortController !== abortController) throw closeError;
       if (response.status !== 200) {
-        throw closeError;
+        throw new HttpStreamError(response);
       }
 
       const arrayBuffer = await response.arrayBuffer();
+      if (this.abortController !== abortController) throw closeError;
+      if (!arrayBuffer.byteLength) {
+        throw new Error('HttpStream received an empty response');
+      }
 
-      this.stream = this.stream.concat(Buffer.from(arrayBuffer));
-      if (this.resolveRead && !this.isClosed) this.resolveRead();
+      this.stream.push(new Uint8Array(arrayBuffer));
+      this.resolveRead?.();
     }).catch((err) => {
-      this.handleDisconnect();
+      if (this.abortController === abortController) this.handleDisconnect(err);
       throw err;
+    }).finally(() => {
+      clearTimeout(requestTimeout);
     });
   }
 
-  handleDisconnect() {
+  handleDisconnect(err: unknown) {
+    if (this.isClosed) return;
+
+    this.isClosed = true;
+    this.rejectRead?.(err);
+    this.abortController?.abort();
+    this.abortController = undefined;
     this.disconnectedCallback?.();
-    if (this.rejectRead) this.rejectRead();
   }
 
   close() {
-    this.isClosed = true;
-    this.handleDisconnect();
-    this.disconnectedCallback = undefined;
+    this.handleDisconnect(closeError);
   }
 }

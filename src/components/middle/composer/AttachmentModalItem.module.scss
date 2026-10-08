@@ -124,3 +124,10 @@
     opacity: 1;
   }
 }
+
+.audio {
+  flex-grow: 1;
+  min-width: 0;
+  padding-block: 0.25rem;
+  padding-inline-start: 0.25rem;
+}

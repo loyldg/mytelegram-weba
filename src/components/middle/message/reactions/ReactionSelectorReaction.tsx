@@ -1,4 +1,3 @@
-import type { FC } from '../../../../lib/teact/teact';
 import { memo } from '../../../../lib/teact/teact';
 
 import type { ApiAvailableReaction, ApiReaction } from '../../../../api/types';
@@ -25,14 +24,14 @@ type OwnProps = {
   onToggleReaction: (reaction: ApiReaction) => void;
 };
 
-const ReactionSelectorReaction: FC<OwnProps> = ({
+const ReactionSelectorReaction = ({
   reaction,
   isReady,
   noAppearAnimation,
   chosen,
   isLocked,
   onToggleReaction,
-}) => {
+}: OwnProps) => {
   const mediaAppearData = useMedia(`sticker${reaction.appearAnimation?.id}`, !isReady || noAppearAnimation);
   const mediaData = useMedia(`document${reaction.selectAnimation?.id}`, !isReady || noAppearAnimation);
   const staticIconData = useMedia(`document${reaction.staticIcon?.id}`, !noAppearAnimation);
@@ -83,7 +82,7 @@ const ReactionSelectorReaction: FC<OwnProps> = ({
         />
       )}
       {isLocked && (
-        <Icon className={styles.lock} name="lock-badge" />
+        <Icon className={styles.lock} name="lock-filled" />
       )}
     </div>
   );

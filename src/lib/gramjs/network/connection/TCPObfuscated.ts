@@ -1,13 +1,25 @@
 import type { HttpStream, PromisedWebSockets } from '../../extensions';
 
+import { bufferFromHex, buffersEqual, concat } from '../../../../util/encoding/buffer';
 import { CTR } from '../../crypto/CTR';
 
 import { generateRandomBytes } from '../../Helpers';
 import { ObfuscatedConnection } from './Connection';
 import { AbridgedPacketCodec } from './TCPAbridged';
 
+const FORBIDDEN_OBFUSCATED_PREFIXES = [
+  bufferFromHex('48454144'),
+  bufferFromHex('504f5354'),
+  bufferFromHex('47455420'),
+  bufferFromHex('4f505449'),
+  bufferFromHex('16030102'),
+  bufferFromHex('dddddddd'),
+  bufferFromHex('eeeeeeee'),
+];
+const ZERO_INT = new Uint8Array(4);
+
 class ObfuscatedIO {
-  header?: Buffer = undefined;
+  header?: Uint8Array = undefined;
 
   private connection: PromisedWebSockets | HttpStream;
 
@@ -25,50 +37,40 @@ class ObfuscatedIO {
   }
 
   initHeader(packetCodec: typeof AbridgedPacketCodec) {
-    // Obfuscated messages secrets cannot start with any of these
-    const keywords = [
-      Buffer.from('50567247', 'hex'),
-      Buffer.from('474554', 'hex'),
-      Buffer.from('504f5354', 'hex'),
-      Buffer.from('eeeeeeee', 'hex'),
-    ];
+    // Prevent the random prefix from being detected as another accepted transport
+    // https://core.telegram.org/mtproto/mtproto-transports#transport-obfuscation
     let random;
 
     while (true) {
       random = generateRandomBytes(64);
-      if (random[0] !== 0xef && !(random.slice(4, 8)
-        .equals(Buffer.alloc(4)))) {
-        let ok = true;
-        for (const key of keywords) {
-          if (key.equals(random.slice(0, 4))) {
-            ok = false;
-            break;
-          }
-        }
-        if (ok) {
-          break;
-        }
+      const firstInt = random.slice(0, 4);
+      const hasForbiddenPrefix = FORBIDDEN_OBFUSCATED_PREFIXES.some(
+        (prefix) => buffersEqual(prefix, firstInt),
+      );
+      if (
+        random[0] !== 0xef
+        && !hasForbiddenPrefix
+        && !buffersEqual(random.slice(4, 8), ZERO_INT)
+      ) {
+        break;
       }
     }
-    random = random.toJSON().data;
 
-    const randomReversed = Buffer.from(random.slice(8, 56))
-      .reverse();
+    const randomReversed = random.slice(8, 56).reverse();
     // Encryption has "continuous buffer" enabled
-    const encryptKey = Buffer.from(random.slice(8, 40));
-    const encryptIv = Buffer.from(random.slice(40, 56));
-    const decryptKey = Buffer.from(randomReversed.slice(0, 32));
-    const decryptIv = Buffer.from(randomReversed.slice(32, 48));
+    const encryptKey = random.slice(8, 40);
+    const encryptIv = random.slice(40, 56);
+    const decryptKey = randomReversed.slice(0, 32);
+    const decryptIv = randomReversed.slice(32, 48);
     const encryptor = new CTR(encryptKey, encryptIv);
     const decryptor = new CTR(decryptKey, decryptIv);
 
-    random = Buffer.concat([
-      Buffer.from(random.slice(0, 56)), packetCodec.obfuscateTag, Buffer.from(random.slice(60)),
-    ]);
-    random = Buffer.concat([
-      Buffer.from(random.slice(0, 56)), Buffer.from(encryptor.encrypt(random)
-        .slice(56, 64)), Buffer.from(random.slice(64)),
-    ]);
+    random = concat(
+      random.slice(0, 56), packetCodec.obfuscateTag, random.slice(60),
+    );
+    random = concat(
+      random.slice(0, 56), encryptor.encrypt(random).slice(56, 64), random.slice(64),
+    );
     return {
       random,
       encryptor,
@@ -81,7 +83,7 @@ class ObfuscatedIO {
     return this._decrypt.encrypt(data);
   }
 
-  write(data: Buffer<ArrayBuffer>) {
+  write(data: Uint8Array) {
     this.connection.write(this._encrypt.encrypt(data));
   }
 }

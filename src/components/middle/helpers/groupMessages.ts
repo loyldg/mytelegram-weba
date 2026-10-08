@@ -1,7 +1,8 @@
 import type { ApiMessage } from '../../../api/types';
 import type { IAlbum, IDocumentGroup } from '../../../types';
 
-import { isActionMessage } from '../../../global/helpers';
+import { getMessageOriginalId, isActionMessage } from '../../../global/helpers';
+import { getMessageForumTopicId } from '../../../global/helpers/replies';
 import { getDayStartAt } from '../../../util/dates/oldDateFormat';
 
 type SenderGroup = (ApiMessage | IAlbum | IDocumentGroup)[];
@@ -26,6 +27,7 @@ export function isDocumentGroup(
 
 export function groupMessages(
   messages: ApiMessage[], firstUnreadId?: number, topMessageId?: number, isChatWithSelf?: boolean, withUsers?: boolean,
+  splitBeforeMessageId?: number, withTopicSplit?: boolean,
 ) {
   const initDateGroup: MessageDateGroup = {
     originalDate: messages[0].date,
@@ -120,7 +122,11 @@ export function groupMessages(
         dateGroups.push(newDateGroup);
       } else if (
         nextMessage.id === firstUnreadId
+        || (splitBeforeMessageId !== undefined && getMessageOriginalId(nextMessage) === splitBeforeMessageId)
         || message.senderId !== nextMessage.senderId
+        || message.isEphemeral !== nextMessage.isEphemeral
+        || message.ephemeralBotId !== nextMessage.ephemeralBotId
+        || message.guestChatViaId !== nextMessage.guestChatViaId
         || (!withUsers && message.paidMessageStars)
         || (nextMessage.suggestedPostInfo)
         || message.isOutgoing !== nextMessage.isOutgoing
@@ -139,6 +145,7 @@ export function groupMessages(
             && nextMessage.id !== topMessageId
             && !(message.groupedId && message.groupedId === nextMessage.groupedId))
           || (isChatWithSelf && message.forwardInfo?.fromId !== nextMessage.forwardInfo?.fromId)
+          || (withTopicSplit && getMessageForumTopicId(message) !== getMessageForumTopicId(nextMessage))
       ) {
         currentDateGroup.senderGroups.push([]);
       }

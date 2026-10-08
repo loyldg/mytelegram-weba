@@ -1,5 +1,4 @@
 import type { FC } from '../../../lib/teact/teact';
-import type React from '../../../lib/teact/teact';
 import { memo, useRef } from '../../../lib/teact/teact';
 
 import buildClassName from '../../../util/buildClassName';
@@ -53,7 +52,7 @@ const DropTarget: FC<OwnProps> = ({ isQuick, isGeneric, onFileSelect }) => {
         <rect className="target-outline" x="0" y="0" width="100%" height="100%" rx="8" />
       </svg>
       <div className="target-content">
-        <Icon name={isQuick ? 'photo' : 'document'} />
+        <Icon name={isQuick ? 'media' : 'document'} />
         <div className="title">{lang('FileDropZoneTitle')}</div>
         {!isGeneric && (
           <div className="description">

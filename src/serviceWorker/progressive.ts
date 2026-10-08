@@ -4,8 +4,9 @@ import {
   MEDIA_PROGRESSIVE_CACHE_DISABLED,
   MEDIA_PROGRESSIVE_CACHE_NAME,
 } from '../config';
+import { getAccountSlot } from '../util/accountSlot';
 import generateUniqueId from '../util/generateUniqueId';
-import { getAccountSlot } from '../util/multiaccount';
+import { loadPasscodeMeta, requestPasscodeStateLock } from '../util/passcode/meta';
 import { pause } from '../util/schedulers';
 
 declare const self: ServiceWorkerGlobalScope;
@@ -64,10 +65,11 @@ export async function respondForProgressive(e: FetchEvent) {
     }
   }
 
+  const hasPasscode = await loadPasscodeMeta().then(Boolean).catch(() => true);
   parsedUrl.searchParams.set('start', String(start));
   parsedUrl.searchParams.set('end', String(end));
   const cacheKey = parsedUrl.href;
-  const [cachedArrayBuffer, cachedHeaders] = !MEDIA_PROGRESSIVE_CACHE_DISABLED
+  const [cachedArrayBuffer, cachedHeaders] = !MEDIA_PROGRESSIVE_CACHE_DISABLED && !hasPasscode
     ? await fetchFromCache(accountSlot, cacheKey) : [];
 
   if (DEBUG) {
@@ -114,8 +116,16 @@ export async function respondForProgressive(e: FetchEvent) {
     ['Content-Type', mimeType],
   ];
 
-  if (!MEDIA_PROGRESSIVE_CACHE_DISABLED && partSize <= MEDIA_CACHE_MAX_BYTES && end < MAX_END_TO_CACHE) {
-    saveToCache(accountSlot, cacheKey, arrayBufferPart, headers);
+  if (
+    !MEDIA_PROGRESSIVE_CACHE_DISABLED
+    && !hasPasscode
+    && partSize <= MEDIA_CACHE_MAX_BYTES
+    && end < MAX_END_TO_CACHE
+  ) {
+    await requestPasscodeStateLock(async () => {
+      if (await loadPasscodeMeta()) return;
+      await saveToCache(accountSlot, cacheKey, arrayBufferPart, headers);
+    });
   }
 
   return new Response(arrayBufferPart, {

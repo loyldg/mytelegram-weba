@@ -75,7 +75,7 @@ function PaidMessagePrice({
         >
           <span className="settings-unlock-button-title">
             {lang('UnlockButtonTitle')}
-            <Icon name="lock-badge" className="settings-unlock-button-icon" />
+            <Icon name="lock-filled" className="settings-unlock-button-icon" />
           </span>
         </Button>
       )}

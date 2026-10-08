@@ -1,5 +1,3 @@
-import type { ChangeEvent } from 'react';
-import type { ElementRef } from '../../../lib/teact/teact';
 import {
   memo, useEffect, useLayoutEffect, useMemo, useRef, useState,
 } from '../../../lib/teact/teact';
@@ -8,22 +6,33 @@ import { getActions, withGlobal } from '../../../global';
 import type { ApiMessage, ApiNewMediaTodo } from '../../../api/types';
 import type { TabState } from '../../../global/types/tabState';
 
-import { requestMeasure, requestNextMutation } from '../../../lib/fasterdom/fasterdom';
+import { requestMeasure } from '../../../lib/fasterdom/fasterdom';
 import { selectChatMessage } from '../../../global/selectors';
-import captureEscKeyListener from '../../../util/captureEscKeyListener';
+import buildClassName from '../../../util/buildClassName';
 import { generateUniqueNumberId } from '../../../util/generateUniqueId';
 import { MEMO_EMPTY_ARRAY } from '../../../util/memo';
 
 import useCurrentOrPrev from '../../../hooks/useCurrentOrPrev';
 import useLang from '../../../hooks/useLang';
 import useLastCallback from '../../../hooks/useLastCallback';
+import useReorderableList from '../../../hooks/useReorderableList';
 
+import Icon from '../../common/icons/Icon';
 import Button from '../../ui/Button';
-import Checkbox from '../../ui/Checkbox';
 import InputText from '../../ui/InputText';
-import Modal from '../../ui/Modal';
+import Island, {
+  IslandDescription,
+  IslandTitle,
+} from '@gili/layout/Island';
+import Modal, {
+  ModalCloseButton,
+  ModalHeader,
+  ModalHeaderAction,
+  ModalTitle,
+} from '@gili/modal/Modal';
+import SwitchField from '@gili/templates/SwitchField';
 
-import './ToDoListModal.scss';
+import styles from './ToDoListModal.module.scss';
 
 export type OwnProps = {
   modal: TabState['todoListModal'];
@@ -38,160 +47,207 @@ export type StateProps = {
   maxItemLength: number;
 };
 
-type Item = {
+type TodoItem = {
   id: number;
   text: string;
-  isDisabled?: boolean;
+  isFrozen?: boolean;
 };
-
-const MAX_LIST_HEIGHT = 320;
-const MAX_OPTION_LENGTH = 100;
 
 const ToDoListModal = ({
   modal,
+  editingMessage,
   maxItemsCount,
   maxTitleLength,
   maxItemLength,
-  editingMessage,
   onSend,
   onClear,
 }: OwnProps & StateProps) => {
   const { editTodo, closeTodoListModal, appendTodoList } = getActions();
 
-  const titleInputRef = useRef<HTMLInputElement>();
-  const itemsListRef = useRef<HTMLDivElement>();
-
-  const [title, setTitle] = useState<string>('');
-  const [items, setItems] = useState<Item[]>(() => [{ id: generateUniqueNumberId(), text: '' }]);
-  const [isOthersCanAppend, setIsOthersCanAppend] = useState(true);
-  const [isOthersCanComplete, setIsOthersCanComplete] = useState(true);
-  const [hasErrors, setHasErrors] = useState<boolean>(false);
-
   const lang = useLang();
+
+  const itemListRef = useRef<HTMLDivElement>();
+
+  const [title, setTitle] = useState('');
+  const [items, setItems] = useState<TodoItem[]>(() => [createTodoItem()]);
+  const [isOthersCanComplete, setIsOthersCanComplete] = useState(true);
+  const [isOthersCanAppend, setIsOthersCanAppend] = useState(true);
 
   const isOpen = Boolean(modal);
   const renderingModal = useCurrentOrPrev(modal);
   // Treat "Add task" as edit mode for own checklists
-  const isAddTaskMode = renderingModal?.forNewTask && !editingMessage?.isOutgoing;
+  const isAddTaskMode = Boolean(renderingModal?.forNewTask && !editingMessage?.isOutgoing);
 
   const editingTodo = editingMessage?.content.todo?.todo;
+  const parsedCheckList = editingMessage ? undefined : renderingModal?.initialCheckList;
 
-  const frozenTasks = useMemo(() => {
+  const frozenItems = useMemo(() => {
     if (!isAddTaskMode || !editingTodo) {
       return MEMO_EMPTY_ARRAY;
     }
 
-    return editingTodo.items.map((item) => ({
+    return editingTodo.items.map((item): TodoItem => ({
       id: item.id,
       text: item.title.text,
-      isDisabled: true,
+      isFrozen: true,
     }));
   }, [isAddTaskMode, editingTodo]);
 
-  const focusInput = useLastCallback((ref: ElementRef<HTMLInputElement>) => {
-    if (isOpen && ref.current) {
-      ref.current.focus();
-    }
-  });
+  const availableItemsCount = maxItemsCount - frozenItems.length;
 
   useLayoutEffect(() => {
-    if (editingTodo) {
-      setTitle(editingTodo.title.text);
-      setIsOthersCanAppend(editingTodo.othersCanAppend ?? false);
-      setIsOthersCanComplete(editingTodo.othersCanComplete ?? false);
-      if (!isAddTaskMode) {
-        const editingItems = editingTodo.items.map((item) => ({
-          id: item.id,
-          text: item.title.text,
-        }));
-        if (editingItems.length < maxItemsCount) {
-          editingItems.push({ id: generateUniqueNumberId(), text: '' });
-        }
-        setItems(editingItems);
-      }
+    if (!editingTodo) {
+      return;
     }
+
+    setTitle(editingTodo.title.text);
+    setIsOthersCanComplete(editingTodo.othersCanComplete ?? false);
+    setIsOthersCanAppend(editingTodo.othersCanAppend ?? false);
+
+    if (isAddTaskMode) {
+      return;
+    }
+
+    const editingItems = editingTodo.items.map((item): TodoItem => ({
+      id: item.id,
+      text: item.title.text,
+    }));
+    setItems(normalizeItems(editingItems, maxItemsCount));
   }, [editingTodo, isAddTaskMode, maxItemsCount]);
 
-  useEffect(() => (isOpen ? captureEscKeyListener(onClear) : undefined), [isOpen, onClear]);
-  useEffect(() => {
-    if (!isOpen) {
-      setTitle('');
-      setItems([{ id: generateUniqueNumberId(), text: '' }]);
-      setIsOthersCanAppend(true);
-      setIsOthersCanComplete(true);
-      setHasErrors(false);
+  useLayoutEffect(() => {
+    if (!isOpen || !parsedCheckList) {
+      return;
     }
-  }, [isOpen]);
+
+    setTitle(parsedCheckList.title || '');
+    setItems(normalizeItems(parsedCheckList.items.map((text) => createTodoItem(text)), maxItemsCount));
+  }, [isOpen, maxItemsCount, parsedCheckList]);
 
   useEffect(() => {
     if (isOpen) {
-      // Wait for the DOM to be updated
-      requestMeasure(() => {
-        if (renderingModal?.forNewTask) {
-          const inputs = itemsListRef.current?.querySelectorAll('input');
-          const lastInput = inputs?.[inputs.length - 1];
-          lastInput?.focus();
-        } else {
-          focusInput(titleInputRef);
-        }
-      });
+      return;
     }
-  }, [focusInput, isOpen, renderingModal?.forNewTask]);
 
-  const addNewItem = useLastCallback((newItems: Item[]) => {
-    const id = generateUniqueNumberId();
-    setItems([...newItems, { id, text: '' }]);
+    setTitle('');
+    setItems([createTodoItem()]);
+    setIsOthersCanComplete(true);
+    setIsOthersCanAppend(true);
+  }, [isOpen]);
 
-    requestNextMutation(() => {
-      const list = itemsListRef.current;
-      if (!list) {
-        return;
-      }
+  const filledItems = useMemo(() => {
+    return items.map((item) => ({
+      id: item.id,
+      text: item.text.trim().substring(0, maxItemLength),
+    })).filter(({ text }) => Boolean(text));
+  }, [items, maxItemLength]);
 
-      requestMeasure(() => {
-        list.scrollTo({ top: list.scrollHeight, behavior: 'smooth' });
-      });
+  const reorderableItemIds = useMemo(() => {
+    return filledItems.map(({ id }) => id);
+  }, [filledItems]);
+
+  const renderingItems = useMemo(() => {
+    return [...frozenItems, ...items];
+  }, [frozenItems, items]);
+
+  const trimmedTitle = useMemo(() => title.trim().substring(0, maxTitleLength), [maxTitleLength, title]);
+  const remainingItemsCount = Math.max(availableItemsCount - filledItems.length, 0);
+  const isSubmitDisabled = (!isAddTaskMode && !trimmedTitle) || !filledItems.length;
+  const modalTitleKey = isAddTaskMode
+    ? 'TitleAppendToDoList'
+    : editingMessage ? 'TitleEditToDoList' : 'TitleNewToDoList';
+  const submitLabelKey = isAddTaskMode ? 'Add' : editingMessage ? 'Save' : 'Create';
+
+  const handleReorderItems = useLastCallback((itemIds: number[]) => {
+    setItems((currentItems) => {
+      const itemsById = new Map(currentItems.map((item) => [item.id, item]));
+      const nextItems = itemIds.reduce<TodoItem[]>((result, id) => {
+        const item = itemsById.get(id);
+
+        if (item) {
+          result.push(item);
+        }
+
+        return result;
+      }, []);
+
+      return normalizeItems(nextItems, availableItemsCount);
     });
   });
 
-  const handleCreate = useLastCallback(() => {
-    setHasErrors(false);
+  const {
+    draggedId: draggedItemId,
+    getRowProps: getReorderableRowProps,
+    getDragElementProps: getReorderableDragElementProps,
+    getHandleProps: getReorderableHandleProps,
+    getPlaceholderStyle: getReorderablePlaceholderStyle,
+    getDragStyle: getReorderableDragStyle,
+  } = useReorderableList({
+    itemIds: reorderableItemIds,
+    withAutoscroll: true,
+    onReorder: handleReorderItems,
+  });
+
+  const updateItem = useLastCallback((id: number, value: string) => {
+    const nextItems = items.map((item) => (
+      item.id === id ? { ...item, text: value } : item
+    ));
+
+    setItems(normalizeItems(nextItems, availableItemsCount));
+  });
+
+  const handleRemoveItem = useLastCallback((id: number) => {
+    setItems(normalizeItems(items.filter((item) => item.id !== id), availableItemsCount));
+  });
+
+  const focusItemInput = useLastCallback((shouldFocusLast?: boolean) => {
+    if (!itemListRef.current) {
+      return;
+    }
+
+    const inputs = itemListRef.current.querySelectorAll<HTMLInputElement>(`.${styles.itemInput} input`);
+    const input = shouldFocusLast ? inputs[inputs.length - 1] : inputs[0];
+
+    if (!input) {
+      return;
+    }
+
+    requestMeasure(() => {
+      input.focus();
+    });
+  });
+
+  const handleTitleKeyDown = useLastCallback((e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key !== 'Enter') {
+      return;
+    }
+
+    e.preventDefault();
+    focusItemInput();
+  });
+
+  const handleItemKeyDown = useLastCallback((e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key !== 'Enter') {
+      return;
+    }
+
+    e.preventDefault();
+    focusItemInput(true);
+  });
+
+  const handleTitleChange = useLastCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    setTitle(e.currentTarget.value);
+  });
+
+  const handleSubmit = useLastCallback(() => {
     if (!isOpen) {
       return;
     }
 
-    const todoItems = items
-      .map((item) => {
-        const text = item.text.trim();
-
-        if (!text) return undefined;
-
-        return {
-          id: item.id,
-          title: {
-            text: text.substring(0, maxItemLength),
-          },
-        };
-      }).filter(Boolean);
-
-    const titleTrimmed = title.trim().substring(0, maxTitleLength);
-    if (!titleTrimmed || todoItems.length === 0) {
-      setTitle(titleTrimmed);
-      if (todoItems.length) {
-        const itemsTrimmed = items.map((o) => (
-          { ...o, text: o.text.trim().substring(0, maxItemLength) }))
-          .filter((o) => o.text.length);
-        if (itemsTrimmed.length === 0) {
-          addNewItem([]);
-        } else {
-          setItems([...itemsTrimmed, { id: generateUniqueNumberId(), text: '' }]);
-        }
-      } else {
-        addNewItem([]);
-      }
-      setHasErrors(true);
-      return;
-    }
+    const todoItems = filledItems.map(({ id, text }) => ({
+      id,
+      title: { text },
+    }));
 
     if (isAddTaskMode && editingMessage) {
       appendTodoList({
@@ -205,12 +261,10 @@ const ToDoListModal = ({
 
     const payload: ApiNewMediaTodo = {
       todo: {
-        title: {
-          text: titleTrimmed,
-        },
+        title: { text: trimmedTitle },
         items: todoItems,
-        othersCanAppend: isOthersCanAppend,
         othersCanComplete: isOthersCanComplete,
+        othersCanAppend: isOthersCanAppend,
       },
     };
 
@@ -227,186 +281,196 @@ const ToDoListModal = ({
     closeTodoListModal();
   });
 
-  const updateItem = useLastCallback((index: number, text: string) => {
-    const newItems = [...items];
-    newItems[index] = { ...newItems[index], text };
-    if (newItems[newItems.length - 1].text.trim().length && newItems.length < maxItemsCount) {
-      addNewItem(newItems);
-    } else {
-      setItems(newItems);
-    }
-  });
-
-  const removeItem = useLastCallback((index: number) => {
-    const newItems = [...items];
-    newItems.splice(index, 1);
-    setItems(newItems);
-
-    requestNextMutation(() => {
-      if (!itemsListRef.current) {
-        return;
-      }
-
-      itemsListRef.current.classList.toggle('overflown', itemsListRef.current.scrollHeight > MAX_LIST_HEIGHT);
-    });
-  });
-
-  const handleIsOthersCanAppendChange = useLastCallback((e: ChangeEvent<HTMLInputElement>) => {
-    setIsOthersCanAppend(e.target.checked);
-  });
-  const handleIsOthersCanCompleteChange = useLastCallback((e: ChangeEvent<HTMLInputElement>) => {
-    setIsOthersCanComplete(e.target.checked);
-  });
-
-  const handleKeyPress = useLastCallback((e: React.KeyboardEvent) => {
-    if (e.key === 'Enter') {
-      handleCreate();
-    }
-  });
-
-  const handleTitleChange = useLastCallback((e: ChangeEvent<HTMLInputElement>) => {
-    setTitle(e.target.value);
-  });
-
-  const getTitleError = useLastCallback(() => {
-    if (hasErrors && !title.trim().length) {
-      return lang('ToDoListErrorChooseTitle');
-    }
-
-    return undefined;
-  });
-
-  const getItemsError = useLastCallback((index: number) => {
-    const itemsTrimmed = items.map((o) => o.text.trim()).filter((o) => o.length);
-    if (hasErrors && itemsTrimmed.length < 1 && !items[index].text.trim().length) {
-      return lang('ToDoListErrorChooseTasks');
-    }
-    return undefined;
-  });
-
-  function renderHeader() {
-    const modalTitle = isAddTaskMode ? 'TitleAppendToDoList'
-      : editingMessage ? 'TitleEditToDoList' : 'TitleNewToDoList';
-    return (
-      <div className="modal-header-condensed">
-        <Button
-          round
-          color="translucent"
-          size="tiny"
-          ariaLabel={lang('AriaToDoCancel')}
-          onClick={onClear}
-          iconName="close"
-        />
-        <div className="modal-title">{lang(modalTitle)}</div>
+  const renderHeader = useMemo(() => (
+    <ModalHeader>
+      <ModalCloseButton />
+      <ModalTitle noAutoFocus>{lang(modalTitleKey)}</ModalTitle>
+      <ModalHeaderAction>
         <Button
           color="primary"
-          size="tiny"
-          className="modal-action-button"
-          onClick={handleCreate}
+          pill
+          disabled={isSubmitDisabled}
+          noForcedUpperCase
+          size="smaller"
+          onClick={handleSubmit}
         >
-          {lang(isAddTaskMode ? 'Add' : editingMessage ? 'Save' : 'Create')}
+          {lang(submitLabelKey)}
         </Button>
-      </div>
-    );
-  }
-
-  function renderItems() {
-    const tasksToRender = [...frozenTasks, ...items];
-    return tasksToRender.map((item, index) => {
-      const stateIndex = index - frozenTasks.length;
-      return (
-        <div className="item-wrapper">
-          <InputText
-            maxLength={MAX_OPTION_LENGTH}
-            label={index !== tasksToRender.length - 1 || tasksToRender.length === maxItemsCount
-              ? lang('TitleTask')
-              : lang('TitleAddTask')}
-            error={getItemsError(stateIndex)}
-            value={item.text}
-            disabled={item.isDisabled}
-            onChange={(e) => updateItem(stateIndex, e.currentTarget.value)}
-            onKeyPress={handleKeyPress}
-          />
-          {index !== tasksToRender.length - 1 && !item.isDisabled && (
-            <Button
-              className="item-remove-button"
-              round
-              color="translucent"
-              size="smaller"
-              ariaLabel={lang('Delete')}
-              onClick={() => removeItem(stateIndex)}
-              iconName="close"
-            />
-          )}
-        </div>
-      );
-    });
-  }
-
-  const moreTasksCount = maxItemsCount - items.length - (isAddTaskMode && editingTodo ? editingTodo.items.length : 0);
+      </ModalHeaderAction>
+    </ModalHeader>
+  ), [isSubmitDisabled, lang, modalTitleKey, submitLabelKey]);
 
   return (
-    <Modal isOpen={isOpen} onClose={onClear} header={renderHeader()} className="ToDoListModal">
-      {!isAddTaskMode && (
+    <Modal
+      isOpen={isOpen}
+      onClose={onClear}
+      header={renderHeader}
+      ariaLabel={lang(modalTitleKey)}
+      width="slim"
+    >
+      <IslandTitle>{lang('InputTitle')}</IslandTitle>
+      <Island>
         <InputText
-          ref={titleInputRef}
+          className={styles.input}
           label={lang('InputTitle')}
           value={title}
-          error={getTitleError()}
+          maxLength={maxTitleLength}
+          disabled={isAddTaskMode}
+          autoFocus={!isAddTaskMode}
           onChange={handleTitleChange}
-          onKeyPress={handleKeyPress}
+          onKeyDown={handleTitleKeyDown}
         />
-      )}
-      {isAddTaskMode && (
-        <div className="readonly-title">
-          {title}
-        </div>
-      )}
-      <div className="options-divider" />
+      </Island>
 
-      <div className="options-list custom-scroll" ref={itemsListRef}>
-        <h3 className="items-header">
-          {lang('TitleToDoList')}
-        </h3>
+      <IslandTitle>{lang('ToDoListTasksTitle')}</IslandTitle>
+      <Island ref={itemListRef} className={styles.itemList} teactFastList>
+        {renderingItems.map((item, index) => {
+          if (item.isFrozen) {
+            return (
+              <div key={item.id} className={styles.itemRowFrame}>
+                <div className={styles.itemRow}>
+                  <div className={styles.itemLeadingIcon} />
+                  <InputText
+                    className={styles.itemInput}
+                    value={item.text}
+                    disabled
+                  />
+                </div>
+              </div>
+            );
+          }
 
-        {renderItems()}
+          const isFilledItem = Boolean(item.text.trim());
+          const isAddItemRow = !isFilledItem && index === renderingItems.length - 1;
+          const isFirstEditableItem = index === frozenItems.length;
+          const shouldShowRemoveButton = items.length > 1 && !isAddItemRow;
+          const rowProps = isFilledItem ? getReorderableRowProps(item.id) : undefined;
+          const handleProps = isFilledItem ? getReorderableHandleProps(item.id) : undefined;
+          const dragElementProps = isFilledItem ? getReorderableDragElementProps(item.id) : undefined;
+          const placeholderStyle = isFilledItem ? getReorderablePlaceholderStyle(item.id) : undefined;
+          const dragStyle = isFilledItem ? getReorderableDragStyle(item.id) : undefined;
 
-      </div>
-
-      <div className="items-count-hint">
-        {lang('HintTodoListTasksCount2', {
-          count: moreTasksCount,
-        }, {
-          pluralValue: moreTasksCount,
+          return (
+            <div
+              key={item.id}
+              ref={rowProps?.ref}
+              className={styles.itemRowFrame}
+              style={placeholderStyle}
+            >
+              <div
+                ref={dragElementProps?.ref}
+                style={dragStyle}
+                className={buildClassName(
+                  styles.itemRow,
+                  isAddItemRow && styles.itemRowAdd,
+                  draggedItemId === item.id && styles.itemRowDragging,
+                )}
+              >
+                <div
+                  className={buildClassName(
+                    styles.itemLeadingIcon,
+                    isAddItemRow && styles.itemLeadingIconAdd,
+                    isFilledItem && styles.itemDragHandle,
+                  )}
+                  role={handleProps?.role}
+                  tabIndex={handleProps?.tabIndex}
+                  aria-label={isFilledItem ? lang('DragToSortAria') : undefined}
+                  onMouseDown={handleProps?.onMouseDown}
+                  onTouchStart={handleProps?.onTouchStart}
+                  onKeyDown={handleProps?.onKeyDown}
+                  ref={handleProps?.ref}
+                >
+                  <Icon
+                    name={isAddItemRow ? 'add' : 'hamburger'}
+                    className={styles.itemLeadingIconGlyph}
+                  />
+                </div>
+                <InputText
+                  className={buildClassName(styles.itemInput, isAddItemRow && styles.itemInputAdd)}
+                  placeholder={isAddItemRow ? lang('TitleAddTask') : lang('TitleTask')}
+                  value={item.text}
+                  maxLength={maxItemLength}
+                  autoFocus={isAddTaskMode && isFirstEditableItem}
+                  onChange={(e) => updateItem(item.id, e.currentTarget.value)}
+                  onKeyDown={handleItemKeyDown}
+                />
+                {shouldShowRemoveButton && (
+                  <Button
+                    round
+                    size="tiny"
+                    color="translucent"
+                    className={styles.itemRemove}
+                    ariaLabel={lang('Delete')}
+                    iconName="close"
+                    onClick={() => handleRemoveItem(item.id)}
+                  />
+                )}
+              </div>
+            </div>
+          );
         })}
-      </div>
-
-      <div className="options-divider" />
+      </Island>
+      <IslandDescription>
+        {remainingItemsCount > 0 ? (
+          lang('HintTodoListTasksCount2', { count: remainingItemsCount }, { pluralValue: remainingItemsCount })
+        ) : lang('ToDoListTasksLimitReached')}
+      </IslandDescription>
 
       {!isAddTaskMode && (
-        <div className="options-footer">
-          <div className="dialog-checkbox-group">
-            <Checkbox
-              label={lang('AllowOthersAddTasks')}
-              checked={isOthersCanAppend}
-              onChange={handleIsOthersCanAppendChange}
-            />
-            <Checkbox
+        <>
+          <IslandTitle>{lang('PollModalSettingsTitle')}</IslandTitle>
+          <Island>
+            <SwitchField
               label={lang('AllowOthersMarkAsDone')}
               checked={isOthersCanComplete}
-              onChange={handleIsOthersCanCompleteChange}
+              onChange={setIsOthersCanComplete}
             />
-          </div>
-        </div>
+            <SwitchField
+              label={lang('AllowOthersAddTasks')}
+              checked={isOthersCanAppend}
+              onChange={setIsOthersCanAppend}
+            />
+          </Island>
+        </>
       )}
     </Modal>
   );
 };
 
+function createTodoItem(text = ''): TodoItem {
+  return {
+    id: generateUniqueNumberId(),
+    text,
+  };
+}
+
+function normalizeItems(items: TodoItem[], maxItemsCount: number) {
+  const nextItems = [...items];
+
+  while (
+    nextItems.length > 1
+    && !nextItems[nextItems.length - 1].text.trim()
+    && !nextItems[nextItems.length - 2].text.trim()
+  ) {
+    nextItems.pop();
+  }
+
+  if (!nextItems.length) {
+    nextItems.push(createTodoItem());
+  }
+
+  if (nextItems.length < maxItemsCount && nextItems[nextItems.length - 1].text.trim()) {
+    nextItems.push(createTodoItem());
+  }
+
+  return nextItems;
+}
+
 export default memo(withGlobal<OwnProps>(
   (global, { modal }): Complete<StateProps> => {
     const { appConfig } = global;
     const editingMessage = modal?.messageId ? selectChatMessage(global, modal.chatId, modal.messageId) : undefined;
+
     return {
       editingMessage,
       maxItemsCount: appConfig.todoItemsMax,

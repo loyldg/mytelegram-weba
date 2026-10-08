@@ -1,4 +1,5 @@
 import type {
+  ApiAiComposeToneType,
   ApiAppConfig,
   ApiAttachBot,
   ApiAvailableEffect,
@@ -11,6 +12,7 @@ import type {
   ApiConfig,
   ApiCountry,
   ApiCountryCode,
+  ApiEmojiGroup,
   ApiEmojiStatusType,
   ApiGroupCall,
   ApiMessage,
@@ -45,12 +47,14 @@ import type {
   ApiStoryAlbum,
   ApiTimezone,
   ApiTonAmount,
+  ApiTopPeerCategory,
   ApiTranscription,
   ApiUpdateAuthorizationStateType,
   ApiUpdateConnectionStateType,
   ApiUser,
   ApiUserCommonChats,
   ApiUserFullInfo,
+  ApiUserSavedMusic,
   ApiUserStatus,
   ApiVideo,
   ApiWallpaper,
@@ -64,14 +68,14 @@ import type {
   ChatListType,
   ChatTranslatedMessages,
   EmojiKeywords,
-  IThemeSettings,
+  OrderMode,
+  RepeatMode,
   ServiceNotification,
   SimilarBotsInfo,
   StarGiftCategory,
   StarsSubscriptions,
   StarsTransactionHistory,
   TextSummary,
-  ThemeKey,
   Thread,
   ThreadId,
   TopicsInfo,
@@ -92,6 +96,10 @@ export type GlobalState = {
     byId: Record<string, ApiTimezone>;
     hash: number;
   };
+  aiComposeTones?: {
+    tones: ApiAiComposeToneType[];
+    hash: string;
+  };
   isCacheApiSupported?: boolean;
   connectionState?: ApiUpdateConnectionStateType;
   currentUserId?: string;
@@ -105,11 +113,17 @@ export type GlobalState = {
   initialUnreadNotifications?: number;
   shouldShowContextMenuHint?: boolean;
   botFreezeAppealId?: string;
+  reactionPollingPause?: {
+    until: number;
+    chatId: string;
+  };
 
   audioPlayer: {
     volume: number;
     lastPlaybackRate: number;
     isLastPlaybackRateActive?: boolean;
+    repeatMode: RepeatMode;
+    orderMode: OrderMode;
   };
 
   mediaViewer: {
@@ -142,10 +156,12 @@ export type GlobalState = {
   passcode: {
     isScreenLocked?: boolean;
     hasPasscode?: boolean;
-    error?: string;
+    hasPasskey?: boolean;
+    autolockDuration?: number;
+    isDataCorrupted?: boolean;
+    errorKey?: RegularLangFnParameters;
     timeoutUntil?: number;
     invalidAttemptsCount?: number;
-    invalidAttemptError?: string;
     isLoading?: boolean;
   };
 
@@ -186,6 +202,9 @@ export type GlobalState = {
   users: {
     byId: Record<string, ApiUser>;
     statusesById: Record<string, ApiUserStatus>;
+    savedMusicById?: Record<string, true>;
+    isSavedMusicLoading?: boolean;
+    savedMusicByPeerId: Record<string, ApiUserSavedMusic>;
     // Obtained from GetFullUser / UserFullInfo
     fullInfoById: Record<string, ApiUserFullInfo>;
     previewMediaByBotId: Record<string, ApiBotPreviewMedia[]>;
@@ -241,11 +260,15 @@ export type GlobalState = {
     notifyExceptionById: Record<string, ApiPeerNotifySettings>;
 
     similarBotsById: Record<string, SimilarBotsInfo>;
+
+    personalChannelIds?: string[];
   };
 
   messages: {
     byChatId: Record<string, {
       byId: Record<number, ApiMessage>;
+      ephemeralById: Record<number, ApiMessage>;
+      anchoredById: Record<number, ApiMessage>;
       summaryById: Record<number, TextSummary>;
       threadsById: Record<ThreadId, Thread>;
     }>;
@@ -359,6 +382,8 @@ export type GlobalState = {
     featured: {
       hash?: string;
       setIds?: string[];
+      isPremium?: boolean;
+      hiddenSetId?: string;
     };
     forEmoji: {
       emoji?: string;
@@ -401,6 +426,13 @@ export type GlobalState = {
   tonGifts?: ApiStickerSet;
   emojiKeywords: Record<string, EmojiKeywords | undefined>;
 
+  emojiGroups: {
+    hash?: number;
+    groups?: ApiEmojiGroup[];
+    stickerHash?: number;
+    stickerGroups?: ApiEmojiGroup[];
+  };
+
   collectibleEmojiStatuses?: {
     statuses: ApiEmojiStatusType[];
     hash?: string;
@@ -413,20 +445,12 @@ export type GlobalState = {
     };
   };
 
-  topPeers: {
-    userIds?: string[];
+  topPeerCategories: Partial<Record<ApiTopPeerCategory, {
+    peerIds: string[];
+    ratingsByPeerId: Record<string, number>;
     lastRequestedAt?: number;
-  };
-
-  topInlineBots: {
-    userIds?: string[];
-    lastRequestedAt?: number;
-  };
-
-  topBotApps: {
-    userIds?: string[];
-    lastRequestedAt?: number;
-  };
+    isDisabled?: boolean;
+  }>>;
 
   activeSessions: {
     byHash: Record<string, ApiSession>;
@@ -447,7 +471,6 @@ export type GlobalState = {
     lastPremiumBandwithNotificationDate?: number;
     paidReactionPrivacy?: ApiPaidReactionPrivacyType;
     botVerificationShownPeerIds: string[];
-    themes: Partial<Record<ThemeKey, IThemeSettings>>;
     accountDaysTtl: number;
     passkeys?: ApiPasskey[];
   };

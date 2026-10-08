@@ -64,7 +64,7 @@ class TelegramClient {
 
   async loadScenario(scenario = 'default'): Promise<void> {
     try {
-      const invokeMiddleware = await import(`./__invokeMiddlewares__/${scenario}`);
+      const invokeMiddleware = await import(/* @vite-ignore */ `./__invokeMiddlewares__/${scenario}`);
 
       this.invokeMiddleware = invokeMiddleware.default;
     } catch (e) {
@@ -73,10 +73,10 @@ class TelegramClient {
     return import(`./__mocks__/${scenario}.json`).then(async (mockData) => {
       this.mockData = mockData as MockTypes;
       await Promise.all(this.mockData.documents.map(async (l, i) => {
-        const response = await import(`./__data__/${l.url}`).then((module) => fetch(module.default));
+        const response = await import(/* @vite-ignore */ `./__data__/${l.url}`).then((module) => fetch(module.default));
         const bytes = await response.arrayBuffer();
         this.mockData.documents[i].size = BigInt(bytes.byteLength);
-        this.mockData.documents[i].bytes = Buffer.from(new Uint8Array(bytes));
+        this.mockData.documents[i].bytes = new Uint8Array(bytes);
       }));
 
       this.callbacks.forEach(({ eventBuilder, callback }) => (callback(
@@ -145,7 +145,13 @@ class TelegramClient {
     if (request instanceof Api.contacts.GetTopPeers) {
       return new Api.contacts.TopPeers({
         categories: [new Api.TopPeerCategoryPeers({
-          category: new Api.TopPeerCategoryCorrespondents(),
+          category: request.botsInline
+            ? new Api.TopPeerCategoryBotsInline()
+            : request.botsApp
+              ? new Api.TopPeerCategoryBotsApp()
+              : request.botsGuestchat
+                ? new Api.TopPeerCategoryBotsGuestChat()
+                : new Api.TopPeerCategoryCorrespondents(),
           count: this.mockData.topPeers.length,
           peers: this.mockData.topPeers.map((id) => {
             return new Api.TopPeer({
@@ -231,7 +237,7 @@ class TelegramClient {
       return new Api.upload.File({
         type: new Api.storage.FileUnknown(),
         mtime: 0,
-        bytes: Buffer.from(new Uint8Array(this.mockData.documents.find((i) => i.id === fileId)!.bytes)),
+        bytes: new Uint8Array(this.mockData.documents.find((i) => i.id === fileId)!.bytes),
       });
     }
 

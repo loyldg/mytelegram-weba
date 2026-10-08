@@ -1,6 +1,7 @@
 import type { ApiGroupCall, ApiPhoneCallDiscardReason } from './calls';
 import type { ApiBotApp, ApiFormattedText, ApiPhoto, ApiPollAnswer, ApiTodoItem } from './messages';
 import type { ApiStarGiftRegular, ApiStarGiftUnique, ApiTypeCurrencyAmount } from './stars';
+import type { ApiBirthday } from './users';
 
 interface ActionMediaType {
   mediaType: 'action';
@@ -41,6 +42,11 @@ export interface ApiMessageActionChatJoinedByLink extends ActionMediaType {
   inviterId: string;
 }
 
+export interface ApiMessageActionChatJoinedViaCommunity extends ActionMediaType {
+  type: 'chatJoinedViaCommunity';
+  communityId: string;
+}
+
 export interface ApiMessageActionChannelCreate extends ActionMediaType {
   type: 'channelCreate';
   title: string;
@@ -57,12 +63,23 @@ export interface ApiMessageActionChannelMigrateFrom extends ActionMediaType {
   chatId: string;
 }
 
+export interface ApiMessageActionChangeCommunity extends ActionMediaType {
+  type: 'changeCommunity';
+  communityId?: string;
+}
+
 export interface ApiMessageActionPinMessage extends ActionMediaType {
   type: 'pinMessage';
 }
 
 export interface ApiMessageActionHistoryClear extends ActionMediaType {
   type: 'historyClear';
+}
+
+export interface ApiMessageActionSetMessagesTtl extends ActionMediaType {
+  type: 'setMessagesTtl';
+  period: number;
+  autoSettingFromId?: string;
 }
 
 export interface ApiMessageActionGameScore extends ActionMediaType {
@@ -167,6 +184,11 @@ export interface ApiMessageActionSuggestProfilePhoto extends ActionMediaType {
   photo: ApiPhoto;
 }
 
+export interface ApiMessageActionSuggestBirthday extends ActionMediaType {
+  type: 'suggestBirthday';
+  birthday: ApiBirthday;
+}
+
 export interface ApiMessageActionGiftCode extends ActionMediaType {
   type: 'giftCode';
   isViaGiveaway?: true;
@@ -259,6 +281,8 @@ export interface ApiMessageActionStarGift extends ActionMediaType {
 
 export interface ApiMessageActionStarGiftUnique extends ActionMediaType {
   type: 'starGiftUnique';
+  isNameHidden?: true;
+  message?: ApiFormattedText;
   isUpgrade?: true;
   isTransferred?: true;
   isSaved?: true;
@@ -387,12 +411,15 @@ export type ApiMessageAction = ApiMessageActionUnsupported | ApiMessageActionCha
   | ApiMessageActionChatEditPhoto | ApiMessageActionChatDeletePhoto | ApiMessageActionChatAddUser
   | ApiMessageActionChatDeleteUser | ApiMessageActionChatJoinedByLink | ApiMessageActionChannelCreate
   | ApiMessageActionChatMigrateTo | ApiMessageActionChannelMigrateFrom | ApiMessageActionPinMessage
-  | ApiMessageActionHistoryClear | ApiMessageActionGameScore | ApiMessageActionPaymentSent | ApiMessageActionPhoneCall
+  | ApiMessageActionHistoryClear | ApiMessageActionSetMessagesTtl
+  | ApiMessageActionGameScore | ApiMessageActionPaymentSent | ApiMessageActionPhoneCall
   | ApiMessageActionScreenshotTaken | ApiMessageActionCustomAction | ApiMessageActionBotAllowed
   | ApiMessageActionBoostApply | ApiMessageActionContactSignUp | ApiMessageActionExpiredContent
   | ApiMessageActionGroupCall | ApiMessageActionInviteToGroupCall | ApiMessageActionGroupCallScheduled
-  | ApiMessageActionChatJoinedByRequest | ApiMessageActionWebViewDataSent | ApiMessageActionGiftPremium
+  | ApiMessageActionChatJoinedByRequest | ApiMessageActionChatJoinedViaCommunity
+  | ApiMessageActionWebViewDataSent | ApiMessageActionGiftPremium
   | ApiMessageActionTopicCreate | ApiMessageActionTopicEdit | ApiMessageActionSuggestProfilePhoto
+  | ApiMessageActionSuggestBirthday
   | ApiMessageActionChannelJoined | ApiMessageActionGiftCode | ApiMessageActionGiveawayLaunch
   | ApiMessageActionGiveawayResults | ApiMessageActionPaymentRefunded | ApiMessageActionGiftStars
   | ApiMessageActionGiftTon | ApiMessageActionPrizeStars | ApiMessageActionStarGift | ApiMessageActionStarGiftUnique
@@ -401,4 +428,5 @@ export type ApiMessageAction = ApiMessageActionUnsupported | ApiMessageActionCha
   | ApiMessageActionTodoAppendTasks | ApiMessageActionPollAppendAnswer | ApiMessageActionPollDeleteAnswer
   | ApiMessageActionStarGiftPurchaseOffer
   | ApiMessageActionStarGiftPurchaseOfferDeclined | ApiMessageActionNewCreatorPending
-  | ApiMessageActionChangeCreator | ApiMessageActionNoForwardsToggle | ApiMessageActionNoForwardsRequest;
+  | ApiMessageActionChangeCreator | ApiMessageActionNoForwardsToggle | ApiMessageActionNoForwardsRequest
+  | ApiMessageActionChangeCommunity;

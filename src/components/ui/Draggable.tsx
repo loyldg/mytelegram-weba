@@ -1,4 +1,3 @@
-import type { FC } from '../../lib/teact/teact';
 import {
   memo, useCallback, useEffect, useMemo, useRef, useState,
 } from '../../lib/teact/teact';
@@ -38,7 +37,7 @@ type OwnProps = {
 
 const ZERO_POINT: TPoint = { x: 0, y: 0 };
 
-const Draggable: FC<OwnProps> = ({
+const Draggable = ({
   children,
   id,
   onDrag,
@@ -46,7 +45,7 @@ const Draggable: FC<OwnProps> = ({
   style: externalStyle,
   knobStyle,
   isDisabled,
-}) => {
+}: OwnProps) => {
   const lang = useOldLang();
   const ref = useRef<HTMLDivElement>();
 
@@ -164,7 +163,7 @@ const Draggable: FC<OwnProps> = ({
           onTouchStart={handleMouseDown}
           style={knobStyle}
         >
-          <Icon name="sort" className={styles.icon} />
+          <Icon name="hamburger" className={styles.icon} />
         </div>
       )}
     </div>

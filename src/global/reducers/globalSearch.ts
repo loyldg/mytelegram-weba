@@ -4,7 +4,7 @@ import type { GlobalState, TabArgs, TabState } from '../types';
 
 import { getCurrentTabId } from '../../util/establishMultitabRole';
 import { areSortedArraysEqual } from '../../util/iteratees';
-import { getSearchResultKey } from '../../util/keys/searchResultKey';
+import { buildSearchResultKey, getSearchResultKey } from '../../util/keys/searchResultKey';
 import { selectTabState } from '../selectors';
 import { updateTabState } from './tabs';
 
@@ -97,6 +97,41 @@ export function updateGlobalSearchResults<T extends GlobalState>(
       },
     },
   }, tabId);
+}
+
+export function removeMessagesFromGlobalSearchResults<T extends GlobalState>(
+  global: T,
+  chatId: string,
+  messageIds: number[],
+  ...[tabId = getCurrentTabId()]: TabArgs<T>
+): T {
+  const { resultsByType } = selectTabState(global, tabId).globalSearch;
+  if (!resultsByType) return global;
+
+  const keysToRemove = new Set(messageIds.map((id) => buildSearchResultKey(chatId, id)));
+
+  let hasChanges = false;
+  const newResultsByType = { ...resultsByType };
+  (Object.keys(newResultsByType) as ApiGlobalMessageSearchType[]).forEach((type) => {
+    const results = newResultsByType[type];
+    if (!results) return;
+
+    const foundIds = results.foundIds.filter((key) => !keysToRemove.has(key));
+    const removedCount = results.foundIds.length - foundIds.length;
+    if (!removedCount) return;
+
+    hasChanges = true;
+    newResultsByType[type] = {
+      ...results,
+      foundIds,
+      totalCount: results.totalCount === undefined
+        ? undefined
+        : Math.max(results.totalCount - removedCount, foundIds.length),
+    };
+  });
+  if (!hasChanges) return global;
+
+  return updateGlobalSearch(global, { resultsByType: newResultsByType }, tabId);
 }
 
 export function updateGlobalSearchFetchingStatus<T extends GlobalState>(

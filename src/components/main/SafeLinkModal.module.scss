@@ -1,0 +1,25 @@
+.url {
+  unicode-bidi: isolate;
+  font-weight: var(--font-weight-normal);
+  color: var(--color-text-secondary);
+  overflow-wrap: anywhere;
+}
+
+.domain {
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text);
+}
+
+.suspicious {
+  color: var(--color-error);
+}
+
+.warning {
+  margin: 1rem 0 0;
+  font-size: 0.875rem;
+}
+
+.riskIcon {
+  margin-inline-end: 0.25rem;
+  color: var(--color-error);
+}

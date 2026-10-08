@@ -27,7 +27,7 @@ function PrivacyLockedOption({ label, isChecked }: OwnProps) {
       onClick={() => showNotification({ message: lang('OptionPremiumRequiredMessage') })}
     >
       <span>{label}</span>
-      <Icon name="lock-badge" className={styles.lockIcon} />
+      <Icon name="lock-filled" className={styles.lockIcon} />
     </div>
   );
 }

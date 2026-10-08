@@ -15,7 +15,6 @@ import {
 } from '../../../config';
 import { IS_APP, IS_MAC_OS } from '../../../util/browser/windowEnvironment';
 import buildClassName from '../../../util/buildClassName';
-import { onDragEnter, onDragLeave } from '../../../util/dragNDropHandlers';
 import { getOrderKey, getPinnedChatsCount } from '../../../util/folderManager';
 import { ARCHIVE_ANIMATION_ID } from './hooks';
 
@@ -48,6 +47,11 @@ type OwnProps = {
   isFoldersSidebarShown?: boolean;
   isStoryRibbonShown?: boolean;
   foldersDispatch?: FolderEditDispatch;
+  noAbsolutePositioning?: boolean;
+  noVirtualization?: boolean;
+  noScrollRestore?: boolean;
+  noFastList?: boolean;
+  scrollContainerClosest?: string;
   onScroll?: (e: React.UIEvent<HTMLDivElement>) => void;
 };
 
@@ -67,12 +71,18 @@ const ChatList = ({
   isFoldersSidebarShown,
   isStoryRibbonShown,
   foldersDispatch,
+  noAbsolutePositioning,
+  noVirtualization,
+  noScrollRestore,
+  noFastList,
+  scrollContainerClosest,
   onScroll,
 }: OwnProps) => {
   const {
     openChat,
     openNextChat,
     closeForumPanel,
+    closeCommunityPanel,
     toggleStoryRibbon,
     openLeftColumnContent,
   } = getActions();
@@ -99,7 +109,10 @@ const ChatList = ({
     orderDiffById, shiftDiff, getAnimationType, onReorderAnimationEnd: onReorderAnimationEnd,
   } = useOrderDiff(orderedIds, panesHeight);
 
-  const [viewportIds, getMore] = useInfiniteScroll(undefined, orderedIds, undefined, CHAT_LIST_SLICE);
+  const chatListSlice = noVirtualization
+    ? Math.max(CHAT_LIST_SLICE, orderedIds?.length || 0)
+    : CHAT_LIST_SLICE;
+  const [viewportIds, getMore] = useInfiniteScroll(undefined, orderedIds, undefined, chatListSlice);
 
   // Support <Alt>+<Up/Down> to navigate between chats
   useHotkeys(useMemo(() => (isActive && orderedIds?.length ? {
@@ -157,6 +170,7 @@ const ChatList = ({
   const handleArchivedClick = useLastCallback(() => {
     openLeftColumnContent({ contentKey: LeftColumnContent.Archived });
     closeForumPanel();
+    closeCommunityPanel();
   });
 
   const handleShowStoryRibbon = useLastCallback(() => {
@@ -165,18 +179,6 @@ const ChatList = ({
 
   const handleHideStoryRibbon = useLastCallback(() => {
     toggleStoryRibbon({ isShown: false, isArchived });
-  });
-
-  const handleArchivedDragEnter = useLastCallback(() => {
-    onDragEnter(() => {
-      handleArchivedClick();
-    });
-  });
-
-  const handleChatDragEnter = useLastCallback((chatId: string) => {
-    onDragEnter(() => {
-      openChat({ id: chatId, shouldReplaceHistory: true });
-    });
   });
 
   useTopOverscroll({
@@ -194,7 +196,9 @@ const ChatList = ({
 
     return viewportIds!.map((id, i) => {
       const isPinned = viewportOffset + i < pinnedCount;
-      const offsetTop = panesHeight + archiveHeight + (viewportOffset + i) * CHAT_HEIGHT_PX;
+      const offsetTop = noAbsolutePositioning
+        ? undefined
+        : panesHeight + archiveHeight + (viewportOffset + i) * CHAT_HEIGHT_PX;
 
       return (
         <Chat
@@ -210,14 +214,14 @@ const ChatList = ({
           onReorderAnimationEnd={onReorderAnimationEnd}
           offsetTop={offsetTop}
           observeIntersection={observe}
-          onDragEnter={handleChatDragEnter}
-          onDragLeave={onDragLeave}
           withTags={withTags}
           isFoldersSidebarShown={isFoldersSidebarShown}
         />
       );
     });
   }
+
+  const totalHeight = chatsHeight + archiveHeight + panesHeight;
 
   return (
     <InfiniteScroll
@@ -226,18 +230,20 @@ const ChatList = ({
       items={viewportIds}
       itemSelector=".ListItem:not(.chat-item-archive)"
       preloadBackwards={CHAT_LIST_SLICE}
-      withAbsolutePositioning
-      maxHeight={chatsHeight + archiveHeight + panesHeight}
+      withAbsolutePositioning={!noAbsolutePositioning}
+      maxHeight={!noAbsolutePositioning ? totalHeight : undefined}
+      scrollContainerClosest={scrollContainerClosest}
+      noScrollRestore={noScrollRestore}
+      noFastList={noFastList}
       onLoadMore={getMore}
       onScroll={onScroll}
     >
-      {isAllFolder && <ChatListPanes key="panes" onHeightChange={setPanesHeight} />}
+      {!isSaved && <ChatListPanes key="panes" noBanners={!isAllFolder} onHeightChange={setPanesHeight} />}
       {shouldDisplayArchive && (
         <Archive
           key="archive"
           archiveSettings={archiveSettings}
           onClick={handleArchivedClick}
-          onDragEnter={handleArchivedDragEnter}
           animationType={getAnimationType(ARCHIVE_ANIMATION_ID)}
           offsetTop={panesHeight}
           isFoldersSidebarShown={isFoldersSidebarShown}

@@ -1,6 +1,6 @@
 import { getActions } from '../../../../global';
 
-import type { ApiMessage, ApiPeer, ApiStory, ApiTopic, ApiUser, ApiWebPage } from '../../../../api/types';
+import type { ApiMessage, ApiPeer, ApiStory, ApiWebPage } from '../../../../api/types';
 import type { OldLangFn } from '../../../../hooks/useOldLang';
 import type { IAlbum, ThreadId } from '../../../../types';
 import { MAIN_THREAD_ID } from '../../../../api/types';
@@ -25,7 +25,7 @@ export default function useInnerHandlers({
   album,
   senderPeer,
   botSender,
-  messageTopic,
+  guestFromSender,
   isTranslatingChat,
   story,
   isReplyPrivate,
@@ -45,8 +45,8 @@ export default function useInnerHandlers({
   album?: IAlbum;
   avatarPeer?: ApiPeer;
   senderPeer?: ApiPeer;
-  botSender?: ApiUser;
-  messageTopic?: ApiTopic;
+  botSender?: ApiPeer;
+  guestFromSender?: ApiPeer;
   isTranslatingChat?: boolean;
   story?: ApiStory;
   isReplyPrivate?: boolean;
@@ -83,7 +83,8 @@ export default function useInnerHandlers({
   });
 
   const handleViaBotClick = useLastCallback(() => {
-    if (!botSender) {
+    const username = botSender && getMainUsername(botSender);
+    if (!username) {
       return;
     }
 
@@ -91,9 +92,17 @@ export default function useInnerHandlers({
       chatId,
       threadId,
       text: {
-        text: `@${getMainUsername(botSender)} `,
+        text: `@${username} `,
       },
     });
+  });
+
+  const handleGuestForClick = useLastCallback(() => {
+    if (!guestFromSender) {
+      return;
+    }
+
+    openChat({ id: guestFromSender.id });
   });
 
   const handleReplyClick = useLastCallback((): void => {
@@ -129,13 +138,15 @@ export default function useInnerHandlers({
       chatId,
       threadId,
       messageId,
-      origin: isScheduled ? MediaViewerOrigin.ScheduledInline : MediaViewerOrigin.Inline,
+      origin: message.isEphemeral
+        ? MediaViewerOrigin.Ephemeral
+        : isScheduled ? MediaViewerOrigin.ScheduledInline : MediaViewerOrigin.Inline,
     });
   });
 
   const openMediaViewerWithPhotoOrVideo = useLastCallback((withDynamicLoading: boolean): void => {
     if (paidMedia && !paidMedia.isBought) return;
-    if (withDynamicLoading) {
+    if (withDynamicLoading && !message.isEphemeral) {
       searchChatMediaMessages({ chatId, threadId, currentMediaMessageId: messageId });
     }
 
@@ -148,18 +159,20 @@ export default function useInnerHandlers({
       chatId,
       threadId,
       messageId,
-      origin: isScheduled ? MediaViewerOrigin.ScheduledInline : MediaViewerOrigin.Inline,
+      origin: message.isEphemeral
+        ? MediaViewerOrigin.Ephemeral
+        : isScheduled ? MediaViewerOrigin.ScheduledInline : MediaViewerOrigin.Inline,
       timestamp: lastPlaybackTimestamp || videoContent?.timestamp || webpageTimestamp,
-      withDynamicLoading,
+      withDynamicLoading: message.isEphemeral ? false : withDynamicLoading,
     });
   });
   const handlePhotoMediaClick = useLastCallback((): void => {
-    const withDynamicLoading = !isScheduled && !paidMedia;
+    const withDynamicLoading = !message.isEphemeral && !isScheduled && !paidMedia;
     openMediaViewerWithPhotoOrVideo(withDynamicLoading);
   });
   const handleVideoMediaClick = useLastCallback(() => {
     const isGif = message.content?.video?.isGif;
-    const withDynamicLoading = !isGif && !isScheduled && !paidMedia;
+    const withDynamicLoading = !message.isEphemeral && !isGif && !isScheduled && !paidMedia;
     openMediaViewerWithPhotoOrVideo(withDynamicLoading);
   });
 
@@ -173,7 +186,11 @@ export default function useInnerHandlers({
   });
 
   const handleAudioPlay = useLastCallback((): void => {
-    openAudioPlayer({ chatId, messageId });
+    openAudioPlayer({
+      item: {
+        type: 'message', chatId, threadId, messageId,
+      },
+    });
   });
 
   const handleAlbumMediaClick = useLastCallback((albumMessageId: number, albumIndex?: number): void => {
@@ -191,6 +208,7 @@ export default function useInnerHandlers({
   });
 
   const handleReadMedia = useLastCallback((): void => {
+    if (message.isEphemeral) return;
     markMessagesRead({ chatId, messageIds: [messageId] });
   });
 
@@ -268,15 +286,6 @@ export default function useInnerHandlers({
     });
   });
 
-  const handleTopicChipClick = useLastCallback(() => {
-    if (!messageTopic) return;
-    focusMessage({
-      chatId: replyToPeerId || chatId,
-      threadId: messageTopic.id,
-      messageId,
-    });
-  });
-
   const handleStoryClick = useLastCallback(() => {
     if (!story) return;
     openStoryViewer({
@@ -289,6 +298,7 @@ export default function useInnerHandlers({
   return {
     handleSenderClick,
     handleViaBotClick,
+    handleGuestForClick,
     handleReplyClick,
     handleDocumentClick,
     handleMediaClick,
@@ -306,7 +316,6 @@ export default function useInnerHandlers({
     handleFocus,
     handleFocusForwarded,
     handleDocumentGroupSelectAll: selectWithGroupedId,
-    handleTopicChipClick,
     handleStoryClick,
   };
 }

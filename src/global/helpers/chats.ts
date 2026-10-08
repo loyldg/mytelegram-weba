@@ -33,6 +33,11 @@ import { getGlobal } from '..';
 import { isSystemBot } from './bots';
 import { getMainUsername } from './users';
 
+type AdminPermissionContainer = {
+  adminRights?: ApiChatAdminRights;
+  isOwner?: boolean;
+};
+
 const FOREVER_BANNED_DATE = Date.now() / 1000 + 31622400; // 366 days
 
 export function isChatGroup(chat: ApiChat) {
@@ -49,6 +54,10 @@ export function isChatSuperGroup(chat: ApiChat) {
 
 export function isChatChannel(chat: ApiChat) {
   return chat.type === 'chatTypeChannel';
+}
+
+export function isChatCommunity(chat: ApiChat) {
+  return chat.type === 'chatTypeCommunity';
 }
 
 export function isChatMonoforum(chat: ApiChat) {
@@ -80,6 +89,8 @@ export function getChatTypeLangKey(chat: ApiChat): RegularLangKey {
       return 'ChatTypeGroup';
     case 'chatTypeChannel':
       return 'ChatTypeChannel';
+    case 'chatTypeCommunity':
+      return 'ChatTypeCommunity';
     default:
       return 'ChatTypeFallback';
   }
@@ -116,16 +127,20 @@ export function getChatAvatarHash(
 }
 
 export function isChatAdmin(chat: ApiChat) {
-  return Boolean(chat.adminRights || chat.isCreator);
+  return Boolean(chat.adminRights || chat.isOwner);
 }
 
-export function getHasAdminRight(chat: ApiChat, key: keyof ApiChatAdminRights) {
-  return chat.adminRights?.[key] || false;
+export function getHasAdminRight(
+  permissionContainer: AdminPermissionContainer,
+  key: keyof ApiChatAdminRights,
+) {
+  return Boolean(permissionContainer.adminRights?.[key]
+    || (permissionContainer.isOwner && key !== 'anonymous'));
 }
 
 export function getCanManageTopic(chat: ApiChat, topic: ApiTopic) {
-  if (topic.id === GENERAL_TOPIC_ID) return chat.isCreator;
-  return chat.isCreator || getHasAdminRight(chat, 'manageTopics') || topic.isOwner;
+  if (topic.id === GENERAL_TOPIC_ID) return chat.isOwner;
+  return getHasAdminRight(chat, 'manageTopics') || topic.isOwner;
 }
 
 export function isUserRightBanned(chat: ApiChat, key: keyof ApiChatBannedRights, chatFullInfo?: ApiChatFullInfo) {
@@ -158,10 +173,6 @@ export function getCanPostInChat(
     || (chat.isNotJoined && !isChatMonoforum(chat) && !isMessageThread)
     || isSystemBot(chat.id) || isAnonymousForwardsChat(chat.id)) {
     return false;
-  }
-
-  if (chat.isCreator) {
-    return true;
   }
 
   if (isUserId(chat.id)) {
@@ -199,6 +210,7 @@ export function getAllowedAttachmentOptions(
   isStoryReply = false,
   paidMessagesStars?: number,
   isInScheduledList = false,
+  isEphemeral = false,
 ): IAllowedAttachmentOptions {
   if (!chat || (paidMessagesStars && isInScheduledList)) {
     return {
@@ -222,10 +234,10 @@ export function getAllowedAttachmentOptions(
 
   return {
     canAttachMedia: isAdmin || isStoryReply || !isUserRightBanned(chat, 'sendMedia', chatFullInfo),
-    canAttachPolls: !isStoryReply && !chat.isMonoforum
+    canAttachPolls: !isEphemeral && !isStoryReply && !chat.isMonoforum
       && (isAdmin || !isUserRightBanned(chat, 'sendPolls', chatFullInfo))
       && (!isUserId(chat.id) || isChatWithBot || isSavedMessages),
-    canAttachToDoLists: !isStoryReply && !chat.isMonoforum && !isChatChannel(chat),
+    canAttachToDoLists: !isEphemeral && !isStoryReply && !chat.isMonoforum && !isChatChannel(chat),
     canSendStickers: isAdmin || isStoryReply || !isUserRightBanned(chat, 'sendStickers', chatFullInfo),
     canSendGifs: isAdmin || isStoryReply || !isUserRightBanned(chat, 'sendGifs', chatFullInfo),
     canAttachEmbedLinks: !isStoryReply && (isAdmin || !isUserRightBanned(chat, 'embedLinks', chatFullInfo)),
@@ -297,7 +309,7 @@ export function isChatArchived(chat: ApiChat) {
 }
 
 export function getCanDeleteChat(chat: ApiChat) {
-  return isChatBasicGroup(chat) || ((isChatSuperGroup(chat) || isChatChannel(chat)) && chat.isCreator);
+  return isChatBasicGroup(chat) || ((isChatSuperGroup(chat) || isChatChannel(chat)) && chat.isOwner);
 }
 
 export function getFolderDescriptionText(lang: LangFn, folder: ApiChatFolder, chatsCount?: number) {

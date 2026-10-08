@@ -1,5 +1,4 @@
 import type { ElementRef, TeactNode } from '../../lib/teact/teact';
-import type React from '../../lib/teact/teact';
 import { useRef } from '../../lib/teact/teact';
 
 import type { IconName } from '../../types/icons';
@@ -11,11 +10,13 @@ import renderText from '../common/helpers/renderText';
 
 import useContextMenuHandlers from '../../hooks/useContextMenuHandlers';
 import { useFastClick } from '../../hooks/useFastClick';
+import { useFileHoverOpenHandler } from '../../hooks/useFileHoverOpen';
 import useFlag from '../../hooks/useFlag';
 import useLang from '../../hooks/useLang';
 import useLastCallback from '../../hooks/useLastCallback';
 
 import Icon from '../common/icons/Icon';
+import IconBackdrop, { type IconBackdropColor } from '../gili/primitives/IconBackdrop';
 import Button from './Button';
 import Menu from './Menu';
 import MenuItem from './MenuItem';
@@ -45,6 +46,7 @@ interface OwnProps {
   buttonRef?: ElementRef<HTMLDivElement | HTMLAnchorElement>;
   icon?: IconName;
   iconClassName?: string;
+  iconBg?: IconBackdropColor;
   leftElement?: TeactNode;
   secondaryIcon?: IconName;
   secondaryIconClassName?: string;
@@ -75,8 +77,7 @@ interface OwnProps {
   onMouseDown?: (e: React.MouseEvent<HTMLDivElement>) => void;
   onContextMenu?: (e: React.MouseEvent<HTMLElement>) => void;
   onSecondaryIconClick?: (e: React.MouseEvent<HTMLButtonElement>) => void;
-  onDragEnter?: (e: React.DragEvent<HTMLDivElement>) => void;
-  onDragLeave?: NoneToVoidFunction;
+  onFileHoverOpen?: NoneToVoidFunction;
 }
 
 const ListItem = ({
@@ -84,6 +85,7 @@ const ListItem = ({
   buttonRef,
   icon,
   iconClassName,
+  iconBg,
   leftElement,
   buttonClassName,
   menuBubbleClassName,
@@ -114,8 +116,7 @@ const ListItem = ({
   onMouseDown,
   onContextMenu,
   onSecondaryIconClick,
-  onDragEnter,
-  onDragLeave,
+  onFileHoverOpen,
 }: OwnProps) => {
   let containerRef = useRef<HTMLDivElement>();
   if (ref) {
@@ -123,6 +124,7 @@ const ListItem = ({
   }
   const menuRef = useRef<HTMLDivElement>();
   const [isTouched, markIsTouched, unmarkIsTouched] = useFlag();
+  const handleFileHoverOpen = useFileHoverOpenHandler(onFileHoverOpen);
 
   const {
     isContextMenuOpen, contextMenuAnchor,
@@ -228,8 +230,8 @@ const ListItem = ({
       dir={lang.isRtl ? 'rtl' : undefined}
       style={style}
       onMouseDown={onMouseDown}
-      onDragEnter={onDragEnter}
-      onDragLeave={onDragLeave}
+      data-file-hover-open={onFileHoverOpen ? true : undefined}
+      onFileHoverOpen={onFileHoverOpen ? handleFileHoverOpen : undefined}
     >
       <ButtonElementTag
         className={buildClassName('ListItem-button', isTouched && 'active', buttonClassName)}
@@ -248,9 +250,11 @@ const ListItem = ({
           <RippleEffect />
         )}
         {leftElement}
-        {icon && (
+        {icon && (iconBg ? (
+          <IconBackdrop className={buildClassName('ListItem-main-icon', iconClassName)} color={iconBg} icon={icon} />
+        ) : (
           <Icon name={icon} className={buildClassName('ListItem-main-icon', iconClassName)} />
-        )}
+        ))}
         {multiline && (<div className="multiline-item">{children}</div>)}
         {!multiline && children}
         {secondaryIcon && (

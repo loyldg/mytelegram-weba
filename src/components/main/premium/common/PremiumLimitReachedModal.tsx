@@ -1,4 +1,3 @@
-import type { FC } from '../../../../lib/teact/teact';
 import { memo, useCallback, useEffect } from '../../../../lib/teact/teact';
 import { getActions, withGlobal } from '../../../../global';
 
@@ -62,13 +61,13 @@ const LIMIT_DESCRIPTION_PREMIUM: Record<ApiLimitTypeWithModal, string> = {
 const LIMIT_ICON: Record<ApiLimitTypeWithModal, IconName> = {
   dialogFiltersChats: 'chat-badge',
   uploadMaxFileparts: 'file-badge',
-  dialogFilters: 'folder-badge',
-  dialogFolderPinned: 'pin-badge',
+  dialogFilters: 'folder-filled',
+  dialogFolderPinned: 'pin-filled',
   channelsPublic: 'link-badge',
   channels: 'chats-badge',
   chatlistInvites: 'link-badge',
-  chatlistJoined: 'folder-badge',
-  savedDialogsPinned: 'pin-badge',
+  chatlistJoined: 'folder-filled',
+  savedDialogsPinned: 'pin-filled',
 };
 
 const LIMIT_VALUE_FORMATTER: Partial<Record<ApiLimitTypeWithModal, (...args: any[]) => string>> = {
@@ -127,13 +126,13 @@ type StateProps = {
   canBuyPremium?: boolean;
 };
 
-const PremiumLimitReachedModal: FC<OwnProps & StateProps> = ({
+const PremiumLimitReachedModal = ({
   defaultValue,
   premiumValue,
   limit,
   isPremium,
   canBuyPremium,
-}) => {
+}: OwnProps & StateProps) => {
   const { closeLimitReachedModal, openPremiumModal } = getActions();
   const lang = useLang();
   const oldLang = useOldLang();

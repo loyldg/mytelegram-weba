@@ -1,10 +1,9 @@
 import type { ApiSticker, ApiStickerSet, ApiStickerSetInfo } from '../../api/types';
-import type { GlobalState, TabArgs } from '../types';
+import type { GlobalState } from '../types';
 
 import { RESTRICTED_EMOJI_SET_ID, TON_CURRENCY_CODE } from '../../config';
-import { getCurrentTabId } from '../../util/establishMultitabRole';
+import { hasMixedEmojiSkinTones, removeEmojiSkinTone } from '../../util/emoji/skinTone';
 import { convertCurrencyFromBaseUnit } from '../../util/formatCurrency';
-import { selectTabState } from './tabs';
 import { selectIsCurrentUserPremium } from './users';
 
 // Duration in days
@@ -15,6 +14,8 @@ const YEAR = MONTH * 12;
 const TWO_YEARS = MONTH * 24;
 
 const DURATION_DELTA = 5;
+
+const NORMALIZED_ANIMATED_EMOJI_BY_STICKERS = new WeakMap<ApiSticker[], Map<string, ApiSticker>>();
 
 // https://github.com/DrKLO/Telegram/blob/c319639e9a4dff2f22da6762dcebd12d49f5afa1/TMessagesProj/src/main/java/org/telegram/ui/Components/Premium/boosts/cells/msg/GiveawayMessageCell.java#L59
 const DURATION_EMOTICON: Record<number, string> = {
@@ -40,20 +41,6 @@ const TON_EMOTICON: Record<number, string> = {
 export function selectIsStickerFavorite<T extends GlobalState>(global: T, sticker: ApiSticker) {
   const { stickers } = global.stickers.favorite;
   return stickers && stickers.some(({ id }) => id === sticker.id);
-}
-
-export function selectCurrentStickerSearch<T extends GlobalState>(
-  global: T,
-  ...[tabId = getCurrentTabId()]: TabArgs<T>
-) {
-  return selectTabState(global, tabId).stickerSearch;
-}
-
-export function selectCurrentGifSearch<T extends GlobalState>(
-  global: T,
-  ...[tabId = getCurrentTabId()]: TabArgs<T>
-) {
-  return selectTabState(global, tabId).gifSearch;
 }
 
 export function selectStickerSet<T extends GlobalState>(global: T, id: string | ApiStickerSetInfo) {
@@ -138,15 +125,36 @@ function cleanEmoji(emoji: string) {
   return emoji.replace('\ufe0f', '');
 }
 
+function normalizeAnimatedEmoji(emoji: string) {
+  return cleanEmoji(hasMixedEmojiSkinTones(emoji) ? emoji : removeEmojiSkinTone(emoji));
+}
+
+function getAnimatedEmojiByNormalizedEmoji(stickers: ApiSticker[]) {
+  const cachedByEmoji = NORMALIZED_ANIMATED_EMOJI_BY_STICKERS.get(stickers);
+  if (cachedByEmoji) return cachedByEmoji;
+
+  const byEmoji = new Map<string, ApiSticker>();
+  stickers.forEach((sticker) => {
+    if (!sticker.emoji) return;
+
+    const normalizedEmoji = normalizeAnimatedEmoji(sticker.emoji);
+    if (!byEmoji.has(normalizedEmoji)) {
+      byEmoji.set(normalizedEmoji, sticker);
+    }
+  });
+  NORMALIZED_ANIMATED_EMOJI_BY_STICKERS.set(stickers, byEmoji);
+
+  return byEmoji;
+}
+
 export function selectAnimatedEmoji<T extends GlobalState>(global: T, emoji: string) {
   const { animatedEmojis } = global;
   if (!animatedEmojis || !animatedEmojis.stickers) {
     return undefined;
   }
 
-  const cleanedEmoji = cleanEmoji(emoji);
-
-  return animatedEmojis.stickers.find((sticker) => sticker.emoji === emoji || sticker.emoji === cleanedEmoji);
+  const normalizedEmoji = normalizeAnimatedEmoji(emoji);
+  return getAnimatedEmojiByNormalizedEmoji(animatedEmojis.stickers).get(normalizedEmoji);
 }
 
 export function selectRestrictedEmoji<T extends GlobalState>(global: T, emoji: string) {
@@ -170,13 +178,12 @@ export function selectAnimatedEmojiEffect<T extends GlobalState>(global: T, emoj
     return undefined;
   }
 
-  const cleanedEmoji = cleanEmoji(emoji);
-
-  return animatedEmojiEffects.stickers.find((sticker) => sticker.emoji === emoji || sticker.emoji === cleanedEmoji);
+  const normalizedEmoji = normalizeAnimatedEmoji(emoji);
+  return getAnimatedEmojiByNormalizedEmoji(animatedEmojiEffects.stickers).get(normalizedEmoji);
 }
 
 export function selectAnimatedEmojiSound<T extends GlobalState>(global: T, emoji: string) {
-  return global?.appConfig.emojiSounds[cleanEmoji(emoji)];
+  return global?.appConfig.emojiSounds[normalizeAnimatedEmoji(emoji)];
 }
 
 export function selectIsAlwaysHighPriorityEmoji<T extends GlobalState>(

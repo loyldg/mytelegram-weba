@@ -1,0 +1,291 @@
+.modal {
+  :global(.modal-dialog) {
+    max-width: 22.5rem;
+    background-color: var(--color-background-secondary);
+  }
+}
+
+.content {
+  display: flex;
+  flex-direction: column;
+  padding: 1rem;
+  padding-top: 0;
+}
+
+.listIsland {
+  overflow: hidden;
+  padding: 0;
+}
+
+.list {
+  overflow-y: auto;
+  max-height: 24rem;
+  padding: 0.75rem;
+
+  :global(.Audio .media-loading) {
+    top: 0;
+    left: 0;
+
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+}
+
+.trackRow {
+  transition: color 150ms ease-out;
+
+  & + & {
+    margin-top: 0.75rem;
+  }
+}
+
+.activeTrackRow {
+  color: var(--color-primary);
+}
+
+.reorderRow {
+  position: relative;
+  padding-inline-end: 2.25rem;
+  border-radius: var(--border-radius-default);
+}
+
+.draggedRow {
+  --custom-cursor: grabbing;
+
+  will-change: transform;
+  cursor: var(--custom-cursor);
+  z-index: var(--z-modal-menu);
+  opacity: 0.95;
+
+  /* The playing ring overflows a track row, so the dragged backing reaches past it */
+  &::before {
+    content: "";
+
+    position: absolute;
+    z-index: -1;
+    inset: -0.625rem;
+
+    border-radius: var(--border-radius-default);
+
+    background: var(--color-background);
+    box-shadow: 0 0.25rem 1rem var(--color-default-shadow);
+  }
+}
+
+.dragHandle {
+  cursor: grab;
+
+  position: absolute;
+  inset-inline-end: 0;
+  top: 50%;
+  transform: translateY(-50%);
+
+  display: grid;
+  place-items: center;
+
+  width: 2rem;
+  height: 2rem;
+  border-radius: 0.25rem;
+
+  color: var(--color-text-secondary);
+
+  opacity: 0;
+
+  transition: opacity 150ms;
+
+  &:active {
+    cursor: grabbing;
+  }
+
+  &:focus-visible {
+    opacity: 1;
+    outline: 0.125rem solid var(--color-primary);
+    outline-offset: 0.125rem;
+  }
+
+  .reorderRow:hover &,
+  .draggedRow & {
+    opacity: 1;
+  }
+
+  @media (pointer: coarse) {
+    touch-action: none;
+    opacity: 1;
+  }
+}
+
+.dragHandleIcon {
+  font-size: 1.5rem;
+}
+
+.trackCoverImage {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.trackCoverIcon {
+  font-size: 1.5rem;
+}
+
+.controls {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 0.75rem;
+}
+
+.nowPlaying {
+  display: flex;
+  gap: 0.75rem;
+  align-items: center;
+}
+
+.nowPlayingCover {
+  overflow: hidden;
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+
+  width: 2.875rem;
+  height: 2.875rem;
+  border-radius: 0.625rem;
+
+  color: var(--color-white);
+
+  background-color: var(--color-primary);
+}
+
+.nowPlayingInfo {
+  overflow: hidden;
+}
+
+.nowPlayingTitle {
+  overflow: hidden;
+
+  font-size: 1.0625rem;
+  font-weight: var(--font-weight-semibold);
+  line-height: 1.375rem;
+  color: var(--color-text);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.nowPlayingSubtitle {
+  overflow: hidden;
+
+  font-size: 0.9375rem;
+  line-height: 1.25rem;
+  color: var(--color-text-secondary);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.seekWrapper {
+  position: relative;
+  height: 1rem;
+  border-radius: 0.25rem;
+}
+
+.times {
+  display: flex;
+  justify-content: space-between;
+
+  font-size: 0.75rem;
+  font-weight: var(--font-weight-medium);
+  font-variant-numeric: tabular-nums;
+  color: var(--color-text-secondary);
+}
+
+.buttonsRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+
+  width: 100%;
+  max-width: 20rem;
+  margin: 0 auto;
+}
+
+.transportButton {
+  width: 3.5rem !important;
+  height: 3.5rem !important;
+  color: var(--color-text) !important;
+
+  :global(.icon) {
+    font-size: 1.75rem;
+  }
+}
+
+.playButton {
+  :global(.icon) {
+    font-size: 1.875rem;
+  }
+}
+
+.sideButton {
+  width: 2.75rem !important;
+  height: 2.75rem !important;
+  color: var(--color-text) !important;
+
+  :global(.icon) {
+    font-size: 1.5rem;
+  }
+}
+
+.sideButtonActive {
+  color: var(--color-primary) !important;
+}
+
+.transportButton,
+.sideButton {
+  background: none !important;
+
+  :global(.icon) {
+    transition: opacity 0.15s ease;
+  }
+
+  &:hover:not(:disabled) :global(.icon) {
+    opacity: 0.72;
+  }
+}
+
+.orderMenu {
+  display: flex;
+  align-items: center;
+}
+
+.orderIconSlide {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.menuItemSelected {
+  &,
+  :global(.icon) {
+    color: var(--color-primary) !important;
+  }
+}
+
+.profileButton {
+  height: 3rem;
+  margin-top: 1rem;
+  border-radius: 1.5rem;
+
+  font-size: 0.9375rem;
+  text-transform: none;
+}
+
+.profileButtonSlide {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  justify-content: center;
+}
+
+.profileButtonIcon {
+  font-size: 1.25rem;
+}

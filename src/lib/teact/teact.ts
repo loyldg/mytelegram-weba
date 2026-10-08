@@ -1,4 +1,3 @@
-/* eslint-disable @eslint-react/purity */
 /* eslint-disable @eslint-react/no-unnecessary-use-prefix */
 import type { ReactElement } from 'react';
 
@@ -458,6 +457,8 @@ function runCapturedImmediateEffects() {
 }
 
 export function renderComponent(componentInstance: ComponentInstance) {
+  // Apply queued state before a prop-driven render suppresses the scheduled state pass
+  prepareComponentForFrame(componentInstance);
   idsToExcludeFromUpdate.add(componentInstance.id);
 
   const { Component, props } = componentInstance;

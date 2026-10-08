@@ -1,5 +1,3 @@
-import './intervals';
-
 import type { ActionReturnType, GlobalState } from './types';
 
 import { IS_MULTIACCOUNT_SUPPORTED } from '../util/browser/globalEnvironment';
@@ -11,6 +9,7 @@ import { isLocalMessageId } from '../util/keys/messageKey';
 import { Bundles, loadBundle } from '../util/moduleLoader';
 import { parseLocationHash } from '../util/routing';
 import { updatePeerColors } from '../util/theme';
+import { batchMessageStoreUpdates, updateMessageStore } from './reducers/messages';
 import { initializeChatMediaSearchResults } from './reducers/middleSearch';
 import { updateTabState } from './reducers/tabs';
 import { replaceTabThreadParam, replaceThreadLocalStateParam } from './reducers/threads';
@@ -60,61 +59,55 @@ addActionHandler('init', (global, actions, payload): ActionReturnType => {
     initSharedState(global.sharedState);
   }
 
-  Object.keys(global.messages.byChatId).forEach((chatId) => {
-    const threadsById = global.messages.byChatId[chatId].threadsById;
-    Object.keys(threadsById).forEach((thread) => {
-      const threadId = Number(thread);
-      const lastViewportIds = selectThreadLocalStateParam(global, chatId, threadId, 'lastViewportIds');
-      // Check if migration from previous version is faulty
-      if (!lastViewportIds?.every((id) => isLocalMessageId(id) || global.messages.byChatId[chatId]?.byId[id])) {
-        global = replaceThreadLocalStateParam(global, chatId, threadId, 'lastViewportIds', undefined);
-        return;
-      }
-      global = initializeChatMediaSearchResults(global, chatId, threadId, tabId);
-      global = replaceTabThreadParam(
-        global,
-        chatId,
-        threadId,
-        'viewportIds',
-        lastViewportIds,
-        tabId,
-      );
+  global = batchMessageStoreUpdates(global, (threadsGlobal) => {
+    Object.keys(threadsGlobal.messages.byChatId).forEach((chatId) => {
+      const threadsById = threadsGlobal.messages.byChatId[chatId].threadsById;
+      Object.keys(threadsById).forEach((thread) => {
+        const threadId = Number(thread);
+        const lastViewportIds = selectThreadLocalStateParam(threadsGlobal, chatId, threadId, 'lastViewportIds');
+        // Check if migration from previous version is faulty
+        if (!lastViewportIds?.every((id) => (
+          isLocalMessageId(id) || threadsGlobal.messages.byChatId[chatId]?.byId[id]
+        ))) {
+          threadsGlobal = replaceThreadLocalStateParam(threadsGlobal, chatId, threadId, 'lastViewportIds', undefined);
+          return;
+        }
+        threadsGlobal = initializeChatMediaSearchResults(threadsGlobal, chatId, threadId, 'media', tabId);
+        threadsGlobal = replaceTabThreadParam(
+          threadsGlobal,
+          chatId,
+          threadId,
+          'viewportIds',
+          lastViewportIds,
+          tabId,
+        );
+      });
     });
-  });
 
-  // Temporary state fix
-  Object.keys(global.messages.byChatId).forEach((chatId) => {
-    const threadsById = global.messages.byChatId[chatId].threadsById;
-    const fixedThreadsById = Object.keys(threadsById).reduce((acc, key) => {
-      const t = threadsById[key];
-      if (!t.localState?.lastViewportIds) {
-        acc[key] = t;
-        return acc;
-      }
+    // Temporary state fix
+    Object.keys(threadsGlobal.messages.byChatId).forEach((chatId) => {
+      const threadsById = threadsGlobal.messages.byChatId[chatId].threadsById;
+      const fixedThreadsById = Object.keys(threadsById).reduce((acc, key) => {
+        const t = threadsById[key];
+        if (!t.localState?.lastViewportIds) {
+          acc[key] = t;
+          return acc;
+        }
 
-      acc[key] = {
-        ...t,
-        localState: {
-          ...t.localState,
-          listedIds: t.localState.lastViewportIds,
-        },
-      };
-      return acc;
-    }, {} as GlobalState['messages']['byChatId'][string]['threadsById']);
-
-    global = {
-      ...global,
-      messages: {
-        ...global.messages,
-        byChatId: {
-          ...global.messages.byChatId,
-          [chatId]: {
-            ...global.messages.byChatId[chatId],
-            threadsById: fixedThreadsById,
+        acc[key] = {
+          ...t,
+          localState: {
+            ...t.localState,
+            listedIds: t.localState.lastViewportIds,
           },
-        },
-      },
-    };
+        };
+        return acc;
+      }, {} as GlobalState['messages']['byChatId'][string]['threadsById']);
+
+      threadsGlobal = updateMessageStore(threadsGlobal, chatId, { threadsById: fixedThreadsById });
+    });
+
+    return threadsGlobal;
   });
 
   const parsedMessageList = parseLocationHash(global.currentUserId);

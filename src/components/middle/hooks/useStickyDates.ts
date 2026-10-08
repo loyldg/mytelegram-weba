@@ -1,11 +1,12 @@
 import { requestMutation } from '../../../lib/fasterdom/fasterdom';
+import { compact } from '../../../util/iteratees';
 
 import useFlag from '../../../hooks/useFlag';
 import useLastCallback from '../../../hooks/useLastCallback';
 import useRunDebounced from '../../../hooks/useRunDebounced';
 
 const DEBOUNCE = 1000;
-const STICKY_TOP = 10;
+const STICKY_SELECTORS = ['.sticky-date', '.sticky-topic'];
 
 export default function useStickyDates() {
   // For some reason we can not synchronously hide a sticky element (from `useLayoutEffect`) when chat opens
@@ -24,17 +25,16 @@ export default function useStickyDates() {
     }
 
     runDebounced(() => {
-      const stuckDateEl = findStuckDate(container);
+      const stuckElements = compact(STICKY_SELECTORS.map((selector) => findStuckElement(container, selector)));
 
       requestMutation(() => {
-        const currentStuck = document.querySelector('.stuck');
-        if (currentStuck) {
-          currentStuck.classList.remove('stuck');
-        }
+        container.querySelectorAll('.stuck').forEach((el) => {
+          el.classList.remove('stuck');
+        });
 
-        if (stuckDateEl) {
-          stuckDateEl.classList.add('stuck');
-        }
+        stuckElements.forEach((el) => {
+          el.classList.add('stuck');
+        });
 
         document.body.classList.remove('is-scrolling-messages');
       });
@@ -47,16 +47,14 @@ export default function useStickyDates() {
   };
 }
 
-function findStuckDate(container: HTMLElement) {
-  const allElements = container.querySelectorAll<HTMLDivElement>('.sticky-date');
+function findStuckElement(container: HTMLElement, selector: string) {
+  const allElements = container.querySelectorAll<HTMLDivElement>(selector);
   const containerTop = container.scrollTop;
-
-  const computedStyle = getComputedStyle(container);
-  const headerActionsHeight = parseInt(computedStyle.getPropertyValue('--middle-header-panes-height'), 10);
 
   return Array.from(allElements).find((el) => {
     const { offsetTop, offsetHeight } = el;
     const top = offsetTop - containerTop;
-    return -offsetHeight <= top && top <= headerActionsHeight + STICKY_TOP;
+    const stickyTop = parseFloat(getComputedStyle(el).top) || 0;
+    return -offsetHeight <= top && top <= stickyTop;
   });
 }

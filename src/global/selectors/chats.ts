@@ -11,6 +11,7 @@ import { IS_TRANSLATION_SUPPORTED } from '../../util/browser/windowEnvironment';
 import { isUserId } from '../../util/entities/ids';
 import { getCurrentTabId } from '../../util/establishMultitabRole';
 import {
+  getApplicableRestrictionReasons,
   getHasAdminRight,
   isChatAdmin,
   isChatChannel,
@@ -21,7 +22,6 @@ import {
   isUserOnline,
   isUserRightBanned,
 } from '../helpers';
-import { selectActiveRestrictionReasons } from './messages';
 import { selectTabState } from './tabs';
 import {
   selectBot, selectIsCurrentUserPremium, selectUser, selectUserFullInfo,
@@ -38,6 +38,10 @@ export function selectChatFullInfo<T extends GlobalState>(global: T, chatId: str
 export function selectPeerFullInfo<T extends GlobalState>(global: T, peerId: string) {
   if (isUserId(peerId)) return selectUserFullInfo(global, peerId);
   return selectChatFullInfo(global, peerId);
+}
+
+export function selectChatHistoryTtl<T extends GlobalState>(global: T, chatId: string) {
+  return selectChat(global, chatId)?.ttlPeriod ?? selectPeerFullInfo(global, chatId)?.ttlPeriod;
 }
 
 export function selectChatListLoadingParameters<T extends GlobalState>(
@@ -152,18 +156,6 @@ export function selectChatFolder<T extends GlobalState>(global: T, folderId: num
   return global.chatFolders.byId[folderId];
 }
 
-export function selectTotalChatCount<T extends GlobalState>(global: T, listType: 'active' | 'archived'): number {
-  const { totalCount } = global.chats;
-  const allChatsCount = totalCount.all;
-  const archivedChatsCount = totalCount.archived || 0;
-
-  if (listType === 'archived') {
-    return archivedChatsCount;
-  }
-
-  return allChatsCount ? allChatsCount - archivedChatsCount : 0;
-}
-
 export function selectIsChatPinned<T extends GlobalState>(
   global: T, chatId: string, folderId = ALL_FOLDER_ID,
 ): boolean {
@@ -249,9 +241,16 @@ export function selectCanInviteToChat<T extends GlobalState>(global: T, chatId: 
 
   // https://github.com/TelegramMessenger/Telegram-iOS/blob/5126be83b3b9578fb014eb52ca553da9e7a8b83a/submodules/TelegramCore/Sources/TelegramEngine/Peers/Communities.swift#L6
   return !chat.migratedTo && Boolean(!isUserId(chatId) && ((isChatChannel(chat) || isChatSuperGroup(chat)) ? (
-    chat.isCreator || getHasAdminRight(chat, 'inviteUsers')
+    getHasAdminRight(chat, 'inviteUsers')
     || (isChatPublic(chat) && !chat.isJoinRequest)
-  ) : (chat.isCreator || getHasAdminRight(chat, 'inviteUsers'))));
+  ) : getHasAdminRight(chat, 'inviteUsers')));
+}
+
+export function selectCanBanUsers<T extends GlobalState>(global: T, chatId: string) {
+  const chat = selectChat(global, chatId);
+  if (!chat || chat.isMonoforum) return false;
+
+  return getHasAdminRight(chat, 'banUsers');
 }
 
 export function selectCanShareFolder<T extends GlobalState>(global: T, folderId: number) {
@@ -361,7 +360,7 @@ export function selectIsMonoforumAdmin<T extends GlobalState>(
   const channel = selectMonoforumChannel(global, chatId);
   if (!channel) return;
 
-  return Boolean(chat.isCreator || getHasAdminRight(channel, 'manageDirectMessages'));
+  return getHasAdminRight(channel, 'manageDirectMessages');
 }
 
 /**
@@ -381,7 +380,9 @@ export function selectIsChatRestricted<T extends GlobalState>(global: T, chatId:
   const chat = selectChat(global, chatId);
   if (!chat) return false;
 
-  const activeRestrictions = selectActiveRestrictionReasons(global, chat.restrictionReasons);
+  const activeRestrictions = getApplicableRestrictionReasons(
+    chat.restrictionReasons, global.appConfig.ignoreRestrictionReasons,
+  );
   return activeRestrictions.length > 0;
 }
 
@@ -408,7 +409,7 @@ export function selectCanEditRank<T extends GlobalState>(global: T, {
 
   if (userId === global.currentUserId) return true; // Admin can edit own rank with permission
 
-  if (!chat.isCreator && (isOwner || isAdmin)) return false; // Admin can't edit rank of owner or another admin
+  if (!chat.isOwner && (isOwner || isAdmin)) return false; // Admin can't edit rank of owner or another admin
 
   return true;
 }

@@ -14,7 +14,9 @@ import { getCurrentTabId } from '../../util/establishMultitabRole';
 import {
   areSortedArraysEqual, areSortedArraysIntersecting, omit, unique,
 } from '../../util/iteratees';
-import { buildChatThreadKey, isMediaLoadableInViewer } from '../helpers';
+import {
+  buildChatThreadKey, buildMediaSearchKey, isMessageInMediaWindow, isMessageLocal,
+} from '../helpers';
 import { selectTabState } from '../selectors';
 import { selectChatMediaSearch } from '../selectors/middleSearch';
 import { updateTabState } from './tabs';
@@ -263,52 +265,56 @@ export function mergeWithChatMediaSearchSegment(
       loadingState,
     };
   }
-  const mergedFoundIds = orderFoundIdsByAscending(unique(Array.prototype.concat(segment.foundIds, foundIds)));
-  if (!areSortedArraysEqual(segment.foundIds, foundIds)) {
-    segment.foundIds = mergedFoundIds;
-  }
-  const mergedLoadingState: LoadingState = {
-    areAllItemsLoadedForwards: loadingState.areAllItemsLoadedForwards
-      || segment.loadingState.areAllItemsLoadedForwards,
-    areAllItemsLoadedBackwards: loadingState.areAllItemsLoadedBackwards
-      || segment.loadingState.areAllItemsLoadedBackwards,
+  return {
+    foundIds: areSortedArraysEqual(segment.foundIds, foundIds)
+      ? segment.foundIds
+      : orderFoundIdsByAscending(unique(segment.foundIds.concat(foundIds))),
+    loadingState: {
+      areAllItemsLoadedForwards: loadingState.areAllItemsLoadedForwards
+        || segment.loadingState.areAllItemsLoadedForwards,
+      areAllItemsLoadedBackwards: loadingState.areAllItemsLoadedBackwards
+        || segment.loadingState.areAllItemsLoadedBackwards,
+    },
   };
-  segment.loadingState = mergedLoadingState;
-  return segment;
 }
 
 function mergeChatMediaSearchSegments(currentSegment: ChatMediaSearchSegment, segments: ChatMediaSearchSegment[]) {
-  return segments.reduce((acc, segment) => {
-    const hasIntersection = areSortedArraysIntersecting(segment.foundIds, currentSegment.foundIds);
-    if (hasIntersection) {
-      currentSegment = mergeWithChatMediaSearchSegment(
-        currentSegment.foundIds,
-        currentSegment.loadingState,
-        segment,
-      );
+  let mergedSegment = currentSegment;
+  const otherSegments: ChatMediaSearchSegment[] = [];
+
+  segments.forEach((segment) => {
+    if (segment === mergedSegment || !segment.foundIds.length) return;
+
+    if (areSortedArraysIntersecting(segment.foundIds, mergedSegment.foundIds)) {
+      mergedSegment = mergeWithChatMediaSearchSegment(mergedSegment.foundIds, mergedSegment.loadingState, segment);
     } else {
-      acc.push(segment);
+      otherSegments.push(segment);
     }
-    return acc;
-  }, [] as ChatMediaSearchSegment[]);
+  });
+
+  return { currentSegment: mergedSegment, segments: otherSegments };
 }
 
 export function updateChatMediaSearchResults<T extends GlobalState>(
   global: T,
   chatId: string,
   threadId: ThreadId,
+  mediaType: SharedMediaType,
   currentSegment: ChatMediaSearchSegment,
   searchParams: ChatMediaSearchParams,
   ...[tabId = getCurrentTabId()]: TabArgs<T>
 ): T {
-  const segments = mergeChatMediaSearchSegments(currentSegment, searchParams.segments);
+  const merged = mergeChatMediaSearchSegments(
+    currentSegment, [searchParams.currentSegment, ...searchParams.segments],
+  );
 
   return replaceChatMediaSearchResults(
     global,
     chatId,
     threadId,
-    currentSegment,
-    segments,
+    mediaType,
+    merged.currentSegment,
+    merged.segments,
     tabId,
   );
 }
@@ -340,10 +346,11 @@ export function removeIdFromSearchResults<T extends GlobalState>(
   global: T,
   chatId: string,
   threadId: ThreadId,
+  mediaType: SharedMediaType,
   id: number,
   ...[tabId = getCurrentTabId()]: TabArgs<T>
 ): T {
-  const searchParams = selectChatMediaSearch(global, chatId, threadId, tabId);
+  const searchParams = selectChatMediaSearch(global, chatId, threadId, mediaType, tabId);
   if (!searchParams) return global;
 
   const updatedSearchParams = removeIdsFromChatMediaSearchParams(id, searchParams);
@@ -352,6 +359,7 @@ export function removeIdFromSearchResults<T extends GlobalState>(
     global,
     chatId,
     threadId,
+    mediaType,
     updatedSearchParams,
     tabId,
   );
@@ -371,28 +379,64 @@ export function updateChatMediaLoadingState<T extends GlobalState>(
   newMessage: ApiMessage,
   chatId: string,
   threadId: ThreadId,
+  mediaType: SharedMediaType,
   ...[tabId = getCurrentTabId()]: TabArgs<T>
 ): T {
-  if (!isMediaLoadableInViewer(newMessage)) {
+  if (!isMessageInMediaWindow(newMessage, mediaType)) {
     return global;
   }
-  const searchParams = selectChatMediaSearch(global, chatId, threadId, tabId);
+  const searchParams = selectChatMediaSearch(global, chatId, threadId, mediaType, tabId);
   if (!searchParams) return global;
-  resetForwardsLoadingStateInParams(searchParams);
 
-  return replaceChatMediaSearch(
+  if (isMessageLocal(newMessage)) {
+    resetForwardsLoadingStateInParams(searchParams);
+
+    return replaceChatMediaSearch(
+      global,
+      chatId,
+      threadId,
+      mediaType,
+      searchParams,
+      tabId,
+    );
+  }
+
+  const appendNewId = (segment: ChatMediaSearchSegment) => (
+    segment.loadingState.areAllItemsLoadedForwards && !segment.foundIds.includes(newMessage.id)
+      ? { ...segment, foundIds: segment.foundIds.concat(newMessage.id) }
+      : segment
+  );
+
+  return replaceChatMediaSearchResults(
     global,
     chatId,
     threadId,
-    searchParams,
+    mediaType,
+    appendNewId(searchParams.currentSegment),
+    searchParams.segments.map(appendNewId),
     tabId,
   );
+}
+
+export function updateChatMediaSearchPendingRequest<T extends GlobalState>(
+  global: T,
+  chatId: string,
+  threadId: ThreadId,
+  mediaType: SharedMediaType,
+  pendingRequest: ChatMediaSearchParams['pendingRequest'],
+  ...[tabId = getCurrentTabId()]: TabArgs<T>
+): T {
+  const searchParams = selectChatMediaSearch(global, chatId, threadId, mediaType, tabId);
+  if (!searchParams) return global;
+
+  return replaceChatMediaSearch(global, chatId, threadId, mediaType, { ...searchParams, pendingRequest }, tabId);
 }
 
 export function initializeChatMediaSearchResults<T extends GlobalState>(
   global: T,
   chatId: string,
   threadId: ThreadId,
+  mediaType: SharedMediaType,
   ...[tabId = getCurrentTabId()]: TabArgs<T>
 ): T {
   const loadingState: LoadingState = {
@@ -407,7 +451,7 @@ export function initializeChatMediaSearchResults<T extends GlobalState>(
 
   const isLoading = false;
 
-  return replaceChatMediaSearch(global, chatId, threadId, {
+  return replaceChatMediaSearch(global, chatId, threadId, mediaType, {
     currentSegment,
     segments,
     isLoading,
@@ -418,17 +462,18 @@ export function setChatMediaSearchLoading<T extends GlobalState>(
   global: T,
   chatId: string,
   threadId: ThreadId,
+  mediaType: SharedMediaType,
   isLoading: boolean,
   ...[tabId = getCurrentTabId()]: TabArgs<T>
 ): T {
-  const chatThreadKey = buildChatThreadKey(chatId, threadId);
-  const searchParams = selectTabState(global, tabId).chatMediaSearch.byChatThreadKey[chatThreadKey];
+  const mediaSearchKey = buildMediaSearchKey(chatId, threadId, mediaType);
+  const searchParams = selectTabState(global, tabId).chatMediaSearch.byChatThreadKey[mediaSearchKey];
 
   if (!searchParams) {
     return global;
   }
 
-  return replaceChatMediaSearch(global, chatId, threadId, {
+  return replaceChatMediaSearch(global, chatId, threadId, mediaType, {
     ...searchParams,
     isLoading,
   }, tabId);
@@ -438,14 +483,15 @@ export function replaceChatMediaSearchResults<T extends GlobalState>(
   global: T,
   chatId: string,
   threadId: ThreadId,
+  mediaType: SharedMediaType,
   currentSegment: ChatMediaSearchSegment,
   segments: ChatMediaSearchSegment[],
   ...[tabId = getCurrentTabId()]: TabArgs<T>
 ): T {
-  const chatThreadKey = buildChatThreadKey(chatId, threadId);
+  const mediaSearchKey = buildMediaSearchKey(chatId, threadId, mediaType);
 
-  return replaceChatMediaSearch(global, chatId, threadId, {
-    ...selectTabState(global, tabId).chatMediaSearch.byChatThreadKey[chatThreadKey],
+  return replaceChatMediaSearch(global, chatId, threadId, mediaType, {
+    ...selectTabState(global, tabId).chatMediaSearch.byChatThreadKey[mediaSearchKey],
     currentSegment,
     segments,
   }, tabId);
@@ -455,16 +501,17 @@ function replaceChatMediaSearch<T extends GlobalState>(
   global: T,
   chatId: string,
   threadId: ThreadId,
+  mediaType: SharedMediaType,
   searchParams: ChatMediaSearchParams,
   ...[tabId = getCurrentTabId()]: TabArgs<T>
 ): T {
-  const chatThreadKey = buildChatThreadKey(chatId, threadId);
+  const mediaSearchKey = buildMediaSearchKey(chatId, threadId, mediaType);
 
   return updateTabState(global, {
     chatMediaSearch: {
       byChatThreadKey: {
         ...selectTabState(global, tabId).chatMediaSearch.byChatThreadKey,
-        [chatThreadKey]: searchParams,
+        [mediaSearchKey]: searchParams,
       },
     },
   }, tabId);

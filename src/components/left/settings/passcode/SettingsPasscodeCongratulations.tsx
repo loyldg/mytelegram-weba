@@ -5,9 +5,10 @@ import { STICKER_SIZE_PASSCODE } from '../../../../config';
 import { LOCAL_TGS_URLS } from '../../../common/helpers/animatedAssets';
 
 import useHistoryBack from '../../../../hooks/useHistoryBack';
-import useOldLang from '../../../../hooks/useOldLang';
+import useLang from '../../../../hooks/useLang';
 
 import AnimatedIcon from '../../../common/AnimatedIcon';
+import Island from '../../../gili/layout/Island';
 import Button from '../../../ui/Button';
 
 type OwnProps = {
@@ -18,7 +19,7 @@ type OwnProps = {
 const SettingsPasscodeCongratulations: FC<OwnProps> = ({
   isActive, onReset,
 }) => {
-  const lang = useOldLang();
+  const lang = useLang();
 
   const fullReset = useCallback(() => {
     onReset(true);
@@ -36,16 +37,13 @@ const SettingsPasscodeCongratulations: FC<OwnProps> = ({
         />
 
         <p className="settings-item-description mb-3" dir="auto">
-          Congratulations!
-        </p>
-        <p className="settings-item-description mb-3" dir="auto">
-          Now you can lock the app with a passcode so that others can&apos;t open it.
+          {lang('SettingsPasscodeSuccess', undefined, { withNodes: true, renderTextFilters: ['br'] })}
         </p>
       </div>
 
-      <div className="settings-item settings-group">
+      <Island>
         <Button onClick={fullReset}>{lang('Back')}</Button>
-      </div>
+      </Island>
     </div>
   );
 };

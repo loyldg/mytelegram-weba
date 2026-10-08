@@ -2,7 +2,7 @@ import type { ApiMessage, ApiMessagePoll, ApiWebPage } from '../../../../api/typ
 import type { IAlbum } from '../../../../types';
 
 import { EMOJI_SIZES, MESSAGE_CONTENT_CLASS_NAME } from '../../../../config';
-import { getMessageContent } from '../../../../global/helpers';
+import { getMessageContent, getRichMessageAudios } from '../../../../global/helpers';
 import getSingularPaidMedia from './getSingularPaidMedia';
 
 export function buildContentClassName(
@@ -51,8 +51,9 @@ export function buildContentClassName(
   const {
     photo = paidMediaPhoto, video = paidMediaVideo,
     audio, voice, document, contact, location, invoice, storyData,
-    giveaway, giveawayResults,
+    giveaway, giveawayResults, richMessage,
   } = content;
+  const hasRichMessageAudio = Boolean(richMessage && getRichMessageAudios(richMessage).ids.length);
   const text = album?.hasMultipleCaptions ? undefined : getMessageContent(album?.captionMessage || message).text;
   const hasFactCheck = Boolean(message.factCheck?.text);
 
@@ -67,7 +68,7 @@ export function buildContentClassName(
   const hasText = text || location?.mediaType === 'venue' || isGeoLiveActive || hasFactCheck || poll;
   const isMediaWithNoText = isMedia && !hasText;
   const hasInlineKeyboard = Boolean(message.inlineButtons);
-  const isViaBot = Boolean(message.viaBotId);
+  const isViaBot = Boolean(message.viaBotId || message.guestChatViaId);
 
   const hasFooter = (() => {
     if (isInvertedMedia && isInvertibleMedia) {
@@ -115,9 +116,13 @@ export function buildContentClassName(
   }
   if (isMedia && !withVoiceTranscription) {
     classNames.push('media');
+    // Custom-shape media (round video) has fixed dimensions and must not stretch to the message width
+    if (!isCustomShape) {
+      classNames.push('has-adaptive-width');
+    }
   } else if (video) {
     classNames.push('video');
-  } else if (audio) {
+  } else if (audio || hasRichMessageAudio) {
     classNames.push('audio');
   } else if (voice) {
     classNames.push('voice');
@@ -128,15 +133,13 @@ export function buildContentClassName(
     classNames.push('document');
   } else if (contact) {
     classNames.push('contact');
-  } else if (poll) {
-    classNames.push('poll');
   } else if (giveaway || giveawayResults) {
     classNames.push('giveaway');
   } else if (webPage?.webpageType === 'full') {
     classNames.push('web-page');
 
     if (webPage.photo || webPage.video) {
-      classNames.push('media');
+      classNames.push('media', 'has-adaptive-width');
     }
 
     if (webPage.document) {
@@ -150,6 +153,10 @@ export function buildContentClassName(
     if (webPage.auction) {
       classNames.push('auction');
     }
+  }
+
+  if (poll) {
+    classNames.push('poll');
   }
 
   if (invoice && !invoice.extendedMedia) {

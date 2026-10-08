@@ -1,5 +1,3 @@
-import type { FC } from '../../lib/teact/teact';
-import type React from '../../lib/teact/teact';
 import {
   memo, useEffect, useRef, useState,
 } from '../../lib/teact/teact';
@@ -19,6 +17,7 @@ import { useIsIntersecting } from '../../hooks/useIntersectionObserver';
 import useLang from '../../hooks/useLang';
 import useLastCallback from '../../hooks/useLastCallback';
 import useMedia from '../../hooks/useMedia';
+import useMediaTransition from '../../hooks/useMediaTransition';
 import useOldLang from '../../hooks/useOldLang';
 
 import Button from '../ui/Button';
@@ -27,12 +26,13 @@ import MenuItem from '../ui/MenuItem';
 import OptimizedVideo from '../ui/OptimizedVideo';
 import Spinner from '../ui/Spinner';
 
-import './GifButton.scss';
+import styles from './GifButton.module.scss';
 
 type OwnProps = {
   gif: ApiVideo;
   observeIntersection: ObserveFn;
   isDisabled?: boolean;
+  noSpinner?: boolean;
   className?: string;
   isSavedMessages?: boolean;
   onClick?: (gif: ApiVideo, isSilent?: boolean, shouldSchedule?: boolean) => void;
@@ -40,16 +40,17 @@ type OwnProps = {
   onAddCaption?: (gif: ApiVideo) => void;
 };
 
-const GifButton: FC<OwnProps> = ({
+const GifButton = ({
   gif,
   isDisabled,
+  noSpinner,
   className,
   observeIntersection,
   isSavedMessages,
   onClick,
   onUnsaveClick,
   onAddCaption,
-}) => {
+}: OwnProps) => {
   const ref = useRef<HTMLDivElement>();
 
   const oldLang = useOldLang();
@@ -68,8 +69,10 @@ const GifButton: FC<OwnProps> = ({
 
   const shouldRenderVideo = Boolean(loadAndPlay && videoData);
   const { isBuffered, bufferingHandlers } = useBuffering(true);
-  const shouldRenderSpinner = loadAndPlay && !isBuffered;
+  const shouldRenderSpinner = !noSpinner && loadAndPlay && !isBuffered;
   const isVideoReady = loadAndPlay && isBuffered;
+
+  const { ref: videoRef } = useMediaTransition<HTMLVideoElement>({ hasMediaData: isVideoReady });
 
   const {
     isContextMenuOpen, contextMenuAnchor,
@@ -79,7 +82,7 @@ const GifButton: FC<OwnProps> = ({
 
   const getTriggerElement = useLastCallback(() => ref.current);
   const getRootElement = useLastCallback(() => ref.current!.closest('.custom-scroll, .no-scrollbar'));
-  const getMenuElement = useLastCallback(() => ref.current!.querySelector('.gif-context-menu .bubble'));
+  const getMenuElement = useLastCallback(() => ref.current!.querySelector(`.${styles.contextMenu} .bubble`));
   const getLayout = useLastCallback(() => ({ shouldAvoidNegativePosition: true }));
 
   const handleClick = useLastCallback(() => {
@@ -132,26 +135,28 @@ const GifButton: FC<OwnProps> = ({
 
   const fullClassName = buildClassName(
     'GifButton',
-    gif.width && gif.height && gif.width < gif.height ? 'vertical' : 'horizontal',
-    onClick && 'interactive',
+    styles.root,
+    onClick && styles.interactive,
     className,
   );
+  const aspectRatioStyle = gif.width && gif.height ? `--gif-aspect-ratio: ${gif.width} / ${gif.height}` : undefined;
 
   return (
     <div
       ref={ref}
       className={fullClassName}
+      style={aspectRatioStyle}
       onMouseDown={handleMouseDown}
       onClick={handleClick}
       onContextMenu={handleContextMenu}
     >
       {!IS_TOUCH_ENV && onUnsaveClick && (
         <Button
-          className="gif-unsave-button"
+          className={styles.unsaveButton}
           color="dark"
           pill
           iconName="close"
-          iconClassName="gif-unsave-button-icon"
+          iconClassName={styles.unsaveButtonIcon}
           noFastClick
           onClick={handleUnsaveClick}
         />
@@ -159,19 +164,20 @@ const GifButton: FC<OwnProps> = ({
       {withThumb && (
         <canvas
           ref={thumbRef}
-          className="thumbnail"
+          className={styles.thumbnail}
         />
       )}
-      {previewBlobUrl && !isVideoReady && (
+      {previewBlobUrl && (
         <img
           src={previewBlobUrl}
           alt=""
-          className="preview"
+          className={styles.preview}
           draggable={false}
         />
       )}
       {shouldRenderVideo && (
         <OptimizedVideo
+          ref={videoRef}
           canPlay
           src={videoData}
           autoPlay
@@ -180,12 +186,13 @@ const GifButton: FC<OwnProps> = ({
           disablePictureInPicture
           playsInline
           preload="none"
+          className={styles.video}
 
           {...bufferingHandlers}
         />
       )}
       {shouldRenderSpinner && (
-        <Spinner color={previewBlobUrl || withThumb ? 'white' : 'black'} />
+        <Spinner className={styles.spinner} color={previewBlobUrl || withThumb ? 'white' : 'black'} />
       )}
       {onClick && contextMenuAnchor !== undefined && (
         <Menu
@@ -195,7 +202,7 @@ const GifButton: FC<OwnProps> = ({
           getRootElement={getRootElement}
           getMenuElement={getMenuElement}
           getLayout={getLayout}
-          className="gif-context-menu"
+          className={styles.contextMenu}
           autoClose
           onClose={handleContextMenuClose}
           onCloseAnimationEnd={handleContextMenuHide}

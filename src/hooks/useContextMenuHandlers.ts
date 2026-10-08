@@ -18,6 +18,16 @@ function stopEvent(e: Event) {
   e.stopPropagation();
 }
 
+function isNativeLinkTarget(target: EventTarget | undefined) {
+  if (!(target instanceof HTMLElement)) {
+    return false;
+  }
+
+  const link = target.closest('a[href]');
+
+  return Boolean(link && link.getAttribute('href') !== '#');
+}
+
 const useContextMenuHandlers = (
   elementRef: ElementRef<HTMLElement>,
   isMenuDisabled?: boolean,
@@ -29,6 +39,7 @@ const useContextMenuHandlers = (
   const [isContextMenuOpen, setIsContextMenuOpen] = useState(false);
   const [contextMenuAnchor, setContextMenuAnchor] = useState<IAnchorPosition | undefined>(undefined);
   const [contextMenuTarget, setContextMenuTarget] = useState<HTMLElement | undefined>(undefined);
+  const [isContextMenuAltKeyPressed, setIsContextMenuAltKeyPressed] = useState(false);
 
   const handleBeforeContextMenu = useLastCallback((e: React.MouseEvent) => {
     if (!isMenuDisabled && e.button === 2) {
@@ -43,7 +54,7 @@ const useContextMenuHandlers = (
       removeExtraClass(e.target as HTMLElement, 'no-selection');
     });
 
-    if (isMenuDisabled || (shouldDisableOnLink && (e.target as HTMLElement).matches('a[href]'))) {
+    if (isMenuDisabled || (shouldDisableOnLink && isNativeLinkTarget(e.target))) {
       return;
     }
     e.preventDefault();
@@ -53,6 +64,7 @@ const useContextMenuHandlers = (
       return;
     }
 
+    setIsContextMenuAltKeyPressed(e.altKey);
     setIsContextMenuOpen(true);
     setContextMenuAnchor({ x: e.clientX, y: e.clientY });
     setContextMenuTarget(e.target as HTMLElement);
@@ -91,12 +103,12 @@ const useContextMenuHandlers = (
 
       const { clientX, clientY, target } = originalEvent.touches[0];
 
-      if (contextMenuAnchor || (shouldDisableOnLink && (target as HTMLElement).matches('a[href]'))) {
+      if (contextMenuAnchor || (shouldDisableOnLink && isNativeLinkTarget(target))) {
         return;
       }
 
       // Temporarily intercept and clear the next click
-      // eslint-disable-next-line @eslint-react/web-api/no-leaked-event-listener
+
       document.addEventListener('touchend', (e) => {
         // On iOS in PWA mode, the context menu may cause click-through to the element in the menu upon opening
         if (IS_IOS && IS_PWA) {
@@ -117,18 +129,18 @@ const useContextMenuHandlers = (
 
       // On iOS15, in PWA mode, the context menu immediately closes after opening
       if (IS_PWA && IS_IOS) {
-        // eslint-disable-next-line @eslint-react/web-api/no-leaked-event-listener
         document.addEventListener('mousedown', stopEvent, {
           once: true,
           capture: true,
         });
-        // eslint-disable-next-line @eslint-react/web-api/no-leaked-event-listener
+
         document.addEventListener('click', stopEvent, {
           once: true,
           capture: true,
         });
       }
 
+      setIsContextMenuAltKeyPressed(false);
       setIsContextMenuOpen(true);
       setContextMenuAnchor({ x: clientX, y: clientY });
     };
@@ -165,6 +177,7 @@ const useContextMenuHandlers = (
     isContextMenuOpen,
     contextMenuAnchor,
     contextMenuTarget,
+    isContextMenuAltKeyPressed,
     handleBeforeContextMenu,
     handleContextMenu,
     handleContextMenuClose,

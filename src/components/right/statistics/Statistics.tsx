@@ -12,6 +12,7 @@ import type {
   ApiTypeStory,
 } from '../../../api/types';
 
+import ensureLovelyChart from '../../../lib/lovelyChartWithStyles';
 import {
   selectChat,
   selectChatFullInfo,
@@ -26,25 +27,13 @@ import { isGraph } from './helpers/isGraph';
 import useForceUpdate from '../../../hooks/useForceUpdate';
 import useOldLang from '../../../hooks/useOldLang';
 
+import Island from '../../gili/layout/Island';
 import Loading from '../../ui/Loading';
 import StatisticsOverview from './StatisticsOverview';
 import StatisticsRecentMessage from './StatisticsRecentMessage';
 import StatisticsRecentStory from './StatisticsRecentStory';
 
 import styles from './Statistics.module.scss';
-
-type ILovelyChart = { create: (el: HTMLElement, params: AnyLiteral) => void };
-let lovelyChartPromise: Promise<ILovelyChart> | undefined;
-let LovelyChart: ILovelyChart;
-
-async function ensureLovelyChart() {
-  if (!lovelyChartPromise) {
-    lovelyChartPromise = import('../../../lib/lovely-chart/LovelyChart') as Promise<ILovelyChart>;
-    LovelyChart = await lovelyChartPromise;
-  }
-
-  return lovelyChartPromise;
-}
 
 const CHANNEL_GRAPHS_TITLES = {
   growthGraph: 'ChannelStats.Graph.Growth',
@@ -141,7 +130,7 @@ const Statistics = ({
 
   useEffect(() => {
     (async () => {
-      await ensureLovelyChart();
+      const LovelyChart = await ensureLovelyChart();
 
       if (!isReady) {
         setIsReady(true);
@@ -174,17 +163,14 @@ const Statistics = ({
 
         const { zoomToken } = graph;
 
-        LovelyChart.create(
-          containerRef.current!.children[index] as HTMLElement,
-          {
-            title: lang((graphTitles as Record<string, string>)[name]),
-            ...zoomToken ? {
-              onZoom: (x: number) => callApi('fetchStatisticsAsyncGraph', { token: zoomToken, x, dcId }),
-              zoomOutLabel: lang('Graph.ZoomOut'),
-            } : {},
-            ...graph,
-          },
-        );
+        new LovelyChart(containerRef.current!.children[index] as HTMLElement, {
+          ...graph,
+          title: lang((graphTitles as Record<string, string>)[name]),
+          onZoom: zoomToken
+            ? (x: number) => callApi('fetchStatisticsAsyncGraph', { token: zoomToken, x, dcId })
+            : undefined,
+          zoomOutLabel: zoomToken ? lang('Graph.ZoomOut') : undefined,
+        });
 
         loadedChartsRef.current.add(name);
 
@@ -200,16 +186,18 @@ const Statistics = ({
   return (
     <div className={buildClassName(styles.root, 'panel-content custom-scroll', isReady && styles.ready)}>
       {statistics && (
-        <StatisticsOverview
-          statistics={statistics}
-          type={isGroup ? 'group' : 'channel'}
-          title={lang('StatisticOverview')}
-        />
+        <Island>
+          <StatisticsOverview
+            statistics={statistics}
+            type={isGroup ? 'group' : 'channel'}
+            title={lang('StatisticOverview')}
+          />
+        </Island>
       )}
 
       {!loadedChartsRef.current.size && <Loading />}
 
-      <div ref={containerRef}>
+      <div ref={containerRef} data-stricterdom-ignore className={styles.graphContainer}>
         {graphs.map((graph) => {
           const isGraphReady = loadedChartsRef.current.has(graph) && !errorChartsRef.current.has(graph);
           return (
@@ -219,7 +207,7 @@ const Statistics = ({
       </div>
 
       {Boolean((statistics as ApiChannelStatistics)?.recentPosts?.length) && (
-        <div className={styles.messages}>
+        <Island className={styles.messages}>
           <h2 className={styles.messagesTitle}>{lang('ChannelStats.Recent.Header')}</h2>
 
           {(statistics as ApiChannelStatistics).recentPosts.map((postStatistic) => {
@@ -251,7 +239,7 @@ const Statistics = ({
 
             return undefined;
           })}
-        </div>
+        </Island>
       )}
     </div>
   );

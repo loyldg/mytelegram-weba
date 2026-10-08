@@ -1,5 +1,4 @@
 import type { FC } from '../../../lib/teact/teact';
-import type React from '../../../lib/teact/teact';
 import {
   memo, useCallback, useEffect,
   useMemo, useRef, useState,
@@ -35,6 +34,7 @@ import useLastCallback from '../../../hooks/useLastCallback';
 import Icon from '../../common/icons/Icon';
 import NothingFound from '../../common/NothingFound';
 import PeerChip from '../../common/PeerChip';
+import Island from '../../gili/layout/Island';
 import InfiniteScroll from '../../ui/InfiniteScroll';
 import Link from '../../ui/Link';
 import Loading from '../../ui/Loading';
@@ -378,23 +378,26 @@ const ChatResults: FC<OwnProps & StateProps> = ({
         />
       )}
       {Boolean(localResults.length) && !isChannelList && (
-        <div
-          className="chat-selection no-scrollbar"
-          dir={lang.isRtl ? 'rtl' : undefined}
-          ref={chatSelectionRef}
-        >
-          {localResults.map((id) => (
-            <PeerChip
-              peerId={id}
-              className="left-search-local-suggestion"
-              onClick={handlePickerItemClick}
-              clickArg={id}
-            />
-          ))}
-        </div>
+        <Island className="search-island">
+          <div
+            className="chat-selection no-scrollbar"
+            dir={lang.isRtl ? 'rtl' : undefined}
+            ref={chatSelectionRef}
+          >
+            {localResults.map((id) => (
+              <PeerChip
+                key={id}
+                peerId={id}
+                className="left-search-local-suggestion"
+                onClick={handlePickerItemClick}
+                clickArg={id}
+              />
+            ))}
+          </div>
+        </Island>
       )}
       {Boolean(localResults.length) && (
-        <div className="search-section">
+        <Island className="search-island search-section">
           <h3 className="section-heading" dir={lang.isRtl ? 'auto' : undefined}>
             {localResults.length > LESS_LIST_ITEMS_AMOUNT && (
               <Link className="Link" onClick={handleClickShowMoreLocal}>
@@ -416,10 +419,10 @@ const ChatResults: FC<OwnProps & StateProps> = ({
               />
             );
           })}
-        </div>
+        </Island>
       )}
       {Boolean(globalResults.length) && (
-        <div className="search-section">
+        <Island className="search-island search-section">
           <h3 className="section-heading" dir={lang.isRtl ? 'auto' : undefined}>
             {globalResults.length > LESS_LIST_ITEMS_AMOUNT && (
               <Link className="Link" onClick={handleClickShowMoreGlobal}>
@@ -444,10 +447,10 @@ const ChatResults: FC<OwnProps & StateProps> = ({
               />
             );
           })}
-        </div>
+        </Island>
       )}
       {Boolean(suggestedChannelIds?.length) && !searchQuery && (
-        <div className="search-section">
+        <Island className="search-island search-section">
           <h3 className="section-heading" dir={lang.isRtl ? 'auto' : undefined}>
             {lang('SearchResultRecommendedChannels')}
           </h3>
@@ -460,12 +463,12 @@ const ChatResults: FC<OwnProps & StateProps> = ({
               />
             );
           })}
-        </div>
+        </Island>
       )}
       <div className="menuOwner" ref={ref}>
         {renderContextMenu()}
         {shouldRenderMessagesSection && (
-          <div className="search-section">
+          <Island className="search-island search-section">
             <h3 className="section-heading" dir={lang.isRtl ? 'auto' : undefined}>
               {!isChannelList && (
                 <Link className="Link menuTrigger dropDownLink" onClick={handleClickContext}>
@@ -490,7 +493,7 @@ const ChatResults: FC<OwnProps & StateProps> = ({
               {lang('SearchMessages')}
             </h3>
             {actualFoundIds.map(renderFoundMessage)}
-          </div>
+          </Island>
         )}
       </div>
     </InfiniteScroll>

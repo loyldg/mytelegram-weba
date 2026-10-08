@@ -52,7 +52,7 @@ export default function useTopicContextActions({
     } = getActions();
 
     const canToggleClosed = getCanManageTopic(chat, topic) && !chat.isBotForum;
-    const canTogglePinned = chat.isCreator || getHasAdminRight(chat, 'manageTopics');
+    const canTogglePinned = getHasAdminRight(chat, 'manageTopics');
 
     const actionOpenInNewTab = IS_OPEN_IN_NEW_TAB_SUPPORTED && {
       title: IS_TAURI ? lang('ChatListOpenInNewWindow') : lang('ChatListOpenInNewTab'),
@@ -112,7 +112,7 @@ export default function useTopicContextActions({
       }
       : {
         title: oldLang('lng_forum_topic_close'),
-        icon: 'close-topic',
+        icon: 'pause-circle',
         handler: () => editTopic({ chatId, topicId, isClosed: true }),
       }) : undefined;
 

@@ -1,4 +1,3 @@
-import type { FC } from '../../lib/teact/teact';
 import {
   useEffect, useMemo, useState,
 } from '../../lib/teact/teact';
@@ -19,8 +18,6 @@ import {
   selectCanUseGiftProfileFilter,
   selectChat,
   selectChatFullInfo,
-  selectCurrentGifSearch,
-  selectCurrentStickerSearch,
   selectIsChatWithSelf,
   selectTabState,
   selectTopic,
@@ -31,7 +28,6 @@ import { IS_MAC_OS } from '../../util/browser/windowEnvironment';
 import buildClassName from '../../util/buildClassName';
 import { isUserId } from '../../util/entities/ids';
 
-import { useVtn } from '../../hooks/animations/useVtn';
 import useAppLayout from '../../hooks/useAppLayout';
 import useCurrentOrPrev from '../../hooks/useCurrentOrPrev';
 import useFlag from '../../hooks/useFlag';
@@ -45,7 +41,6 @@ import ConfirmDialog from '../ui/ConfirmDialog';
 import DropdownMenu from '../ui/DropdownMenu';
 import MenuItem from '../ui/MenuItem';
 import MenuSeparator from '../ui/MenuSeparator';
-import SearchInput from '../ui/SearchInput';
 import Transition from '../ui/Transition';
 
 import './RightHeader.scss';
@@ -61,12 +56,11 @@ type OwnProps = {
   isMessageStatistics?: boolean;
   isMonetizationStatistics?: boolean;
   isStoryStatistics?: boolean;
-  isStickerSearch?: boolean;
-  isGifSearch?: boolean;
   isPollResults?: boolean;
   isCreatingTopic?: boolean;
   isEditingTopic?: boolean;
   isAddingChatMembers?: boolean;
+  headerBackground?: 'regular' | 'secondary';
   profileState?: ProfileState;
   managementScreen?: ManagementScreens;
   onClose: (shouldScrollUp?: boolean) => void;
@@ -80,8 +74,6 @@ type StateProps = {
   isChannel?: boolean;
   userId?: string;
   isSelf?: boolean;
-  stickerSearchQuery?: string;
-  gifSearchQuery?: string;
   isEditingInvite?: boolean;
   currentInviteInfo?: ApiExportedInvite;
   shouldSkipHistoryAnimations?: boolean;
@@ -126,8 +118,6 @@ enum HeaderContent {
   ManageGroupNewAdminRights,
   ManageGroupMembers,
   ManageGroupAddAdmins,
-  StickerSearch,
-  GifSearch,
   PollResults,
   AddingMembers,
   ManageInvites,
@@ -141,7 +131,7 @@ enum HeaderContent {
   NewDiscussionGroup,
 }
 
-const RightHeader: FC<OwnProps & StateProps> = ({
+const RightHeader = ({
   chatId,
   threadId,
   isColumnOpen,
@@ -152,12 +142,11 @@ const RightHeader: FC<OwnProps & StateProps> = ({
   isStoryStatistics,
   isMonetizationStatistics,
   isBoostStatistics,
-  isStickerSearch,
-  isGifSearch,
   isPollResults,
   isCreatingTopic,
   isEditingTopic,
   isAddingChatMembers,
+  headerBackground,
   profileState,
   managementScreen,
   canAddContact,
@@ -165,8 +154,6 @@ const RightHeader: FC<OwnProps & StateProps> = ({
   isSelf,
   canManage,
   isChannel,
-  stickerSearchQuery,
-  gifSearchQuery,
   isEditingInvite,
   canViewStatistics,
   currentInviteInfo,
@@ -182,10 +169,8 @@ const RightHeader: FC<OwnProps & StateProps> = ({
   isOwnProfile,
   onClose,
   onScreenSelect,
-}) => {
+}: OwnProps & StateProps) => {
   const {
-    setStickerSearchQuery,
-    setGifSearchQuery,
     toggleManagement,
     openAddContactDialog,
     toggleStatistics,
@@ -198,7 +183,6 @@ const RightHeader: FC<OwnProps & StateProps> = ({
 
   const [isDeleteDialogOpen, openDeleteDialog, closeDeleteDialog] = useFlag();
   const { isMobile } = useAppLayout();
-  const { createVtnStyle } = useVtn();
 
   const {
     sortType: giftsSortType,
@@ -221,14 +205,6 @@ const RightHeader: FC<OwnProps & StateProps> = ({
     deleteExportedChatInvite({ chatId: chatId!, link: currentInviteInfo!.link });
     onScreenSelect(ManagementScreens.Invites);
     closeDeleteDialog();
-  });
-
-  const handleStickerSearchQueryChange = useLastCallback((query: string) => {
-    setStickerSearchQuery({ query });
-  });
-
-  const handleGifSearchQueryChange = useLastCallback((query: string) => {
-    setGifSearchQuery({ query });
   });
 
   const handleAddContact = useLastCallback(() => {
@@ -266,6 +242,8 @@ const RightHeader: FC<OwnProps & StateProps> = ({
 
   const oldLang = useOldLang();
   const lang = useLang();
+
+  const isSecondaryBackground = headerBackground === 'secondary';
   const contentKey = isProfile ? (
     profileState === ProfileState.Profile ? (
       HeaderContent.Profile
@@ -282,10 +260,6 @@ const RightHeader: FC<OwnProps & StateProps> = ({
     ) : -1 // Never reached
   ) : isPollResults ? (
     HeaderContent.PollResults
-  ) : isStickerSearch ? (
-    HeaderContent.StickerSearch
-  ) : isGifSearch ? (
-    HeaderContent.GifSearch
   ) : isAddingChatMembers ? (
     HeaderContent.AddingMembers
   ) : isManagement ? (
@@ -374,8 +348,8 @@ const RightHeader: FC<OwnProps & StateProps> = ({
     return oldLang('GroupInfo.Title');
   }
 
-  const PrimaryLinkMenuButton: FC<{ onTrigger: () => void; isOpen?: boolean }> = useMemo(() => {
-    return ({ onTrigger, isOpen }) => (
+  const PrimaryLinkMenuButton = useMemo(() => {
+    return ({ onTrigger, isOpen }: { onTrigger: () => void; isOpen?: boolean }) => (
       <Button
         round
         ripple={!isMobile}
@@ -490,24 +464,6 @@ const RightHeader: FC<OwnProps & StateProps> = ({
         return <h3 className="title">{isChannel ? oldLang('SubscribeRequests') : oldLang('MemberRequests')}</h3>;
       case HeaderContent.ManageGroupAddAdmins:
         return <h3 className="title">{oldLang('Channel.Management.AddModerator')}</h3>;
-      case HeaderContent.StickerSearch:
-        return (
-          <SearchInput
-            value={stickerSearchQuery}
-            placeholder={oldLang('SearchStickersHint')}
-            autoFocusSearch
-            onChange={handleStickerSearchQueryChange}
-          />
-        );
-      case HeaderContent.GifSearch:
-        return (
-          <SearchInput
-            value={gifSearchQuery}
-            placeholder={oldLang('SearchGifsTitle')}
-            autoFocusSearch
-            onChange={handleGifSearchQueryChange}
-          />
-        );
       case HeaderContent.Statistics:
         return <h3 className="title">{oldLang(isChannel ? 'ChannelStats.Title' : 'GroupStats.Title')}</h3>;
       case HeaderContent.MessageStatistics:
@@ -552,7 +508,7 @@ const RightHeader: FC<OwnProps & StateProps> = ({
                   autoClose={false}
                 >
                   <MenuItem
-                    icon={giftsSortType === 'byDate' ? 'cash-circle' : 'calendar-filter'}
+                    icon={giftsSortType === 'byDate' ? 'cash-circle' : 'calendar'}
 
                     onClick={() => updateGiftProfileFilter(
                       { peerId: chatId, filter: { sortType: giftsSortType === 'byDate' ? 'byValue' : 'byDate' } },
@@ -703,9 +659,8 @@ const RightHeader: FC<OwnProps & StateProps> = ({
 
   return (
     <div
-      className="RightHeader"
+      className={buildClassName('RightHeader', isSecondaryBackground && 'secondary')}
       data-tauri-drag-region={IS_TAURI && IS_MAC_OS ? true : undefined}
-      style={createVtnStyle('rightHeader', true)}
     >
       <Button
         className="close-button"
@@ -732,8 +687,6 @@ export default withGlobal<OwnProps>(
     chatId, isProfile, isManagement, threadId,
   }): Complete<StateProps> => {
     const tabState = selectTabState(global);
-    const { query: stickerSearchQuery } = selectCurrentStickerSearch(global) || {};
-    const { query: gifSearchQuery } = selectCurrentGifSearch(global) || {};
     const chat = chatId ? selectChat(global, chatId) : undefined;
     const user = isProfile && chatId && isUserId(chatId) ? selectUser(global, chatId) : undefined;
     const isChannel = chat && isChatChannel(chat);
@@ -769,8 +722,6 @@ export default withGlobal<OwnProps>(
       canEditTopic,
       userId: user?.id,
       isSelf: user?.isSelf,
-      stickerSearchQuery,
-      gifSearchQuery,
       isEditingInvite,
       currentInviteInfo,
       isSavedMessages,

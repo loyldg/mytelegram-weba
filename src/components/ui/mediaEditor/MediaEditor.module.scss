@@ -26,6 +26,23 @@
     transition: none;
   }
 
+  // While landing, the editor is a top-layer popover that fades in above the still-open (opaque)
+  // Media Viewer. Keep the opacity fade for the entrance, but pin the scale — dropping `transform`
+  // from the transition stops it easing to `none`, which would corrupt the canvas measurement.
+  // The size/margin/border/padding overrides cancel the UA popover defaults (`fit-content`, `auto`
+  // margin and a `solid` border with padding) so the editor still fills the screen borderlessly.
+  &.landingGhost {
+    transform: none !important;
+
+    width: 100%;
+    height: 100%;
+    margin: 0;
+    padding: 0;
+    border: 0;
+
+    transition: opacity 0.2s ease !important;
+  }
+
   @media (max-width: 600px) {
     flex-direction: column;
   }
@@ -60,6 +77,11 @@
   max-width: 100%;
   min-height: 0;
   max-height: 100%;
+
+  // Kept laid out (so the ghost can measure its target) but not painted until the ghost lands
+  &.hiddenForGhost {
+    opacity: 0;
+  }
 }
 
 .canvas {
@@ -605,75 +627,6 @@
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 0.25rem;
-}
-
-// CSS-based ratio icons
-.ratioBox {
-
-  // Base height for all ratio boxes
-  --ratio-size: 1.25rem;
-
-  margin-inline-start: 0.125rem;
-  border: 0.125rem solid var(--color-text-secondary);
-  border-radius: 0.125rem;
-
-  .selected & {
-    border-color: var(--color-primary);
-  }
-
-  // Square (1:1)
-  &.ratio1x1 {
-    width: var(--ratio-size);
-    height: var(--ratio-size);
-  }
-
-  // 3:2 (horizontal)
-  &.ratio3x2 {
-    width: var(--ratio-size);
-    height: calc(var(--ratio-size) * 2 / 3);
-  }
-
-  // 2:3 (vertical)
-  &.ratio2x3 {
-    width: calc(var(--ratio-size) * 2 / 3);
-    height: var(--ratio-size);
-  }
-
-  // 4:3 (horizontal)
-  &.ratio4x3 {
-    width: var(--ratio-size);
-    height: calc(var(--ratio-size) * 3 / 4);
-  }
-
-  // 3:4 (vertical)
-  &.ratio3x4 {
-    width: calc(var(--ratio-size) * 3 / 4);
-    height: var(--ratio-size);
-  }
-
-  // 5:4 (horizontal)
-  &.ratio5x4 {
-    width: var(--ratio-size);
-    height: calc(var(--ratio-size) * 4 / 5);
-  }
-
-  // 4:5 (vertical)
-  &.ratio4x5 {
-    width: calc(var(--ratio-size) * 4 / 5);
-    height: var(--ratio-size);
-  }
-
-  // 16:9 (wide)
-  &.ratio16x9 {
-    width: var(--ratio-size);
-    height: calc(var(--ratio-size) * 9 / 16);
-  }
-
-  // 9:16 (tall)
-  &.ratio9x16 {
-    width: calc(var(--ratio-size) * 9 / 16);
-    height: var(--ratio-size);
-  }
 }
 
 // Inline color picker

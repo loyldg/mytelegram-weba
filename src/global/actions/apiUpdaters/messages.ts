@@ -1,5 +1,6 @@
 import type {
   ApiMediaExtendedPreview, ApiMessage, ApiReactions,
+  ApiWebPage,
   MediaContent,
 } from '../../../api/types';
 import type { ActiveEmojiInteraction, ThreadId } from '../../../types';
@@ -9,14 +10,17 @@ import type {
 } from '../../types';
 import { MAIN_THREAD_ID } from '../../../api/types';
 
-import { SERVICE_NOTIFICATIONS_USER_ID } from '../../../config';
+import { ARCHIVED_FOLDER_ID, SERVICE_NOTIFICATIONS_USER_ID } from '../../../config';
 import { areDeepEqual } from '../../../util/areDeepEqual';
+import { makeMessageTrackKey } from '../../../util/audioPlayback/mediaPool';
+import * as playbackController from '../../../util/audioPlayback/playbackController';
 import { isUserId } from '../../../util/entities/ids';
 import { getCurrentTabId } from '../../../util/establishMultitabRole';
 import {
   buildCollectionByKey, omit, unique,
 } from '../../../util/iteratees';
 import { getMessageKey, isLocalMessageId } from '../../../util/keys/messageKey';
+import { buildSearchResultKey } from '../../../util/keys/searchResultKey';
 import { notifyAboutMessage } from '../../../util/notifications';
 import { onTickEnd } from '../../../util/schedulers';
 import { getServerTime } from '../../../util/serverTime';
@@ -30,8 +34,11 @@ import {
   getMessageText,
   groupMessageIdsByThreadId,
   isActionMessage,
+  isDeletedUser,
   isMessageLocal,
+  isUserBot,
   pickMatchingTypingDraftMessage,
+  WINDOWED_MEDIA_SEARCH_TYPES,
 } from '../../helpers';
 import { getMessageReplyInfo, getStoryReplyInfo } from '../../helpers/replies';
 import {
@@ -39,13 +46,16 @@ import {
   getGlobal,
   setGlobal,
 } from '../../index';
+import { scheduleEphemeralExpiration } from '../../intervals';
 import {
+  addChatListIds,
   addMessages,
   addViewportId,
   clearMessageSummary,
   clearMessageTranslation,
   deleteChatMessages,
   deleteChatScheduledMessages,
+  deleteEphemeralMessages,
   deletePeerPhoto,
   deleteQuickReply,
   deleteQuickReplyMessages,
@@ -55,6 +65,7 @@ import {
   updateChatLastMessageId,
   updateChatMediaLoadingState,
   updateChatMessage,
+  updateEphemeralMessage,
   updateListedIds,
   updateMessageTranslations,
   updatePeerFullInfo,
@@ -64,6 +75,9 @@ import {
   updateQuickReplyMessage,
   updateScheduledMessage,
 } from '../../reducers';
+import { appendShufflePlaylist, removeTrackFromShuffle } from '../../reducers/audioPlayer';
+import { removeMessagesFromGlobalSearchResults } from '../../reducers/globalSearch';
+import { addUnreadPollVotes } from '../../reducers/polls';
 import { addUnreadReactions, removeUnreadReactions } from '../../reducers/reactions';
 import { updateTabState } from '../../reducers/tabs';
 import {
@@ -84,6 +98,7 @@ import {
   selectChatScheduledMessages,
   selectCommonBoxChatId,
   selectCurrentMessageList,
+  selectEphemeralMessage,
   selectFirstUnreadId,
   selectIsChatListed,
   selectIsChatWithSelf,
@@ -98,8 +113,12 @@ import {
   selectTabState,
   selectTopic,
   selectTopicFromMessage,
+  selectUser,
   selectViewportIds,
 } from '../../selectors';
+import {
+  selectIsPlaylistFullyLoaded, selectPlaybackSource, selectPlaylistKeys,
+} from '../../selectors/audioPlayer';
 import {
   selectSavedDialogIdFromMessage,
   selectThread,
@@ -144,6 +163,7 @@ function removeTypingDraftEntries<T extends GlobalState>(
   chatId: string,
   threadId: ThreadId,
   typingDraftEntries: TypingDraftEntry[],
+  shouldSkipAnimation?: boolean,
 ) {
   if (!typingDraftEntries.length) {
     return global;
@@ -172,17 +192,95 @@ function removeTypingDraftEntries<T extends GlobalState>(
   );
 
   if (messageIdsToDelete.length) {
-    global = deleteChatMessages(global, chatId, messageIdsToDelete);
+    global = shouldSkipAnimation
+      ? deleteChatMessages(global, chatId, messageIdsToDelete)
+      : deleteChatMessagesWithAnimation(global, chatId, messageIdsToDelete);
   }
+
+  return global;
+}
+
+function shouldBumpGuestBotTopPeer<T extends GlobalState>(global: T, message: ApiMessage) {
+  const { guestChatViaId, senderId } = message;
+  if (message.isOutgoing || message.content.action || guestChatViaId !== global.currentUserId || !senderId) {
+    return false;
+  }
+
+  const sender = selectUser(global, senderId);
+  return Boolean(sender?.isGuestChatBot);
+}
+
+function shouldBumpInlineBotTopPeer(message: ApiMessage) {
+  return Boolean(message.isOutgoing && !message.content.action && message.viaBotId);
+}
+
+function shouldBumpCorrespondentTopPeer<T extends GlobalState>(global: T, chatId: string) {
+  const user = selectUser(global, chatId);
+  return Boolean(user && !user.isSelf && !isUserBot(user) && !isDeletedUser(user));
+}
+
+function addWebPages<T extends GlobalState>(
+  global: T,
+  webPages?: ApiWebPage[],
+) {
+  if (!webPages?.length) {
+    return global;
+  }
+
+  const addedWebPageIds = new Set<string>();
+
+  webPages.forEach((page) => {
+    if (addedWebPageIds.has(page.id)) {
+      return;
+    }
+
+    global = replaceWebPage(global, page.id, page);
+    addedWebPageIds.add(page.id);
+  });
 
   return global;
 }
 
 addActionHandler('apiUpdate', (global, actions, update): ActionReturnType => {
   switch (update['@type']) {
+    case 'newEphemeralMessage':
+    case 'updateEphemeralMessage': {
+      const { message, webPages } = update;
+      if (message.previousLocalId !== undefined) {
+        global = deleteEphemeralMessages(global, message.chatId, [message.previousLocalId]);
+      }
+      global = addWebPages(global, webPages);
+      global = updateEphemeralMessage(global, message);
+      setGlobal(global);
+      scheduleEphemeralExpiration(global);
+
+      if (update['@type'] === 'newEphemeralMessage' && update.shouldForceReply && !message.anchorMsgId) {
+        Object.values(global.byTabId).forEach(({ id: tabId }) => {
+          if (!isEphemeralMessageInCurrentThread(global, tabId, message)) return;
+
+          setTimeout(() => {
+            global = getGlobal();
+            if (!isEphemeralMessageInCurrentThread(global, tabId, message)) return;
+
+            actions.updateDraftReplyInfo({
+              type: 'ephemeral',
+              replyToMsgId: message.id,
+              tabId,
+            });
+          }, ANIMATION_DELAY);
+        });
+      }
+      break;
+    }
+
+    case 'deleteEphemeralMessages': {
+      deleteEphemeralMessagesWithAnimation(global, update.chatId, update.messageIds);
+      break;
+    }
+
     case 'newMessage': {
       const {
-        chatId, id, message, shouldForceReply, wasDrafted, poll, webPage,
+        chatId, id, message, shouldForceReply, wasDrafted, poll, webPages,
       } = update;
       const chat = selectChat(global, chatId);
       const isLocal = isMessageLocal(message);
@@ -212,13 +310,14 @@ addActionHandler('apiUpdate', (global, actions, update): ActionReturnType => {
         ...message,
         previousLocalId: matchedTypingDraftEntry.message.id,
         isTypingDraft: true,
+        wasTypingDraft: true,
       } : message;
 
       global = updateWithLocalMedia(global, chatId, id, true, nextMessage);
       global = updateListedAndViewportIds(global, nextMessage);
 
       if (hasTypingDraftsInThread && matchedTypingDraftEntry) {
-        global = removeTypingDraftEntries(global, chatId, threadId, [matchedTypingDraftEntry]);
+        global = removeTypingDraftEntries(global, chatId, threadId, [matchedTypingDraftEntry], true);
       }
 
       const newMessage = selectChatMessage(global, chatId, id)!;
@@ -238,7 +337,16 @@ addActionHandler('apiUpdate', (global, actions, update): ActionReturnType => {
         }
 
         const messageThreadId = selectThreadIdFromMessage(global, newMessage);
-        global = updateChatMediaLoadingState(global, newMessage, chatId, messageThreadId, tabId);
+        WINDOWED_MEDIA_SEARCH_TYPES.forEach((mediaType) => {
+          global = updateChatMediaLoadingState(global, newMessage, chatId, messageThreadId, mediaType, tabId);
+        });
+
+        const playbackSource = selectPlaybackSource(global, tabId);
+        if (playbackSource?.type === 'chat' && playbackSource.chatId === chatId
+          && playbackSource.threadId === messageThreadId
+          && selectPlaylistKeys(global, tabId)?.includes(newMessage.id)) {
+          global = appendShufflePlaylist(global, [newMessage.id], selectIsPlaylistFullyLoaded(global, tabId), tabId);
+        }
 
         if (selectIsMessageInCurrentMessageList(global, chatId, message, tabId)) {
           if (isLocal && message.isOutgoing && !(message.content?.action) && !storyReplyInfo?.storyId
@@ -294,9 +402,7 @@ addActionHandler('apiUpdate', (global, actions, update): ActionReturnType => {
         global = updatePoll(global, poll.summary.id, poll);
       }
 
-      if (webPage) {
-        global = replaceWebPage(global, webPage.id, webPage);
-      }
+      global = addWebPages(global, webPages);
 
       if (message.reportDeliveryUntilDate && message.reportDeliveryUntilDate > getServerTime()) {
         actions.reportMessageDelivery({ chatId, messageId: id });
@@ -305,7 +411,7 @@ addActionHandler('apiUpdate', (global, actions, update): ActionReturnType => {
       if (shouldClearTypingDraftsAfterRender) {
         onTickEnd(() => {
           global = getGlobal();
-          global = removeTypingDraftEntries(global, chatId, threadId, typingDraftEntries);
+          global = removeTypingDraftEntries(global, chatId, threadId, typingDraftEntries, true);
           setGlobal(global);
         });
       }
@@ -341,10 +447,37 @@ addActionHandler('apiUpdate', (global, actions, update): ActionReturnType => {
         }
       }
 
+      const chatListType = chat?.folderId === ARCHIVED_FOLDER_ID ? 'archived' : 'active';
+      const shouldRestoreChatInList = (
+        !isLocal && !isActionMessage(newMessage) && !chat?.isNotJoined
+        && !selectIsChatListed(global, chatId, chatListType)
+      );
+      if (shouldRestoreChatInList && chat) {
+        if (global.chats.listIds[chatListType]) {
+          global = addChatListIds(global, chatListType, [chatId]);
+        }
+      }
+
       setGlobal(global);
 
+      if (shouldBumpGuestBotTopPeer(global, newMessage)) {
+        actions.bumpTopPeerRating({
+          category: 'botsGuestChat',
+          peerId: newMessage.senderId!,
+          date: newMessage.date,
+        });
+      }
+
+      if (shouldBumpInlineBotTopPeer(newMessage)) {
+        actions.bumpTopPeerRating({
+          category: 'botsInline',
+          peerId: newMessage.viaBotId!,
+          date: newMessage.date,
+        });
+      }
+
       // Reload dialogs if chat is not present in the list
-      if (!isLocal && !chat?.isNotJoined && !selectIsChatListed(global, chatId)) {
+      if (shouldRestoreChatInList) {
         actions.loadTopChats();
       }
 
@@ -353,6 +486,10 @@ addActionHandler('apiUpdate', (global, actions, update): ActionReturnType => {
         if (savedDialogId && !selectIsChatListed(global, savedDialogId, 'saved')) {
           actions.requestSavedDialogUpdate({ chatId: savedDialogId });
         }
+      }
+
+      if (!isLocal && message.ttlPeriod) {
+        actions.cleanupExpiredTtlMessages({ chatId, messageIds: [id] });
       }
 
       break;
@@ -396,7 +533,7 @@ addActionHandler('apiUpdate', (global, actions, update): ActionReturnType => {
 
     case 'newScheduledMessage': {
       const {
-        chatId, id, message, poll, webPage,
+        chatId, id, message, poll, webPages,
       } = update;
 
       global = updateWithLocalMedia(global, chatId, id, true, message, true);
@@ -418,9 +555,7 @@ addActionHandler('apiUpdate', (global, actions, update): ActionReturnType => {
         global = updatePoll(global, poll.summary.id, poll);
       }
 
-      if (webPage) {
-        global = replaceWebPage(global, webPage.id, webPage);
-      }
+      global = addWebPages(global, webPages);
 
       global = updatePeerFullInfo(global, chatId, {
         hasScheduledMessages: true,
@@ -433,7 +568,7 @@ addActionHandler('apiUpdate', (global, actions, update): ActionReturnType => {
 
     case 'updateScheduledMessage': {
       const {
-        chatId, id, message, poll, webPage, isFromNew,
+        chatId, id, message, poll, webPages, isFromNew,
       } = update;
 
       const currentMessage = selectScheduledMessage(global, chatId, id);
@@ -445,7 +580,7 @@ addActionHandler('apiUpdate', (global, actions, update): ActionReturnType => {
             chatId: update.chatId,
             message: update.message as ApiMessage,
             poll: update.poll,
-            webPage: update.webPage,
+            webPages: update.webPages,
           });
         }
         return;
@@ -466,9 +601,7 @@ addActionHandler('apiUpdate', (global, actions, update): ActionReturnType => {
         global = updatePoll(global, poll.summary.id, poll);
       }
 
-      if (webPage) {
-        global = replaceWebPage(global, webPage.id, webPage);
-      }
+      global = addWebPages(global, webPages);
 
       setGlobal(global);
 
@@ -477,7 +610,7 @@ addActionHandler('apiUpdate', (global, actions, update): ActionReturnType => {
 
     case 'updateMessage': {
       const {
-        chatId, id, message, poll, webPage, isFromNew, isFull, shouldForceReply,
+        chatId, id, message, poll, webPages, isFromNew, isFull, shouldForceReply,
       } = update;
 
       const currentMessage = selectChatMessage(global, chatId, id);
@@ -496,9 +629,7 @@ addActionHandler('apiUpdate', (global, actions, update): ActionReturnType => {
         global = updatePoll(global, poll.summary.id, poll);
       }
 
-      if (webPage) {
-        global = replaceWebPage(global, webPage.id, webPage);
-      }
+      global = addWebPages(global, webPages);
 
       if (!currentMessage) {
         if (isFromNew && isFull) {
@@ -508,7 +639,7 @@ addActionHandler('apiUpdate', (global, actions, update): ActionReturnType => {
             chatId: update.chatId,
             message: update.message,
             poll: update.poll,
-            webPage: update.webPage,
+            webPages: update.webPages,
             shouldForceReply,
           });
         }
@@ -521,7 +652,16 @@ addActionHandler('apiUpdate', (global, actions, update): ActionReturnType => {
         return;
       }
 
-      if (message.content?.text?.text !== currentMessage?.content?.text?.text) {
+      const hasRichMessageEdit = (message.content?.richMessage || currentMessage.content.richMessage)
+        && message.editDate !== undefined
+        && message.editDate !== currentMessage.editDate;
+      const hasContentChanged = message.content && (
+        message.content.text?.text !== currentMessage.content.text?.text
+        || !areDeepEqual(message.content.richMessage?.blocks, currentMessage.content.richMessage?.blocks)
+        || message.content.richMessage?.isRtl !== currentMessage.content.richMessage?.isRtl
+      );
+
+      if (hasRichMessageEdit || hasContentChanged) {
         global = clearMessageTranslation(global, chatId, id);
         global = clearMessageSummary(global, chatId, id);
       }
@@ -534,7 +674,9 @@ addActionHandler('apiUpdate', (global, actions, update): ActionReturnType => {
     }
 
     case 'updateQuickReplyMessage': {
-      const { id, message, poll, webPage } = update;
+      const {
+        id, message, poll, webPages,
+      } = update;
 
       global = updateQuickReplyMessage(global, id, message);
 
@@ -542,9 +684,7 @@ addActionHandler('apiUpdate', (global, actions, update): ActionReturnType => {
         global = updatePoll(global, poll.summary.id, poll);
       }
 
-      if (webPage) {
-        global = replaceWebPage(global, webPage.id, webPage);
-      }
+      global = addWebPages(global, webPages);
 
       setGlobal(global);
 
@@ -620,14 +760,14 @@ addActionHandler('apiUpdate', (global, actions, update): ActionReturnType => {
 
     case 'updateMessageSendSucceeded': {
       const {
-        chatId, localId, message, poll,
+        chatId, localId, message, poll, webPages,
       } = update;
 
       global = updateListedAndViewportIds(global, message);
 
       const currentMessage = selectChatMessage(global, chatId, localId);
 
-      global = deleteChatMessages(global, chatId, [localId]);
+      global = deleteChatMessages(global, chatId, [localId], { shouldPreserveMedia: true });
 
       // Edge case for "Send When Online"
       if (message.isScheduled) {
@@ -645,6 +785,8 @@ addActionHandler('apiUpdate', (global, actions, update): ActionReturnType => {
         global = updatePoll(global, poll.summary.id, poll);
       }
 
+      global = addWebPages(global, webPages);
+
       global = {
         ...global,
         fileUploads: {
@@ -654,6 +796,34 @@ addActionHandler('apiUpdate', (global, actions, update): ActionReturnType => {
 
       const newMessage = selectChatMessage(global, chatId, message.id)!;
       global = updateChatLastMessage(global, chatId, newMessage);
+
+      Object.values(global.byTabId).forEach(({ id: tabId }) => {
+        const { activeItem, source } = selectTabState(global, tabId).audioPlayer;
+        if (activeItem?.type !== 'message' || activeItem.chatId !== chatId || activeItem.messageId !== localId) return;
+
+        if (tabId === getCurrentTabId()) {
+          playbackController.renameTrack(
+            makeMessageTrackKey(chatId, localId, activeItem.documentId),
+            makeMessageTrackKey(chatId, message.id, activeItem.documentId),
+          );
+        }
+        const { voice, video } = message.content;
+        const nextSource = source?.type === 'richMessage' && source.messageId === localId
+          ? { ...source, messageId: message.id }
+          : source;
+        global = updateTabState(global, {
+          audioPlayer: {
+            ...selectTabState(global, tabId).audioPlayer,
+            activeItem: { ...activeItem, messageId: message.id },
+            source: nextSource?.type === 'single' ? {
+              type: 'chat',
+              chatId,
+              threadId: activeItem.threadId,
+              mediaType: (voice || video) ? 'voice' : 'audio',
+            } : nextSource,
+          },
+        }, tabId);
+      });
 
       const thread = selectThreadByMessage(global, message);
       // For some reason Telegram requires to manually mark outgoing thread messages read
@@ -688,12 +858,16 @@ addActionHandler('apiUpdate', (global, actions, update): ActionReturnType => {
 
       setGlobal(global);
 
+      if (shouldBumpCorrespondentTopPeer(global, chatId)) {
+        actions.bumpTopPeerRating({ category: 'correspondents', peerId: chatId });
+      }
+
       break;
     }
 
     case 'updateScheduledMessageSendSucceeded': {
       const {
-        chatId, localId, message, poll,
+        chatId, localId, message, poll, webPages,
       } = update;
       const scheduledIds = selectScheduledIds(global, chatId, MAIN_THREAD_ID) || [];
       global = replaceThreadLocalStateParam(
@@ -722,7 +896,12 @@ addActionHandler('apiUpdate', (global, actions, update): ActionReturnType => {
         global = updatePoll(global, poll.summary.id, poll);
       }
 
+      global = addWebPages(global, webPages);
+
       setGlobal(global);
+      if (shouldBumpCorrespondentTopPeer(global, chatId)) {
+        actions.bumpTopPeerRating({ category: 'correspondents', peerId: chatId });
+      }
       break;
     }
 
@@ -907,9 +1086,10 @@ addActionHandler('apiUpdate', (global, actions, update): ActionReturnType => {
     }
 
     case 'updateMessagePoll': {
-      const { pollId, pollUpdate } = update;
+      const { pollId, pollUpdate, webPages } = update;
 
       global = updatePoll(global, pollId, pollUpdate);
+      global = addWebPages(global, webPages);
 
       setGlobal(global);
       break;
@@ -918,6 +1098,29 @@ addActionHandler('apiUpdate', (global, actions, update): ActionReturnType => {
     case 'updateMessagePollVote': {
       const { pollId, peerId, options } = update;
       global = updatePollVote(global, pollId, peerId, options);
+      setGlobal(global);
+
+      break;
+    }
+
+    case 'updateMessagePollUnread': {
+      const { chatId, messageId, threadId } = update;
+      const readState = selectThreadReadState(global, chatId, threadId);
+
+      if (!readState?.unreadPollVotes) {
+        actions.loadUnreadPollVotes({ chatId, threadId });
+        break;
+      }
+
+      if (readState.unreadPollVotes.includes(messageId)) break;
+
+      // We can't calculate threads without local messages, so reload instead.
+      if (!selectChatMessage(global, chatId, messageId)) {
+        actions.loadUnreadPollVotes({ chatId, threadId });
+        break;
+      }
+
+      global = addUnreadPollVotes({ global, chatId, ids: [messageId] });
       setGlobal(global);
 
       break;
@@ -1045,29 +1248,45 @@ addActionHandler('apiUpdate', (global, actions, update): ActionReturnType => {
 
     case 'updateMessageTranslations': {
       const {
-        chatId, messageIds, toLanguageCode, translations, tone,
+        chatId, messageIds, toLanguageCode, translations, requestId, tone,
       } = update;
 
-      global = updateMessageTranslations(global, chatId, messageIds, toLanguageCode, translations, tone);
+      global = updateMessageTranslations(global, chatId, messageIds, toLanguageCode, translations, requestId, tone);
 
       setGlobal(global);
       break;
     }
 
     case 'failedMessageTranslations': {
-      const { chatId, messageIds, toLanguageCode, tone } = update;
+      const { chatId, messageIds, toLanguageCode, requestId, tone } = update;
 
-      global = updateMessageTranslations(global, chatId, messageIds, toLanguageCode, [], tone);
+      global = updateMessageTranslations(global, chatId, messageIds, toLanguageCode, [], requestId, tone);
 
       setGlobal(global);
       break;
     }
 
+    case 'updateChatTypingDraftStopped': {
+      const { id, chatId, threadId = MAIN_THREAD_ID } = update;
+      const entries = getTypingDraftEntries(global, chatId, threadId);
+      const entry = entries.find(({ randomId }) => randomId === id);
+      if (!entry) return undefined;
+
+      if (entry.message.typingDraft?.shouldKeepOnStop) {
+        return updateChatMessage(global, chatId, entry.message.id, {
+          typingDraft: { ...entry.message.typingDraft, canStop: undefined },
+        });
+      }
+
+      return removeTypingDraftEntries(global, chatId, threadId, [entry]);
+    }
     case 'updateChatTypingDraft': {
-      const { id, chatId, threadId = MAIN_THREAD_ID, text } = update;
+      const { id, chatId, threadId = MAIN_THREAD_ID, text, richMessage, canStop, shouldKeepOnStop } = update;
       const thread = selectThread(global, chatId, threadId);
       if (!thread) return undefined;
 
+      const replacedDrafts = getTypingDraftEntries(global, chatId, threadId).filter(({ randomId }) => randomId !== id);
+      global = removeTypingDraftEntries(global, chatId, threadId, replacedDrafts);
       let typingDraftStore = selectThreadLocalStateParam(global, chatId, threadId, 'typingDraftIdByRandomId');
       const messageId = typingDraftStore?.[id];
 
@@ -1087,11 +1306,7 @@ addActionHandler('apiUpdate', (global, actions, update): ActionReturnType => {
             // Already deleted or replaced with a new message
             if (!currentMessage || getServerTime() - currentMessage.editDate! < global.appConfig.typingDraftTtl) return;
 
-            const newTypingDraftIds = omit(currentTypingDraftStore, [id]);
-            global = replaceThreadLocalStateParam(
-              global, chatId, threadId, 'typingDraftIdByRandomId', newTypingDraftIds,
-            );
-            global = deleteChatMessages(global, chatId, [currentMessageId]);
+            global = removeTypingDraftEntries(global, chatId, threadId, [{ randomId: id, message: currentMessage }]);
             setGlobal(global);
           }
         }, global.appConfig.typingDraftTtl * 1000);
@@ -1101,8 +1316,11 @@ addActionHandler('apiUpdate', (global, actions, update): ActionReturnType => {
         global = updateChatMessage(global, chatId, messageId, {
           content: {
             text,
+            richMessage,
           },
           editDate: getServerTime(),
+          typingDraft: { canStop, shouldKeepOnStop },
+          shouldSkipTypingAnimation: undefined,
         });
         rescheduleDraftRemoval();
         return global;
@@ -1118,7 +1336,10 @@ addActionHandler('apiUpdate', (global, actions, update): ActionReturnType => {
         chatId,
         threadId,
         text,
+        richMessage,
       });
+      newMessage.typingDraft = { canStop, shouldKeepOnStop };
+      newMessage.shouldSkipTypingAnimation = replacedDrafts.length ? true : undefined;
 
       actions.apiUpdate({
         '@type': 'newMessage',
@@ -1239,7 +1460,7 @@ export function updateWithLocalMedia(
   // Preserve locally uploaded media.
   if (currentMessage && messageUpdate.content && !isLocalMessageId(id)) {
     const {
-      photo, video, sticker, document,
+      photo, video, document,
     } = getMessageContent(currentMessage);
 
     if (photo && messageUpdate.content.photo) {
@@ -1247,8 +1468,6 @@ export function updateWithLocalMedia(
       messageUpdate.content.photo.thumbnail ??= photo.thumbnail;
     } else if (video && messageUpdate.content.video) {
       messageUpdate.content.video.blobUrl ??= video.blobUrl;
-    } else if (sticker && messageUpdate.content.sticker) {
-      messageUpdate.content.sticker.isPreloadedGlobally ??= sticker.isPreloadedGlobally;
     } else if (document && messageUpdate.content.document) {
       messageUpdate.content.document.previewBlobUrl ??= document.previewBlobUrl;
     }
@@ -1425,11 +1644,9 @@ export function deleteMessages<T extends GlobalState>(
     const threadIdsToUpdate = new Set<ThreadId>();
     threadIdsToUpdate.add(MAIN_THREAD_ID);
 
-    ids.forEach((id) => {
-      global = updateChatMessage(global, chatId, id, {
-        isDeleting: true,
-      });
+    global = deleteChatMessagesWithAnimation(global, chatId, ids);
 
+    ids.forEach((id) => {
       if (selectTopic(global, chatId, id)) {
         global = deleteTopic(global, chatId, id);
       }
@@ -1452,6 +1669,25 @@ export function deleteMessages<T extends GlobalState>(
     actions.requestChatUpdate({ chatId });
 
     const idsSet = new Set(ids);
+
+    Object.values(global.byTabId).forEach(({ id: tabId }) => {
+      const { activeItem, source } = selectTabState(global, tabId).audioPlayer;
+      if (activeItem?.type === 'message' && activeItem.chatId === chatId && idsSet.has(activeItem.messageId)) {
+        actions.closeAudioPlayer({ tabId });
+      }
+
+      global = removeMessagesFromGlobalSearchResults(global, chatId, ids, tabId);
+
+      if (source?.type === 'chat' && source.chatId === chatId) {
+        ids.forEach((id) => {
+          global = removeTrackFromShuffle(global, id, tabId);
+        });
+      } else if (source?.type === 'globalSearch') {
+        ids.forEach((id) => {
+          global = removeTrackFromShuffle(global, buildSearchResultKey(chatId, id), tabId);
+        });
+      }
+    });
 
     threadIdsToUpdate.forEach((threadId) => {
       if (chat.isForum && threadId !== MAIN_THREAD_ID) {
@@ -1477,16 +1713,6 @@ export function deleteMessages<T extends GlobalState>(
 
     setGlobal(global);
 
-    const isAnimatingAsSnap = selectCanAnimateSnapEffect(global);
-
-    setTimeout(() => {
-      global = getGlobal();
-      // Prevent local deletion of sent messages in case of desync
-      const stillDeletedIds = ids.filter((id) => selectChatMessage(global, chatId, id)?.isDeleting);
-      global = deleteChatMessages(global, chatId, stillDeletedIds);
-      setGlobal(global);
-    }, isAnimatingAsSnap ? SNAP_ANIMATION_DELAY : ANIMATION_DELAY);
-
     return;
   }
 
@@ -1499,9 +1725,7 @@ export function deleteMessages<T extends GlobalState>(
     if (commonBoxChatId) {
       chatIdsToUpdate.push(commonBoxChatId);
 
-      global = updateChatMessage(global, commonBoxChatId, id, {
-        isDeleting: true,
-      });
+      global = deleteChatMessagesWithAnimation(global, commonBoxChatId, [id]);
 
       const newLastMessage = findLastMessage(global, commonBoxChatId);
       if (newLastMessage) {
@@ -1524,13 +1748,20 @@ export function deleteMessages<T extends GlobalState>(
         global = deletePeerPhoto(global, commonBoxChatId, message.content.action.photo.id, true);
       }
 
-      const isAnimatingAsSnap = selectCanAnimateSnapEffect(global);
+      Object.values(global.byTabId).forEach(({ id: tabId }) => {
+        const { activeItem, source } = selectTabState(global, tabId).audioPlayer;
+        if (activeItem?.type === 'message' && activeItem.chatId === commonBoxChatId && activeItem.messageId === id) {
+          actions.closeAudioPlayer({ tabId });
+        }
 
-      setTimeout(() => {
-        global = getGlobal();
-        global = deleteChatMessages(global, commonBoxChatId, [id]);
-        setGlobal(global);
-      }, isAnimatingAsSnap ? SNAP_ANIMATION_DELAY : ANIMATION_DELAY);
+        global = removeMessagesFromGlobalSearchResults(global, commonBoxChatId, [id], tabId);
+
+        if (source?.type === 'chat' && source.chatId === commonBoxChatId) {
+          global = removeTrackFromShuffle(global, id, tabId);
+        } else if (source?.type === 'globalSearch') {
+          global = removeTrackFromShuffle(global, buildSearchResultKey(commonBoxChatId, id), tabId);
+        }
+      });
     }
   });
 
@@ -1539,6 +1770,73 @@ export function deleteMessages<T extends GlobalState>(
   unique(chatIdsToUpdate).forEach((id) => {
     actions.requestChatUpdate({ chatId: id });
   });
+}
+
+function deleteChatMessagesWithAnimation<T extends GlobalState>(global: T, chatId: string, ids: number[]) {
+  ids.forEach((id) => {
+    global = updateChatMessage(global, chatId, id, { isDeleting: true });
+  });
+
+  const isAnimatingAsSnap = selectCanAnimateSnapEffect(global);
+  setTimeout(() => {
+    global = getGlobal();
+    // Prevent local deletion of sent messages in case of desync
+    const stillDeletedIds = ids.filter((id) => selectChatMessage(global, chatId, id)?.isDeleting);
+    global = deleteChatMessages(global, chatId, stillDeletedIds);
+    setGlobal(global);
+  }, isAnimatingAsSnap ? SNAP_ANIMATION_DELAY : ANIMATION_DELAY);
+
+  return global;
+}
+
+export function deleteEphemeralMessagesWithAnimation<T extends GlobalState>(
+  global: T, chatId: string, ids: number[],
+) {
+  const messages = ids
+    .map((id) => selectEphemeralMessage(global, chatId, id))
+    .filter(Boolean);
+  if (!messages.length) return;
+
+  messages.forEach((message) => {
+    if (message.anchorMsgId) {
+      global = deleteEphemeralMessages(global, chatId, [message.id]);
+      return;
+    }
+    global = updateEphemeralMessage(global, {
+      ...message,
+      isDeleting: true,
+    });
+  });
+  setGlobal(global);
+
+  const isAnimatingAsSnap = selectCanAnimateSnapEffect(global);
+  setTimeout(() => {
+    global = getGlobal();
+    const stillDeletingIds = messages
+      .map(({ id }) => id)
+      .filter((id) => selectEphemeralMessage(global, chatId, id)?.isDeleting);
+    global = deleteEphemeralMessages(global, chatId, stillDeletingIds);
+    setGlobal(global);
+    scheduleEphemeralExpiration(global);
+  }, isAnimatingAsSnap ? SNAP_ANIMATION_DELAY : ANIMATION_DELAY);
+}
+
+function isEphemeralMessageInCurrentThread<T extends GlobalState>(
+  global: T,
+  tabId: number,
+  message: ApiMessage,
+) {
+  const currentMessageList = selectCurrentMessageList(global, tabId);
+  if (!currentMessageList
+    || currentMessageList.chatId !== message.chatId
+    || currentMessageList.type !== 'thread') {
+    return false;
+  }
+
+  const currentThreadId = Number(currentMessageList.threadId);
+  return currentThreadId === MAIN_THREAD_ID
+    ? message.ephemeralTopMsgId === undefined
+    : message.ephemeralTopMsgId === currentThreadId;
 }
 
 function deleteScheduledMessages<T extends GlobalState>(

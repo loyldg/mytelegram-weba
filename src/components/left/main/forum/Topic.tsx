@@ -164,6 +164,11 @@ const Topic = ({
     onReorderAnimationEnd,
   });
 
+  const openTopicThread = useLastCallback(() => {
+    openThread({ chatId, threadId: topic.id, shouldReplaceHistory: true });
+    if (!chat.isBotForum && !chat.isMonoforum) setViewForumAsMessages({ chatId, isEnabled: false });
+  });
+
   const handleOpenTopic = useLastCallback((e: React.MouseEvent) => {
     if (e.altKey) {
       e.preventDefault();
@@ -171,10 +176,9 @@ const Topic = ({
       return;
     }
 
-    openThread({ chatId, threadId: topic.id, shouldReplaceHistory: true });
-    if (!chat.isBotForum && !chat.isMonoforum) setViewForumAsMessages({ chatId, isEnabled: false });
+    openTopicThread();
 
-    if (canScrollDown) {
+    if (canScrollDown && e.detail <= 1) {
       scrollMessageListToBottom();
     }
   });
@@ -200,6 +204,7 @@ const Topic = ({
         'chat-item-clickable',
       )}
       onClick={handleOpenTopic}
+      onFileHoverOpen={openTopicThread}
       style={style}
       href={IS_OPEN_IN_NEW_TAB_SUPPORTED ? `#${createLocationHash(chatId, 'thread', topic.id)}` : undefined}
       contextActions={contextActions}
@@ -215,7 +220,7 @@ const Topic = ({
           {Boolean(notifySettings.mutedUntil) && <Icon name="muted" />}
           <div className="separator" />
           {isClosed && (
-            <Icon name="lock-badge" className={styles.closedIcon} />
+            <Icon name="lock-filled" className={styles.closedIcon} />
           )}
           {lastMessage && (
             <LastMessageMeta

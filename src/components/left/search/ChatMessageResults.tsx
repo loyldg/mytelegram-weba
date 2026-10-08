@@ -1,4 +1,3 @@
-import type { FC } from '../../../lib/teact/teact';
 import { memo, useCallback, useMemo } from '../../../lib/teact/teact';
 import { getActions, withGlobal } from '../../../global';
 
@@ -15,6 +14,7 @@ import useAppLayout from '../../../hooks/useAppLayout';
 import useLang from '../../../hooks/useLang';
 
 import NothingFound from '../../common/NothingFound';
+import Island from '../../gili/layout/Island';
 import InfiniteScroll from '../../ui/InfiniteScroll';
 import ChatMessage from './ChatMessage';
 import DateSuggest from './DateSuggest';
@@ -39,7 +39,7 @@ type StateProps = {
 
 const runThrottled = throttle((cb) => cb(), 500, true);
 
-const ChatMessageResults: FC<OwnProps & StateProps> = ({
+const ChatMessageResults = ({
   searchQuery,
   dateSearchQuery,
   foundIds,
@@ -50,7 +50,7 @@ const ChatMessageResults: FC<OwnProps & StateProps> = ({
   searchChatId,
   onSearchDateSelect,
   onReset,
-}) => {
+}: OwnProps & StateProps) => {
   const { searchMessagesGlobal, openThread } = getActions();
 
   const lang = useLang();
@@ -107,6 +107,7 @@ const ChatMessageResults: FC<OwnProps & StateProps> = ({
         chatId={message.chatId}
         message={message}
         searchQuery={searchQuery}
+        withTopic
       />
     );
   }
@@ -138,7 +139,7 @@ const ChatMessageResults: FC<OwnProps & StateProps> = ({
           />
         )}
         {Boolean(foundTopicIds?.length) && (
-          <div className="pb-2">
+          <Island className="search-island pb-2">
             <h3 className="section-heading topic-search-heading" dir={lang.isRtl ? 'auto' : undefined}>
               {lang('SearchResultTopics')}
             </h3>
@@ -151,15 +152,15 @@ const ChatMessageResults: FC<OwnProps & StateProps> = ({
                 />
               );
             })}
-          </div>
+          </Island>
         )}
         {Boolean(foundMessages.length) && (
-          <div className="pb-2">
+          <Island className="search-island pb-2">
             <h3 className="section-heading topic-search-heading" dir={lang.isRtl ? 'auto' : undefined}>
               {lang('SearchMessages')}
             </h3>
             {foundMessages.map(renderFoundMessage)}
-          </div>
+          </Island>
         )}
       </InfiniteScroll>
     </div>

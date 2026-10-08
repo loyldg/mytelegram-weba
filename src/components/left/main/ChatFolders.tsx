@@ -1,4 +1,3 @@
-import type { FC } from '@teact';
 import { memo, useEffect, useRef } from '@teact';
 import { getActions, withGlobal } from '../../../global';
 
@@ -26,13 +25,12 @@ import useScrolledState from '../../../hooks/useScrolledState';
 import useShowTransition from '../../../hooks/useShowTransition';
 
 import StoryRibbon from '../../story/StoryRibbon';
-import SquareTabList from '../../ui/SquareTabList';
 import Transition from '../../ui/Transition';
+import ChatFolderTabList from './ChatFolderTabList';
 import ChatList from './ChatList';
 
 type OwnProps = {
   foldersDispatch: FolderEditDispatch;
-  shouldHideFolderTabs?: boolean;
   isForumPanelOpen?: boolean;
   isFoldersSidebarShown?: boolean;
 };
@@ -57,7 +55,7 @@ type StateProps = {
 const SAVED_MESSAGES_HOTKEY = '0';
 const FIRST_FOLDER_INDEX = 0;
 
-const ChatFolders: FC<OwnProps & StateProps> = ({
+const ChatFolders = ({
   foldersDispatch,
   chatFoldersById,
   orderedFolderIds,
@@ -68,7 +66,6 @@ const ChatFolders: FC<OwnProps & StateProps> = ({
   shouldSkipHistoryAnimations,
   maxFolders,
   maxChatLists,
-  shouldHideFolderTabs,
   folderInvitesById,
   maxFolderInvites,
   hasArchivedChats,
@@ -76,7 +73,7 @@ const ChatFolders: FC<OwnProps & StateProps> = ({
   archiveSettings,
   isStoryRibbonShown,
   isFoldersSidebarShown,
-}) => {
+}: OwnProps & StateProps) => {
   const {
     loadChatFolders,
     setActiveChatFolder,
@@ -87,7 +84,7 @@ const ChatFolders: FC<OwnProps & StateProps> = ({
 
   const lang = useLang();
 
-  const { isAtBeginning: isNotScrolled, handleScroll, updateScrollState } = useScrolledState();
+  const { isAtBeginning, handleScroll, updateScrollState } = useScrolledState();
 
   useEffect(() => {
     loadChatFolders();
@@ -119,6 +116,7 @@ const ChatFolders: FC<OwnProps & StateProps> = ({
 
   const { displayedFolders, folderTabs } = useFolderTabs({
     sidebarMode: false,
+    noEmoticons: true,
     orderedFolderIds,
     chatFoldersById,
     maxFolders,
@@ -131,11 +129,19 @@ const ChatFolders: FC<OwnProps & StateProps> = ({
   const isInAllChatsFolder = allChatsFolderIndex === activeChatFolder;
   const isInFirstFolder = FIRST_FOLDER_INDEX === activeChatFolder;
 
-  const handleSwitchTab = useLastCallback((index: number) => {
+  const openFolder = useLastCallback((index: number) => {
+    if (activeChatFolder === index) return;
+
     setActiveChatFolder({ activeChatFolder: index }, { forceOnHeavyAnimation: true });
+  });
+
+  const handleSwitchTab = useLastCallback((index: number) => {
     if (activeChatFolder === index) {
       scrollToTop();
+      return;
     }
+
+    openFolder(index);
   });
 
   // Prevent `activeTab` pointing at non-existing folder after update
@@ -252,31 +258,36 @@ const ChatFolders: FC<OwnProps & StateProps> = ({
       ref={ref}
       className={buildClassName(
         'ChatFolders',
-        shouldRenderFolders && shouldHideFolderTabs && 'ChatFolders--tabs-hidden',
         shouldRenderStoryRibbon && 'with-story-ribbon',
         isFoldersSidebarShown && 'ChatFolders--tabs-sidebar-shown',
       )}
     >
       {shouldRenderStoryRibbon && <StoryRibbon isClosing={isStoryRibbonClosing} />}
-      {shouldRenderFolders ? (
-        <SquareTabList
-          contextRootElementSelector="#LeftColumn"
-          tabs={folderTabs}
-          activeTab={activeChatFolder}
-          onSwitchTab={handleSwitchTab}
-          className={!isNotScrolled ? 'scrolled' : undefined}
-        />
-      ) : shouldRenderPlaceholder ? (
-        <div ref={placeholderRef} className="tabs-placeholder" />
-      ) : undefined}
-      <Transition
-        ref={transitionRef}
-        name={resolveTransitionName('slideOptimized', animationLevel, shouldSkipHistoryAnimations, lang.isRtl)}
-        activeKey={activeChatFolder}
-        renderCount={hasFolders ? folderTabs.length : undefined}
+      <div className={buildClassName(
+        'ChatFolders-content',
+        shouldRenderFolders && 'with-tabs',
+        !shouldRenderFolders && !isAtBeginning && 'scrolled',
+      )}
       >
-        {renderCurrentTab}
-      </Transition>
+        {shouldRenderFolders ? (
+          <ChatFolderTabList
+            tabs={folderTabs}
+            activeTab={activeChatFolder}
+            onSwitchTab={handleSwitchTab}
+            onFileHoverOpen={openFolder}
+          />
+        ) : shouldRenderPlaceholder ? (
+          <div ref={placeholderRef} className="tabs-placeholder" />
+        ) : undefined}
+        <Transition
+          ref={transitionRef}
+          name={resolveTransitionName('slideOptimized', animationLevel, shouldSkipHistoryAnimations, lang.isRtl)}
+          activeKey={activeChatFolder}
+          renderCount={hasFolders ? folderTabs.length : undefined}
+        >
+          {renderCurrentTab}
+        </Transition>
+      </div>
     </div>
   );
 };

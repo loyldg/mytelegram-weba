@@ -1,10 +1,10 @@
-import type { FC } from '../../../lib/teact/teact';
 import { memo, useCallback, useMemo } from '../../../lib/teact/teact';
 import { getActions, getGlobal, withGlobal } from '../../../global';
 
 import type { ApiMessage } from '../../../api/types';
 import type { StateProps } from './helpers/createMapStateToProps';
-import { AudioOrigin, LoadMoreDirection } from '../../../types';
+import { MAIN_THREAD_ID } from '../../../api/types';
+import { LoadMoreDirection } from '../../../types';
 
 import { SLIDE_TRANSITION_DURATION } from '../../../config';
 import { getIsDownloading } from '../../../global/helpers';
@@ -21,6 +21,7 @@ import useAsyncRendering from '../../right/hooks/useAsyncRendering';
 
 import Audio from '../../common/Audio';
 import NothingFound from '../../common/NothingFound';
+import Island from '../../gili/layout/Island';
 import InfiniteScroll from '../../ui/InfiniteScroll';
 import Loading from '../../ui/Loading';
 import Transition from '../../ui/Transition.tsx';
@@ -32,7 +33,7 @@ export type OwnProps = {
 
 const runThrottled = throttle((cb) => cb(), 500, true);
 
-const AudioResults: FC<OwnProps & StateProps> = ({
+const AudioResults = ({
   theme,
   isVoice,
   searchQuery,
@@ -42,7 +43,7 @@ const AudioResults: FC<OwnProps & StateProps> = ({
   globalMessagesByChatId,
   foundIds,
   activeDownloads,
-}) => {
+}: OwnProps & StateProps) => {
   const {
     searchMessagesGlobal,
     focusMessage,
@@ -79,7 +80,11 @@ const AudioResults: FC<OwnProps & StateProps> = ({
   }, [focusMessage]);
 
   const handlePlayAudio = useCallback((messageId: number, chatId: string) => {
-    openAudioPlayer({ chatId, messageId });
+    openAudioPlayer({
+      item: {
+        type: 'message', chatId, threadId: MAIN_THREAD_ID, messageId,
+      },
+    });
   }, [openAudioPlayer]);
 
   function renderList() {
@@ -109,7 +114,7 @@ const AudioResults: FC<OwnProps & StateProps> = ({
               key={message.id}
               theme={theme}
               message={message}
-              origin={AudioOrigin.Search}
+              variant="search"
               senderTitle={getSenderName(lang, message, chatsById, usersById)}
               date={message.date}
               className="scroll-item"
@@ -147,7 +152,11 @@ const AudioResults: FC<OwnProps & StateProps> = ({
             description={lang('ChatList.Search.NoResultsDescription')}
           />
         )}
-        {canRenderContents && foundIds && foundIds.length > 0 && renderList()}
+        {canRenderContents && foundIds && foundIds.length > 0 && (
+          <Island className="search-island">
+            {renderList()}
+          </Island>
+        )}
       </InfiniteScroll>
     </Transition>
   );

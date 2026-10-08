@@ -6,8 +6,25 @@ export function patchSafariProgressiveAudio(audioEl: HTMLAudioElement) {
   if (audioEl.dataset.patchedForSafari) {
     return;
   }
+  audioEl.dataset.patchedForSafari = 'true';
+
+  let danceAbortController: AbortController | undefined;
+
+  audioEl.addEventListener('emptied', () => {
+    danceAbortController?.abort();
+    danceAbortController = undefined;
+    delete audioEl.dataset.patchAppliedForSafari;
+    delete audioEl.dataset.patchForSafariInProgress;
+  });
 
   audioEl.addEventListener('play', () => {
+    if (audioEl.dataset.patchAppliedForSafari) {
+      return;
+    }
+    audioEl.dataset.patchAppliedForSafari = 'true';
+
+    danceAbortController = new AbortController();
+    const { signal } = danceAbortController;
     const t = audioEl.currentTime;
 
     audioEl.dataset.patchForSafariInProgress = 'true';
@@ -22,15 +39,13 @@ export function patchSafariProgressiveAudio(audioEl: HTMLAudioElement) {
         if (audioEl.paused && !audioEl.dataset.preventPlayAfterPatch) {
           audioEl.play();
         }
-      }, { once: true });
+      }, { once: true, signal });
 
       audioEl.removeEventListener('progress', onProgress);
     }
 
-    audioEl.addEventListener('progress', onProgress);
-  }, { once: true });
-
-  audioEl.dataset.patchedForSafari = 'true';
+    audioEl.addEventListener('progress', onProgress, { signal });
+  });
 }
 
 export function isSafariPatchInProgress(audioEl: HTMLAudioElement) {

@@ -1,4 +1,3 @@
-import type { FC } from '../../../lib/teact/teact';
 import { memo, useCallback, useMemo } from '../../../lib/teact/teact';
 import { getActions, withGlobal } from '../../../global';
 
@@ -14,9 +13,10 @@ import useLastCallback from '../../../hooks/useLastCallback';
 import useOldLang from '../../../hooks/useOldLang';
 
 import Icon from '../../common/icons/Icon';
+import Island, { IslandDescription, IslandTitle } from '../../gili/layout/Island';
+import Switch from '../../gili/primitives/Switch';
 import ListItem from '../../ui/ListItem';
 import RadioGroup from '../../ui/RadioGroup';
-import Switcher from '../../ui/Switcher';
 import PremiumStatusItem from './PremiumStatusItem';
 import PrivacyLockedOption from './PrivacyLockedOption';
 import SettingsAcceptedGift from './SettingsAcceptedGift';
@@ -40,7 +40,7 @@ type StateProps = {
   isCurrentUserPremium?: boolean;
 };
 
-const SettingsPrivacyVisibility: FC<OwnProps & StateProps> = ({
+const SettingsPrivacyVisibility = ({
   screen,
   isActive,
   primaryPrivacy,
@@ -52,7 +52,7 @@ const SettingsPrivacyVisibility: FC<OwnProps & StateProps> = ({
   onReset,
   shouldDisplayGiftsButton,
   isCurrentUserPremium,
-}) => {
+}: OwnProps & StateProps) => {
   const { updateGlobalPrivacySettings, showNotification } = getActions();
 
   const lang = useLang();
@@ -95,25 +95,26 @@ const SettingsPrivacyVisibility: FC<OwnProps & StateProps> = ({
   return (
     <div className="settings-content custom-scroll">
       {screen === SettingsScreens.PrivacyGifts && (
-        <div className="settings-item">
-          <ListItem onClick={handleShowGiftIconInChats}>
-            <span>{lang('PrivacyDisplayGiftsButton')}</span>
-            <Switcher
-              id="gift"
-              disabled={!isCurrentUserPremium}
-              label={shouldDisplayGiftsButton ? lang('HideGiftsButton') : lang('DisplayGiftsButton')}
-              checked={shouldDisplayGiftsButton}
-            />
-          </ListItem>
-          <p className="settings-item-description-larger" dir={lang.isRtl ? 'rtl' : undefined}>
+        <>
+          <Island>
+            <ListItem onClick={handleShowGiftIconInChats}>
+              <span>{lang('PrivacyDisplayGiftsButton')}</span>
+              <Switch
+                id="gift"
+                disabled={!isCurrentUserPremium}
+                checked={Boolean(shouldDisplayGiftsButton)}
+              />
+            </ListItem>
+          </Island>
+          <IslandDescription dir={lang.isRtl ? 'rtl' : undefined}>
             {lang('PrivacyDisplayGiftIconInChats', {
               icon: <Icon name="gift" className="gift-icon" />,
               gift: lang('PrivacyDisplayGift'),
             }, {
               withNodes: true,
             })}
-          </p>
-        </div>
+          </IslandDescription>
+        </>
       )}
       <PrivacySubsection
         screen={screen}
@@ -205,6 +206,8 @@ function PrivacySubsection({
     switch (screen) {
       case SettingsScreens.PrivacyGifts:
         return lang('PrivacyGiftsInfo');
+      case SettingsScreens.PrivacySavedMusic:
+        return lang('PrivacyMusicInfo');
       case SettingsScreens.PrivacyLastSeen:
         return oldLang('CustomHelp');
       case SettingsScreens.PrivacyAddByPhone: {
@@ -233,6 +236,8 @@ function PrivacySubsection({
         return oldLang('PrivacyBirthdayTitle');
       case SettingsScreens.PrivacyGifts:
         return lang('PrivacyGiftsTitle');
+      case SettingsScreens.PrivacySavedMusic:
+        return lang('PrivacyMusicTitle');
       case SettingsScreens.PrivacyForwarding:
         return oldLang('PrivacyForwardsTitle');
       case SettingsScreens.PrivacyVoiceMessages:
@@ -305,6 +310,8 @@ function PrivacySubsection({
         return SettingsScreens.PrivacyBirthdayAllowedContacts;
       case SettingsScreens.PrivacyGifts:
         return SettingsScreens.PrivacyGiftsAllowedContacts;
+      case SettingsScreens.PrivacySavedMusic:
+        return SettingsScreens.PrivacySavedMusicAllowedContacts;
       case SettingsScreens.PrivacyForwarding:
         return SettingsScreens.PrivacyForwardingAllowedContacts;
       case SettingsScreens.PrivacyPhoneCall:
@@ -332,6 +339,8 @@ function PrivacySubsection({
         return SettingsScreens.PrivacyBirthdayDeniedContacts;
       case SettingsScreens.PrivacyGifts:
         return SettingsScreens.PrivacyGiftsDeniedContacts;
+      case SettingsScreens.PrivacySavedMusic:
+        return SettingsScreens.PrivacySavedMusicDeniedContacts;
       case SettingsScreens.PrivacyForwarding:
         return SettingsScreens.PrivacyForwardingDeniedContacts;
       case SettingsScreens.PrivacyPhoneCall:
@@ -347,54 +356,54 @@ function PrivacySubsection({
 
   return (
     <>
-      <div className="settings-item">
-        <h4 className="settings-item-header" dir={lang.isRtl ? 'rtl' : undefined}>{headerText}</h4>
+      <IslandTitle dir={lang.isRtl ? 'rtl' : undefined}>{headerText}</IslandTitle>
+      <Island>
         <RadioGroup
           name={`visibility-${privacyKey}`}
           options={visibilityOptions}
           onChange={handleVisibilityChange}
           selected={privacy?.visibility}
         />
-        {descriptionText && (
-          <p className="settings-item-description-larger" dir={lang.isRtl ? 'rtl' : undefined}>{descriptionText}</p>
-        )}
-      </div>
+      </Island>
+      {descriptionText && (
+        <IslandDescription dir={lang.isRtl ? 'rtl' : undefined}>{descriptionText}</IslandDescription>
+      )}
       {!isPremiumRequired && (primaryExceptionLists.shouldShowAllowed || primaryExceptionLists.shouldShowDenied) && (
-        <div className="settings-item">
-          <h4 className="settings-item-header" dir={lang.isRtl ? 'rtl' : undefined}>
+        <>
+          <IslandTitle dir={lang.isRtl ? 'rtl' : undefined}>
             {oldLang('PrivacyExceptions')}
-          </h4>
-          {primaryExceptionLists.shouldShowAllowed && (
-            <ListItem
-              narrow
-              icon="add-user"
-
-              onClick={() => {
-                openSettingsScreen({ screen: allowedContactsScreen });
-              }}
-            >
-              <div className="multiline-item full-size">
-                <span className="title">{oldLang('AlwaysAllow')}</span>
-                <span className="subtitle">{allowedString}</span>
-              </div>
-            </ListItem>
-          )}
-          {primaryExceptionLists.shouldShowDenied && (
-            <ListItem
-              narrow
-              icon="delete-user"
-
-              onClick={() => {
-                openSettingsScreen({ screen: deniedContactsScreen });
-              }}
-            >
-              <div className="multiline-item full-size">
-                <span className="title">{oldLang('NeverAllow')}</span>
-                <span className="subtitle">{blockString}</span>
-              </div>
-            </ListItem>
-          )}
-        </div>
+          </IslandTitle>
+          <Island>
+            {primaryExceptionLists.shouldShowAllowed && (
+              <ListItem
+                narrow
+                icon="add-user"
+                onClick={() => {
+                  openSettingsScreen({ screen: allowedContactsScreen });
+                }}
+              >
+                <div className="multiline-item full-size">
+                  <span className="title">{oldLang('AlwaysAllow')}</span>
+                  <span className="subtitle">{allowedString}</span>
+                </div>
+              </ListItem>
+            )}
+            {primaryExceptionLists.shouldShowDenied && (
+              <ListItem
+                narrow
+                icon="delete-user"
+                onClick={() => {
+                  openSettingsScreen({ screen: deniedContactsScreen });
+                }}
+              >
+                <div className="multiline-item full-size">
+                  <span className="title">{oldLang('NeverAllow')}</span>
+                  <span className="subtitle">{blockString}</span>
+                </div>
+              </ListItem>
+            )}
+          </Island>
+        </>
       )}
       {isPremiumRequired && <PremiumStatusItem />}
     </>
@@ -442,6 +451,10 @@ export default memo(withGlobal<OwnProps>(
 
       case SettingsScreens.PrivacyGifts:
         primaryPrivacy = privacy.gifts;
+        break;
+
+      case SettingsScreens.PrivacySavedMusic:
+        primaryPrivacy = privacy.savedMusic;
         break;
 
       case SettingsScreens.PrivacyPhoneP2P:

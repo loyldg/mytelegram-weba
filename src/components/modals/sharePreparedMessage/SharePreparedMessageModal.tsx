@@ -1,5 +1,4 @@
 import {
-  type FC,
   memo, useEffect,
 } from '../../../lib/teact/teact';
 import {
@@ -30,7 +29,7 @@ export type OwnProps = {
 };
 
 type StateProps = {
-  isPaymentMessageConfirmDialogOpen: boolean;
+  paymentMessageConfirmDialogKey?: string;
   starsBalance: number;
   isStarsBalanceModalOpen: boolean;
 };
@@ -40,9 +39,11 @@ export type SendParams = {
   starsForSendMessage: number;
 };
 
-const SharePreparedMessageModal: FC<OwnProps & StateProps> = ({
-  modal, isPaymentMessageConfirmDialogOpen, isStarsBalanceModalOpen, starsBalance,
-}) => {
+const PAYMENT_DIALOG_KEY = 'sharePreparedMessage';
+
+const SharePreparedMessageModal = ({
+  modal, paymentMessageConfirmDialogKey, isStarsBalanceModalOpen, starsBalance,
+}: OwnProps & StateProps) => {
   const {
     closeSharePreparedMessageModal,
     sendInlineBotResult,
@@ -75,7 +76,7 @@ const SharePreparedMessageModal: FC<OwnProps & StateProps> = ({
     shouldAutoApprove: shouldPaidMessageAutoApprove,
     setAutoApprove: setShouldPaidMessageAutoApprove,
     handleWithConfirmation: handleActionWithPaymentConfirmation,
-  } = usePaidMessageConfirmation(starsForSendMessage || 0, isStarsBalanceModalOpen, starsBalance);
+  } = usePaidMessageConfirmation(PAYMENT_DIALOG_KEY, starsForSendMessage || 0, isStarsBalanceModalOpen, starsBalance);
 
   const handleClose = useLastCallback(() => {
     closeSharePreparedMessageModal();
@@ -158,7 +159,7 @@ const SharePreparedMessageModal: FC<OwnProps & StateProps> = ({
         isLowStackPriority
       />
       <PaymentMessageConfirmDialog
-        isOpen={isPaymentMessageConfirmDialogOpen}
+        isOpen={paymentMessageConfirmDialogKey === PAYMENT_DIALOG_KEY}
         onClose={handleClosePaymentMessageConfirmDialog}
         userName={peerName}
         messagePriceInStars={starsForSendMessage || 0}
@@ -174,11 +175,11 @@ const SharePreparedMessageModal: FC<OwnProps & StateProps> = ({
 export default memo(withGlobal(
   (global): Complete<StateProps> => {
     const tabState = selectTabState(global);
-    const { isPaymentMessageConfirmDialogOpen } = tabState;
+    const { paymentMessageConfirmDialogKey } = tabState;
     const starsBalance = global.stars?.balance.amount || 0;
     const isStarsBalanceModalOpen = Boolean(tabState.starsBalanceModal);
     return {
-      isPaymentMessageConfirmDialogOpen,
+      paymentMessageConfirmDialogKey,
       starsBalance,
       isStarsBalanceModalOpen,
     };

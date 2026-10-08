@@ -1,4 +1,3 @@
-import type { FC } from '../../lib/teact/teact';
 import {
   memo, useCallback, useEffect, useMemo, useState,
 } from '../../lib/teact/teact';
@@ -14,6 +13,7 @@ import useLang from '../../hooks/useLang';
 import useOldLang from '../../hooks/useOldLang';
 import usePreviousDeprecated from '../../hooks/usePreviousDeprecated';
 
+import Island, { IslandDescription, IslandTitle } from '../gili/layout/Island';
 import ConfirmDialog from '../ui/ConfirmDialog';
 import Draggable from '../ui/Draggable';
 import ListItem from '../ui/ListItem';
@@ -34,11 +34,11 @@ type OwnProps = {
 
 const USERNAME_HEIGHT_PX = 56;
 
-const ManageUsernames: FC<OwnProps> = ({
+const ManageUsernames = ({
   chatId,
   usernames,
   onEditUsername,
-}) => {
+}: OwnProps) => {
   const {
     showNotification,
     toggleUsername,
@@ -147,10 +147,10 @@ const ManageUsernames: FC<OwnProps> = ({
 
   return (
     <>
-      <div className={styles.container}>
-        <h4 className={styles.header} dir={lang.isRtl ? 'rtl' : undefined}>
-          {oldLang('lng_usernames_subtitle')}
-        </h4>
+      <IslandTitle dir={lang.isRtl ? 'rtl' : undefined}>
+        {oldLang('lng_usernames_subtitle')}
+      </IslandTitle>
+      <Island className={styles.container}>
         <div className={styles.sortableContainer} style={`height: ${(usernames.length) * USERNAME_HEIGHT_PX}px`}>
           {usernames.map((usernameData, i) => {
             const isDragged = state.draggedIndex === i;
@@ -191,20 +191,20 @@ const ManageUsernames: FC<OwnProps> = ({
                     handleUsernameClick(usernameData);
                   }}
                 >
-                  <span className="title">
+                  <span className="title list-item-ellipsis">
                     @
                     {usernameData.username}
                   </span>
-                  <span className="subtitle">{oldLang(subtitle)}</span>
+                  <span className="subtitle list-item-ellipsis">{oldLang(subtitle)}</span>
                 </ListItem>
               </Draggable>
             );
           })}
         </div>
-        <p className={styles.description} dir={lang.isRtl ? 'rtl' : undefined}>
-          {oldLang('lng_usernames_description')}
-        </p>
-      </div>
+      </Island>
+      <IslandDescription dir={lang.isRtl ? 'rtl' : undefined}>
+        {oldLang('lng_usernames_description')}
+      </IslandDescription>
       <ConfirmDialog
         isOpen={Boolean(usernameForConfirm)}
         onClose={closeConfirmUsernameDialog}

@@ -1,4 +1,3 @@
-import type { FC } from '../../../lib/teact/teact';
 import {
   memo, useCallback, useMemo, useState,
 } from '../../../lib/teact/teact';
@@ -19,14 +18,16 @@ import MenuItem from '../../ui/MenuItem';
 type OwnProps = {
   currentScreen: SettingsScreens;
   editedFolderId?: number;
+  hasProfileBackground?: boolean;
   onReset: () => void;
 };
 
-const SettingsHeader: FC<OwnProps> = ({
+const SettingsHeader = ({
   currentScreen,
   editedFolderId,
+  hasProfileBackground,
   onReset,
-}) => {
+}: OwnProps) => {
   const {
     signOut,
     openDeleteChatFolderModal,
@@ -59,8 +60,8 @@ const SettingsHeader: FC<OwnProps> = ({
     signOut({ forceInitApi: true });
   }, [closeSignOutConfirmation, signOut]);
 
-  const SettingsMenuButton: FC<{ onTrigger: () => void; isOpen?: boolean }> = useMemo(() => {
-    return ({ onTrigger, isOpen }) => (
+  const SettingsMenuButton = useMemo(() => {
+    return ({ onTrigger, isOpen }: { onTrigger: () => void; isOpen?: boolean }) => (
       <Button
         round
         ripple={!isMobile}
@@ -93,6 +94,8 @@ const SettingsHeader: FC<OwnProps> = ({
         return <h3>{oldLang('DataSettings')}</h3>;
       case SettingsScreens.Privacy:
         return <h3>{oldLang('PrivacySettings')}</h3>;
+      case SettingsScreens.AutoDeleteMessages:
+        return <h3>{lang('AutoDeleteMessages')}</h3>;
       case SettingsScreens.Language:
         return <h3>{oldLang('Language')}</h3>;
       case SettingsScreens.DoNotTranslate:
@@ -119,6 +122,8 @@ const SettingsHeader: FC<OwnProps> = ({
         return <h3>{oldLang('PrivacyBirthday')}</h3>;
       case SettingsScreens.PrivacyGifts:
         return <h3>{lang('PrivacyGifts')}</h3>;
+      case SettingsScreens.PrivacySavedMusic:
+        return <h3>{lang('PrivacyMusic')}</h3>;
       case SettingsScreens.PrivacyForwarding:
         return <h3>{oldLang('PrivacyForwards')}</h3>;
       case SettingsScreens.PrivacyVoiceMessages:
@@ -134,12 +139,14 @@ const SettingsHeader: FC<OwnProps> = ({
       case SettingsScreens.PrivacyProfilePhotoAllowedContacts:
       case SettingsScreens.PrivacyBioAllowedContacts:
       case SettingsScreens.PrivacyGroupChatsAllowedContacts:
+      case SettingsScreens.PrivacySavedMusicAllowedContacts:
         return <h3>{oldLang('AlwaysShareWith')}</h3>;
 
       case SettingsScreens.PrivacyLastSeenDeniedContacts:
       case SettingsScreens.PrivacyProfilePhotoDeniedContacts:
       case SettingsScreens.PrivacyBioDeniedContacts:
       case SettingsScreens.PrivacyGroupChatsDeniedContacts:
+      case SettingsScreens.PrivacySavedMusicDeniedContacts:
         return <h3>{oldLang('NeverShareWith')}</h3>;
 
       case SettingsScreens.PrivacyPhoneNumberAllowedContacts:
@@ -202,6 +209,8 @@ const SettingsHeader: FC<OwnProps> = ({
       case SettingsScreens.PasscodeEnabled:
       case SettingsScreens.PasscodeNewPasscode:
       case SettingsScreens.PasscodeNewPasscodeConfirm:
+      case SettingsScreens.PasscodePasskeyAddConfirm:
+      case SettingsScreens.PasscodePasskeyRemoveConfirm:
       case SettingsScreens.PasscodeCongratulations:
         return <h3>{oldLang('Passcode')}</h3>;
 
@@ -286,7 +295,9 @@ const SettingsHeader: FC<OwnProps> = ({
   }
 
   return (
-    <div className="left-header">
+    <div className={hasProfileBackground && currentScreen === SettingsScreens.Main
+      ? 'left-header' : 'left-header secondary'}
+    >
       <Button
         round
         size="smaller"

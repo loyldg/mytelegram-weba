@@ -1,4 +1,4 @@
-import type { ApiFormattedText } from '../../api/types';
+import type { ApiUpdateMessageTranslations } from '../../api/types';
 import type { TextSummary, TranslatedMessage, TranslationTone } from '../../types';
 import type { GlobalState, TabArgs } from '../types';
 
@@ -79,14 +79,22 @@ export function updateMessageTranslations<T extends GlobalState>(
   chatId: string,
   messageIds: number[],
   toLanguageCode: string,
-  translations: ApiFormattedText[],
+  translations: ApiUpdateMessageTranslations['translations'],
+  requestId: string,
   tone?: TranslationTone,
 ) {
+  const cacheKey = getTranslationCacheKey(toLanguageCode, tone);
+  const currentTranslations = selectMessageTranslations(global, chatId, cacheKey);
   messageIds.forEach((messageId, index) => {
-    const text = translations[index];
+    // Edits clear `requestId`, so an older response cannot restore a stale translation
+    if (currentTranslations[messageId]?.requestId !== requestId) return;
+
+    const { text, richMessage } = translations[index] || {};
     global = updateMessageTranslation(global, chatId, messageId, toLanguageCode, {
       text: text?.text?.length ? text : undefined,
+      richMessage: richMessage?.blocks.length ? richMessage : undefined,
       isPending: false,
+      requestId: undefined,
     }, tone);
   });
 
@@ -276,8 +284,12 @@ export function updateMessageSummary<T extends GlobalState>(
 }
 
 export function clearMessageSummary<T extends GlobalState>(
-  global: T, chatId: string, messageId: number,
+  global: T, chatId: string, messageId: number, toLanguageCode?: string,
 ) {
+  if (toLanguageCode) {
+    return updateMessageTranslation(global, chatId, messageId, toLanguageCode, { summary: undefined });
+  }
+
   const chatSummaries = global.messages.byChatId[chatId]?.summaryById;
   if (!chatSummaries) return global;
 

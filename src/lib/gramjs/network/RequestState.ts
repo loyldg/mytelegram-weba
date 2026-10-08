@@ -2,7 +2,8 @@ import type { Api } from '../tl';
 
 import Deferred from '../../../util/Deferred';
 
-export type CallableRequest = Api.AnyRequest | Api.MsgsAck | Api.MsgsStateInfo | Api.HttpWait;
+export type CallableRequest = Api.AnyRequest | Api.MsgsAck | Api.MsgsStateReq
+  | Api.MsgsStateInfo | Api.MsgResendReq | Api.HttpWait;
 type RequestResponse<T> = T extends { __response: infer R } ? R : void;
 
 export default class RequestState<T extends CallableRequest = CallableRequest> {
@@ -10,9 +11,15 @@ export default class RequestState<T extends CallableRequest = CallableRequest> {
 
   public msgId?: bigint;
 
+  public seqNo?: number;
+
+  public containerSeqNo?: number;
+
+  public acknowledgedMsgIds?: bigint[];
+
   public request: any;
 
-  public data: Buffer<ArrayBuffer>;
+  public data: Uint8Array;
 
   public after: any;
 
@@ -31,6 +38,9 @@ export default class RequestState<T extends CallableRequest = CallableRequest> {
   constructor(request: T, abortSignal?: AbortSignal) {
     this.containerId = undefined;
     this.msgId = undefined;
+    this.seqNo = undefined;
+    this.containerSeqNo = undefined;
+    this.acknowledgedMsgIds = undefined;
     this.request = request;
     this.data = request.getBytes();
     this.after = undefined;
@@ -47,6 +57,12 @@ export default class RequestState<T extends CallableRequest = CallableRequest> {
     }
 
     return this.after.finished.promise;
+  }
+
+  get isContentRelated() {
+    return this.request.classType === 'request'
+      || this.request.className === 'MsgsStateReq'
+      || this.request.className === 'MsgResendReq';
   }
 
   resetPromise() {

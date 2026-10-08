@@ -161,7 +161,7 @@ const SavedGift = ({
     >
       {radialPatternBackdrop}
       {!radialPatternBackdrop && <Avatar className={styles.topIcon} peer={avatarPeer} size="micro" />}
-      {gift.isPinned && <Icon name="pinned-message" className={styles.topIcon} />}
+      {gift.isPinned && <Icon name="pin-filled" className={styles.topIcon} />}
       <div
         ref={stickerRef}
         className={styles.stickerWrapper}

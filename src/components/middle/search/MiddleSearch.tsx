@@ -90,7 +90,7 @@ type StateProps = {
 
 const CHANNELS_PEER: CustomPeer = {
   isCustomPeer: true,
-  avatarIcon: 'channel-filled',
+  avatarIcon: 'megaphone-filled',
   titleKey: 'SearchPublicPosts',
 };
 const FOCUSED_SEARCH_TRIGGER_OFFSET = 5;
@@ -413,9 +413,8 @@ const MiddleSearch = ({
       });
     }
 
-    // eslint-disable-next-line @eslint-react/web-api/no-leaked-event-listener
     window.addEventListener('touchend', focus);
-    // eslint-disable-next-line @eslint-react/web-api/no-leaked-event-listener
+
     window.addEventListener('mouseup', focus);
 
     window.addEventListener('touchstart', removeListeners);

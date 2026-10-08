@@ -1,6 +1,5 @@
 import type { ChangeEvent } from 'react';
 import type { FC } from '../../../lib/teact/teact';
-import type React from '../../../lib/teact/teact';
 import {
   memo, useEffect, useMemo, useRef, useState,
 } from '../../../lib/teact/teact';
@@ -125,7 +124,7 @@ const GiveawayModal: FC<OwnProps & StateProps> = ({
   const dialogRef = useRef<HTMLDivElement>();
   const {
     closeGiveawayModal, openInvoice, openPremiumModal,
-    launchPrepaidGiveaway, launchPrepaidStarsGiveaway,
+    launchPrepaidGiveaway, launchPrepaidStarsGiveaway, showNotification,
   } = getActions();
 
   const lang = useOldLang();
@@ -410,6 +409,12 @@ const GiveawayModal: FC<OwnProps & StateProps> = ({
 
   const handleSetCountriesListChange = useLastCallback((value: string[]) => {
     setSelectedCountryIds(value);
+  });
+
+  const handleCountrySelectionLimit = useLastCallback((selectionLimit: number) => {
+    showNotification({
+      message: lang('BoostingSelectUpToWarningCountries', selectionLimit),
+    });
   });
 
   const handleSelectedUserIdsChange = useLastCallback((newSelectedIds: string[]) => {
@@ -856,7 +861,10 @@ const GiveawayModal: FC<OwnProps & StateProps> = ({
         onClose={closeCountryPickerModal}
         countryList={countryList}
         onSubmit={handleSetCountriesListChange}
+        initialSelectedCountryIds={selectedCountryIds}
         selectionLimit={countrySelectionLimit}
+        title={lang('BoostingSelectCountry')}
+        onSelectionLimit={handleCountrySelectionLimit}
       />
       <GiveawayUserPickerModal
         isOpen={isUserPickerModalOpen}

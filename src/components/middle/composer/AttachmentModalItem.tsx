@@ -1,4 +1,4 @@
-import { memo, useMemo } from '../../../lib/teact/teact';
+import { memo, useMemo, useState } from '../../../lib/teact/teact';
 
 import type { ApiAttachment } from '../../../api/types';
 
@@ -12,6 +12,7 @@ import useAppLayout from '../../../hooks/useAppLayout';
 import useLang from '../../../hooks/useLang';
 import useLastCallback from '../../../hooks/useLastCallback';
 
+import AttachmentAudio from '../../common/AttachmentAudio';
 import File from '../../common/File';
 import Icon from '../../common/icons/Icon';
 import MediaSpoiler from '../../common/MediaSpoiler';
@@ -45,7 +46,8 @@ const AttachmentModalItem = ({
 }: OwnProps) => {
   const lang = useLang();
   const { isMobile } = useAppLayout();
-  const displayType = getDisplayType(attachment, shouldDisplayCompressed);
+  const [isAudioBroken, setIsAudioBroken] = useState(false);
+  const displayType = isAudioBroken ? 'file' : getDisplayType(attachment, shouldDisplayCompressed);
 
   const handleSpoilerClick = useLastCallback(() => {
     onToggleSpoiler?.(index);
@@ -82,6 +84,25 @@ const AttachmentModalItem = ({
             />
           </>
         );
+      case 'audio':
+        return (
+          <>
+            <AttachmentAudio
+              attachment={attachment}
+              className={styles.audio}
+
+              onDecodeError={() => setIsAudioBroken(true)}
+            />
+            {onDelete && (
+              <Icon
+                name="delete"
+                className={buildClassName(styles.actionItem, styles.deleteFile)}
+
+                onClick={() => onDelete(index)}
+              />
+            )}
+          </>
+        );
       default: {
         const canEdit = SUPPORTED_PHOTO_CONTENT_TYPES.has(attachment.mimeType) && !isMobile;
         return (
@@ -110,9 +131,10 @@ const AttachmentModalItem = ({
     }
   }, [attachment, displayType, index, onDelete, isMobile]);
 
-  const shouldSkipGrouping = displayType === 'file' || !shouldDisplayGrouped;
-  const shouldDisplaySpoiler = Boolean(displayType !== 'file' && attachment.shouldSendAsSpoiler);
-  const shouldRenderOverlay = displayType !== 'file';
+  const shouldSkipGrouping = displayType === 'file' || displayType === 'audio' || !shouldDisplayGrouped;
+  const shouldDisplaySpoiler = Boolean(displayType !== 'file' && displayType !== 'audio'
+    && attachment.shouldSendAsSpoiler);
+  const shouldRenderOverlay = displayType !== 'file' && displayType !== 'audio';
 
   const rootClassName = buildClassName(
     className, styles.root, isSingle && styles.single, shouldSkipGrouping && styles.noGrouping,
@@ -159,6 +181,9 @@ function getDisplayType(attachment: ApiAttachment, shouldDisplayCompressed?: boo
     if (SUPPORTED_VIDEO_CONTENT_TYPES.has(attachment.mimeType)) {
       return 'video';
     }
+  }
+  if (attachment.audio) {
+    return 'audio';
   }
   return 'file';
 }

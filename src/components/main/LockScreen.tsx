@@ -1,21 +1,21 @@
-import type { FC } from '../../lib/teact/teact';
-import {
-  memo, useCallback, useEffect, useState,
-} from '../../lib/teact/teact';
+import { memo, useEffect, useState } from '../../lib/teact/teact';
 import { getActions, withGlobal } from '../../global';
 
 import type { GlobalState } from '../../global/types';
 
-import { decryptSession, UnrecoverablePasscodeError } from '../../util/passcode';
+import { IS_WEBAUTHN_SUPPORTED } from '../../util/browser/windowEnvironment';
+import { cancelConditionalPasskeyRequest } from '../../util/passcode/passkey';
 import { LOCAL_TGS_URLS } from '../common/helpers/animatedAssets';
 
 import useTimeout from '../../hooks/schedulers/useTimeout';
 import useFlag from '../../hooks/useFlag';
-import useOldLang from '../../hooks/useOldLang';
+import useLang from '../../hooks/useLang';
+import useLastCallback from '../../hooks/useLastCallback';
 import useShowTransitionDeprecated from '../../hooks/useShowTransitionDeprecated';
 
 import AnimatedIconWithPreview from '../common/AnimatedIconWithPreview';
 import PasswordForm from '../common/PasswordForm';
+import Wallpaper from '../common/Wallpaper';
 import Button from '../ui/Button';
 import ConfirmDialog from '../ui/ConfirmDialog';
 import Link from '../ui/Link';
@@ -30,93 +30,114 @@ export type OwnProps = {
 
 type StateProps = {
   passcodeSettings: GlobalState['passcode'];
+  shouldKeepBackground: boolean;
 };
 
 const ICON_SIZE = 160;
 
-const LockScreen: FC<OwnProps & StateProps> = ({
+const LockScreen = ({
   isLocked,
   passcodeSettings,
-}) => {
+  shouldKeepBackground,
+}: OwnProps & StateProps) => {
   const {
     unlockScreen,
-    signOut,
-    logInvalidUnlockAttempt,
+    unlockScreenWithPasskey,
+    signOutAllAccounts,
     resetInvalidUnlockAttempts,
+    clearPasscodeError,
   } = getActions();
 
   const {
-    invalidAttemptsCount,
     timeoutUntil,
     isLoading,
+    errorKey,
+    hasPasskey,
+    isDataCorrupted,
   } = passcodeSettings;
 
-  const lang = useOldLang();
-  const [validationError, setValidationError] = useState<string>('');
+  const lang = useLang();
   const [shouldShowPasscode, setShouldShowPasscode] = useState(false);
-  const [isSignOutDialogOpen, openSignOutConfirmation, closeSignOutConfirmation] = useFlag(false);
+  const [isSignOutAllDialogOpen, openSignOutAllConfirmation, closeSignOutAllConfirmation] = useFlag(false);
   const { shouldRender } = useShowTransitionDeprecated(isLocked);
 
-  // eslint-disable-next-line @eslint-react/purity
-  useTimeout(resetInvalidUnlockAttempts, timeoutUntil ? timeoutUntil - Date.now() : undefined);
-
-  const handleClearError = useCallback(() => {
-    setValidationError('');
-  }, []);
-
-  const handleSubmit = useCallback((passcode: string) => {
-    if (timeoutUntil !== undefined) {
-      setValidationError(lang('FloodWait'));
-      return;
-    }
-
-    setValidationError('');
-    decryptSession(passcode).then(unlockScreen, (err) => {
-      if (err instanceof UnrecoverablePasscodeError) {
-        signOut({ forceInitApi: true });
-      }
-
-      logInvalidUnlockAttempt();
-      setValidationError(lang('lng_passcode_wrong'));
-    });
-  }, [lang, timeoutUntil]);
-
   useEffect(() => {
-    if (timeoutUntil !== undefined) {
-      setValidationError(lang('FloodWait'));
-    } else if (invalidAttemptsCount === 0) {
-      setValidationError('');
-    }
-  }, [timeoutUntil, lang, invalidAttemptsCount]);
+    if (!isLocked || isLoading || !hasPasskey || isDataCorrupted || !IS_WEBAUTHN_SUPPORTED) return undefined;
 
-  const handleSignOutMessage = useCallback(() => {
-    closeSignOutConfirmation();
-    signOut({ forceInitApi: true });
-  }, [closeSignOutConfirmation, signOut]);
+    unlockScreenWithPasskey({ isConditional: true });
+    return cancelConditionalPasskeyRequest;
+  }, [hasPasskey, isDataCorrupted, isLoading, isLocked]);
+
+  const handleInvalidAttemptsTimeout = useLastCallback(() => {
+    if (!timeoutUntil) return;
+    resetInvalidUnlockAttempts({ timeoutUntil });
+  });
+
+  // eslint-disable-next-line @eslint-react/purity
+  useTimeout(handleInvalidAttemptsTimeout, timeoutUntil ? timeoutUntil - Date.now() : undefined);
+
+  const handleClearError = useLastCallback(() => {
+    clearPasscodeError();
+  });
+
+  const handleSubmit = useLastCallback((passcode: string) => {
+    unlockScreen({ passcode });
+  });
+
+  const handlePasskeyClick = useLastCallback(() => {
+    unlockScreenWithPasskey();
+  });
+
+  const handleSignOutAllMessage = useLastCallback(() => {
+    closeSignOutAllConfirmation();
+    signOutAllAccounts();
+  });
 
   if (!shouldRender) {
     return undefined;
   }
 
+  function getValidationError() {
+    return errorKey
+      ? lang.withRegular(errorKey)
+      : timeoutUntil ? lang('PasscodeTooManyAttempts') : '';
+  }
+
   function renderLogoutPrompt() {
     return (
-      <div className={styles.help}>
-        <p>
-          <Link onClick={openSignOutConfirmation}>Log out</Link>
-          {' '}
-          if you don&apos;t remember your passcode.
-        </p>
-        <p>
-          <Button color="translucent" size="tiny" isText onClick={openSignOutConfirmation}>
-            {lang('AccountSettings.Logout')}
-          </Button>
-        </p>
+      <p className={styles.help}>
+        {lang('PasscodeForgotHelp', {
+          logOut: (
+            <Link className={styles.logOutLink} onClick={openSignOutAllConfirmation}>
+              {lang('PasscodeForgotHelpLink')}
+            </Link>
+          ),
+        }, { withNodes: true })}
+      </p>
+    );
+  }
+
+  function renderCorruptedData() {
+    return (
+      <div className={styles.wrapper} dir={lang.isRtl ? 'rtl' : undefined}>
+        <AnimatedIconWithPreview
+          tgsUrl={LOCAL_TGS_URLS.Lock}
+          previewUrl={lockPreviewUrl}
+          size={ICON_SIZE}
+          className={styles.icon}
+        />
+
+        <p className={styles.corruptedText}>{lang('PasscodeDataCorrupted')}</p>
+
+        <Button color="danger" isText className={styles.logOutAllButton} onClick={openSignOutAllConfirmation}>
+          {lang('PasscodeLogOutAllAccounts')}
+        </Button>
       </div>
     );
   }
 
-  return (
-    <div className={styles.container}>
+  function renderUnlockForm() {
+    return (
       <div className={styles.wrapper} dir={lang.isRtl ? 'rtl' : undefined}>
         <AnimatedIconWithPreview
           tgsUrl={LOCAL_TGS_URLS.Lock}
@@ -129,9 +150,10 @@ const LockScreen: FC<OwnProps & StateProps> = ({
           key="password-form"
           shouldShowSubmit
           shouldDisablePasswordManager
+          shouldOfferPasskey={hasPasskey && IS_WEBAUTHN_SUPPORTED}
           isLoading={isLoading}
-          error={validationError}
-          placeholder={lang('Passcode.EnterPasscodePlaceholder')}
+          error={getValidationError()}
+          placeholder={lang('PasscodeEnterPasscodePlaceholder')}
           submitLabel={lang('Next')}
           onClearError={handleClearError}
           isPasswordVisible={shouldShowPasscode}
@@ -140,18 +162,40 @@ const LockScreen: FC<OwnProps & StateProps> = ({
           onSubmit={handleSubmit}
         />
 
+        {hasPasskey && IS_WEBAUTHN_SUPPORTED && (
+          <Button
+            color="translucent"
+            isText
+            className={styles.passkeyButton}
+            disabled={isLoading}
+            onClick={handlePasskeyClick}
+          >
+            {lang('PasscodeUsePasskey')}
+          </Button>
+        )}
+
         {renderLogoutPrompt()}
       </div>
+    );
+  }
+
+  return (
+    <Wallpaper
+      className={styles.container}
+      backgroundMode={shouldKeepBackground ? 'lockScreen' : 'default'}
+      isStatic
+    >
+      {isDataCorrupted ? renderCorruptedData() : renderUnlockForm()}
 
       <ConfirmDialog
-        isOpen={isSignOutDialogOpen}
-        onClose={closeSignOutConfirmation}
-        text={lang('lng_sure_logout')}
-        confirmLabel={lang('AccountSettings.Logout')}
-        confirmHandler={handleSignOutMessage}
+        isOpen={isSignOutAllDialogOpen}
+        onClose={closeSignOutAllConfirmation}
+        text={lang('PasscodeLogOutAllConfirm')}
+        confirmLabel={lang('PasscodeLogOutAllAccounts')}
+        confirmHandler={handleSignOutAllMessage}
         confirmIsDestructive
       />
-    </div>
+    </Wallpaper>
   );
 };
 
@@ -159,6 +203,7 @@ export default memo(withGlobal<OwnProps>(
   (global): Complete<StateProps> => {
     return {
       passcodeSettings: global.passcode,
+      shouldKeepBackground: global.sharedState.settings.shouldKeepLockScreenBackground,
     };
   },
 )(LockScreen));

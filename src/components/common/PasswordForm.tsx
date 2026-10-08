@@ -1,6 +1,4 @@
 import type { ChangeEvent } from 'react';
-import type { FC } from '../../lib/teact/teact';
-import type React from '../../lib/teact/teact';
 import {
   memo, useEffect, useRef, useState,
 } from '../../lib/teact/teact';
@@ -29,6 +27,7 @@ type OwnProps = {
   shouldDisablePasswordManager?: boolean;
   shouldShowSubmit?: boolean;
   shouldResetValue?: boolean;
+  shouldOfferPasskey?: boolean;
   isPasswordVisible?: boolean;
   noRipple?: boolean;
   onClearError: NoneToVoidFunction;
@@ -37,7 +36,7 @@ type OwnProps = {
   onSubmit?: (password: string) => void;
 };
 
-const PasswordForm: FC<OwnProps> = ({
+const PasswordForm = ({
   isLoading = false,
   isPasswordVisible,
   error,
@@ -47,13 +46,14 @@ const PasswordForm: FC<OwnProps> = ({
   description,
   shouldShowSubmit,
   shouldResetValue,
+  shouldOfferPasskey,
   shouldDisablePasswordManager = false,
   noRipple = false,
   onClearError,
   onChangePasswordVisibility,
   onInputChange,
   onSubmit,
-}) => {
+}: OwnProps) => {
   const inputRef = useRef<HTMLInputElement>();
 
   const lang = useLang();
@@ -138,7 +138,9 @@ const PasswordForm: FC<OwnProps> = ({
           type={isPasswordVisible ? 'text' : 'password'}
           id="sign-in-password"
           value={password || ''}
-          autoComplete={shouldDisablePasswordManager ? 'one-time-code' : 'current-password'}
+          autoComplete={shouldOfferPasskey
+            ? 'one-time-code webauthn'
+            : shouldDisablePasswordManager ? 'one-time-code' : 'current-password'}
           spellCheck={IS_TAURI ? false : undefined}
           onChange={onPasswordChange}
           maxLength={256}

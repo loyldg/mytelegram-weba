@@ -5,6 +5,11 @@
   margin-bottom: 0.5rem;
 }
 
+.preview {
+  overflow-x: auto;
+  min-width: 0;
+}
+
 .label {
   font-size: 0.875rem;
   font-weight: var(--font-weight-semibold);
@@ -32,7 +37,9 @@
 .resultArea {
   position: relative;
   overflow: hidden;
+}
 
+.resultAreaAnimated {
   /* stylelint-disable-next-line plugin/no-low-performance-animation-properties */
   transition: height 0.1s;
 }
@@ -92,7 +99,7 @@
 }
 
 .emojifyCheckboxControl {
-  column-gap: 0.5rem;
+  --control-gap: 0.5rem;
 }
 
 .emojifyCheckboxLabel {

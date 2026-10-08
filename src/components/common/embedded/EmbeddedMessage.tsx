@@ -19,6 +19,7 @@ import {
 } from '../../../global/helpers';
 import { getMediaContentTypeDescription } from '../../../global/helpers/messageSummary';
 import { getPeerTitle } from '../../../global/helpers/peers';
+import { getRichMessagePreviewText } from '../../../global/helpers/richMessage';
 import buildClassName from '../../../util/buildClassName';
 import { formatScheduledDateTime } from '../../../util/dates/oldDateFormat';
 import { isUserId } from '../../../util/entities/ids';
@@ -61,7 +62,7 @@ type OwnProps = {
   pictogramActionIcon?: IconName;
   observeIntersectionForLoading?: ObserveFn;
   observeIntersectionForPlaying?: ObserveFn;
-  onClick: ((e: React.MouseEvent) => void);
+  onClick?: ((e: React.MouseEvent) => void);
   onPictogramClick?: ((e: React.MouseEvent) => void);
 };
 
@@ -111,10 +112,13 @@ const EmbeddedMessage = ({
   const replyForwardInfo = replyInfo?.type === 'message' ? replyInfo.replyFrom : undefined;
 
   const shouldTranslate = message && isMessageTranslatable(message);
-  const { translatedText } = useMessageTranslation(
+  const { translatedText, translatedRichMessage } = useMessageTranslation(
     chatTranslations, message?.chatId, shouldTranslate ? message?.id : undefined,
     requestedChatTranslationLanguage, requestedChatTranslationTone,
   );
+  const translatedPreview = useMemo(() => translatedRichMessage
+    ? { text: getRichMessagePreviewText(translatedRichMessage) } : translatedText,
+  [translatedRichMessage, translatedText]);
 
   const oldLang = useOldLang();
   const lang = useLang();
@@ -196,7 +200,7 @@ const EmbeddedMessage = ({
       <MessageSummary
         message={message}
         noEmoji={hasPictogram}
-        forcedText={translatedText}
+        forcedText={translatedPreview}
         observeIntersectionForLoading={observeIntersectionForLoading}
         observeIntersectionForPlaying={observeIntersectionForPlaying}
         emojiSize={EMOJI_SIZE}
@@ -235,13 +239,19 @@ const EmbeddedMessage = ({
     }
 
     if (!senderTitle && !forwardSendersTitle) {
-      return NBSP;
+      // Keep the sender subtree structure stable while the peer is still loading — replacing
+      // a bare text node with an element subtree later makes WebKit shift `scrollTop`
+      return (
+        <span className="embedded-sender-wrapper">
+          <span className="embedded-sender">{NBSP}</span>
+        </span>
+      );
     }
 
     let icon: IconName | undefined;
     if (senderChat) {
       if (isChatChannel(senderChat)) {
-        icon = 'channel-filled';
+        icon = 'megaphone-filled';
       }
 
       if (isChatGroup(senderChat)) {

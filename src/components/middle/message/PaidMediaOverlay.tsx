@@ -1,11 +1,9 @@
-import type React from '../../../lib/teact/teact';
 import { memo, type TeactNode, useMemo } from '../../../lib/teact/teact';
 import { getActions } from '../../../global';
 
 import type { ApiPaidMedia } from '../../../api/types';
 
 import { STARS_ICON_PLACEHOLDER } from '../../../config';
-import buildClassName from '../../../util/buildClassName';
 import { formatStarsAsIcon } from '../../../util/localization/format';
 import { replaceWithTeact } from '../../../util/replaceWithTeact';
 import stopEvent from '../../../util/stopEvent';
@@ -16,6 +14,7 @@ import useOldLang from '../../../hooks/useOldLang';
 
 import StarIcon from '../../common/icons/StarIcon';
 import Button from '../../ui/Button';
+import MediaBadge from './MediaBadge';
 
 import styles from './PaidMediaOverlay.module.scss';
 
@@ -75,11 +74,11 @@ const PaidMediaOverlay = ({
         </Button>
       )}
       {paidMedia.isBought && (
-        <div className={buildClassName('message-paid-media-status', styles.boughtStatus)}>
+        <MediaBadge className="message-paid-media-status" position="right">
           {isOutgoing
             ? formatStarsAsIcon(lang, paidMedia.starsAmount)
             : oldLang('Chat.PaidMedia.Purchased')}
-        </div>
+        </MediaBadge>
       )}
     </div>
   );

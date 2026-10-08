@@ -1,5 +1,3 @@
-@use "../../../styles/mixins";
-
 .root {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
@@ -25,7 +23,7 @@
 
   color: white;
 
-  @include mixins.action-message-bg($isModule: true);
+  background-color: var(--action-message-bg);
 }
 
 .textContent {
@@ -40,7 +38,7 @@
 
   color: white;
 
-  @include mixins.action-message-bg($isModule: true);
+  background-color: var(--action-message-bg);
 }
 
 .hasFullContent {
@@ -72,6 +70,10 @@
 .singleLine, .messageLink {
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.withLinkBreaks .messageLink {
+  white-space: normal;
 }
 
 .inlineWrapper {
@@ -117,7 +119,6 @@
 
   .textContent {
     background-color: transparent !important;
-    backdrop-filter: none !important;
   }
 }
 
@@ -142,6 +143,25 @@
   text-wrap: balance;
 }
 
+.birthdayValues {
+  display: flex;
+  gap: 1rem;
+  justify-content: center;
+}
+
+.birthdayValue {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  font-weight: var(--font-weight-medium);
+}
+
+.birthdayValueLabel {
+  font-size: 0.75rem;
+  font-weight: var(--font-weight-normal);
+  opacity: 0.75;
+}
+
 .actionButton {
   cursor: var(--custom-cursor, pointer);
 
@@ -154,7 +174,7 @@
 
   font-weight: var(--font-weight-semibold);
 
-  @include mixins.action-message-bg($isModule: true);
+  background-color: var(--action-message-bg);
 
   transition: opacity 0.15s;
 
@@ -191,7 +211,7 @@
 
     border-radius: calc(var(--border-radius-messages) + 0.25rem);
 
-    @include mixins.action-message-bg($isModule: true);
+    background-color: var(--action-message-bg);
   }
 }
 
@@ -296,8 +316,7 @@
   padding: 1.25rem;
   border-radius: 50%;
   font-size: 2.5rem;
-
-  @include mixins.action-message-bg($isModule: true);
+  background-color: var(--action-message-bg);
 }
 
 .botForumTopicTitle {

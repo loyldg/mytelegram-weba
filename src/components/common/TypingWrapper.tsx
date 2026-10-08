@@ -6,7 +6,8 @@ import {
 import type { ApiFormattedText } from '../../api/types';
 
 import { requestMutation } from '../../lib/fasterdom/fasterdom';
-import { LOCAL_TGS_URLS } from './helpers/animatedAssets';
+import buildClassName from '../../util/buildClassName';
+import { LOCAL_TGS_PREVIEW_URLS, LOCAL_TGS_URLS } from './helpers/animatedAssets';
 import { REM } from './helpers/mediaDimensions';
 
 import useLastCallback from '../../hooks/useLastCallback';
@@ -18,6 +19,7 @@ import styles from './TypingWrapper.module.scss';
 type OwnProps = {
   formattedText: ApiFormattedText;
   shouldAnimateMask?: boolean;
+  noInitialAnimation?: boolean;
   shouldRenderPlaceholder: boolean;
   completionKey: number;
   renderText: (text: ApiFormattedText) => TeactNode;
@@ -39,7 +41,7 @@ try {
     inherits: false,
     initialValue: '0%',
   });
-} catch (_) {
+} catch {
   // Ignore duplicate registrations
 }
 
@@ -52,24 +54,27 @@ function getRunningProgress(animation: Animation | undefined, baseProgress: numb
 const TypingWrapper = ({
   formattedText,
   shouldAnimateMask,
+  noInitialAnimation,
   shouldRenderPlaceholder,
   completionKey,
   renderText,
   onCompleted,
 }: OwnProps) => {
+  const fullText = formattedText.text;
+  const initialRevealedLength = noInitialAnimation ? fullText.length : 0;
+
   const ref = useRef<HTMLSpanElement>();
   const animationRef = useRef<Animation>();
-  const progressRef = useRef(0);
-  const prevRevealedRef = useRef(0);
+  const progressRef = useRef(noInitialAnimation || !fullText ? 100 : 0);
+  const prevRevealedRef = useRef(initialRevealedLength);
   const fullTextRef = useRef('');
 
-  const [revealedLength, setRevealedLength] = useState(0);
-  const revealedLengthRef = useRef(0);
+  const [revealedLength, setRevealedLength] = useState(initialRevealedLength);
+  const revealedLengthRef = useRef(initialRevealedLength);
   const chunkTimerRef = useRef<number>();
   const completedKeyRef = useRef<string>();
-  const prevFullTextRef = useRef('');
+  const prevFullTextRef = useRef(noInitialAnimation ? fullText : '');
 
-  const fullText = formattedText.text;
   fullTextRef.current = fullText;
 
   const stopAnimation = useLastCallback(() => {
@@ -163,7 +168,10 @@ const TypingWrapper = ({
 
     const revealed = revealedLength;
     const prevRevealed = prevRevealedRef.current;
-    if (revealed === prevRevealed) return;
+    if (revealed === prevRevealed) {
+      if (progressRef.current === 100) element.style.setProperty(PROGRESS_CSS_PROPERTY, '100%');
+      return;
+    }
 
     prevRevealedRef.current = revealed;
 
@@ -244,14 +252,16 @@ const TypingWrapper = ({
     text: fullText.slice(0, revealedLength),
     entities: formattedText.entities,
   }), [fullText, formattedText.entities, revealedLength]);
+  const className = buildClassName(styles.root, !fullText && styles.fullyRevealed);
 
   return (
-    <span ref={ref} className={styles.root}>
+    <span ref={ref} className={className}>
       {renderText(truncatedText)}
       {shouldRenderPlaceholder && (
         <span key="typing-placeholder" className={styles.placeholder}>
           <AnimatedIconWithPreview
             tgsUrl={LOCAL_TGS_URLS.Writing}
+            previewUrl={LOCAL_TGS_PREVIEW_URLS.Writing}
             size={PLACEHOLDER_SIZE}
             play
             noLoop={false}

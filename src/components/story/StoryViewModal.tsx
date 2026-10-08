@@ -1,4 +1,3 @@
-import type { FC } from '../../lib/teact/teact';
 import {
   memo, useEffect, useMemo, useState,
 } from '../../lib/teact/teact';
@@ -119,8 +118,8 @@ function StoryViewModal({
     closeStoryViewModal();
   });
 
-  const MoreMenuButton: FC<{ onTrigger: () => void; isOpen?: boolean }> = useMemo(() => {
-    return ({ onTrigger, isOpen: isMenuOpen }) => (
+  const MoreMenuButton = useMemo(() => {
+    return ({ onTrigger, isOpen: isMenuOpen }: { onTrigger: () => void; isOpen?: boolean }) => (
       <Button
         fluid
         size="tiny"
@@ -130,7 +129,7 @@ function StoryViewModal({
         onClick={onTrigger}
         ariaLabel={lang('SortBy')}
       >
-        <Icon name={areReactionsFirst ? 'heart-outline' : 'recent'} className={styles.iconSort} />
+        <Icon name={areReactionsFirst ? 'heart-outline' : 'clock'} className={styles.iconSort} />
         <Icon name="down" className={styles.iconDown} />
       </Button>
     );
@@ -180,7 +179,7 @@ function StoryViewModal({
                   <Icon name="check" className={styles.check} />
                 )}
               </MenuItem>
-              <MenuItem icon="recent" onClick={unmarkReactionsFirst}>
+              <MenuItem icon="clock" onClick={unmarkReactionsFirst}>
                 {lang('SortByTime')}
                 {!areReactionsFirst && (
                   <Icon name="check" className={styles.check} />

@@ -1,5 +1,3 @@
-import type { FC } from '../../../lib/teact/teact';
-import type React from '../../../lib/teact/teact';
 import {
   useEffect, useLayoutEffect,
   useRef, useSignal, useState,
@@ -15,7 +13,7 @@ import {
   getVideoMediaHash,
   hasMessageTtl,
 } from '../../../global/helpers';
-import { stopCurrentAudio } from '../../../util/audioPlayer';
+import { stopCurrentAudio } from '../../../util/audioPlayback/playbackController';
 import buildClassName from '../../../util/buildClassName';
 import { formatMediaDuration } from '../../../util/dates/oldDateFormat';
 import safePlay from '../../../util/safePlay';
@@ -37,8 +35,10 @@ import MediaSpoiler from '../../common/MediaSpoiler';
 import Button from '../../ui/Button';
 import OptimizedVideo from '../../ui/OptimizedVideo';
 import ProgressSpinner from '../../ui/ProgressSpinner';
+import MediaBadge from './MediaBadge';
 
 import './RoundVideo.scss';
+import styles from './media.module.scss';
 
 type OwnProps = {
   message: ApiMessage;
@@ -64,7 +64,7 @@ const PROGRESS_THROTTLE = 16; // Min period needed for `playerEl.currentTime` to
 
 let stopPrevious: NoneToVoidFunction;
 
-const RoundVideo: FC<OwnProps> = ({
+const RoundVideo = ({
   message,
   className,
   canAutoLoad,
@@ -79,7 +79,7 @@ const RoundVideo: FC<OwnProps> = ({
   onHideTranscription,
   isTranscriptionHidden,
   isTranscribing,
-}) => {
+}: OwnProps) => {
   const ref = useRef<HTMLDivElement>();
   const playerRef = useRef<HTMLVideoElement>();
   const circleRef = useRef<SVGCircleElement>();
@@ -98,6 +98,7 @@ const RoundVideo: FC<OwnProps> = ({
     !shouldLoad,
     getMediaFormat(video, 'inline'),
   );
+  const fullMediaData = video.blobUrl || mediaData;
 
   const { loadProgress: downloadProgress } = useMediaWithLoadProgress(
     getVideoMediaHash(video, 'download'),
@@ -151,7 +152,7 @@ const RoundVideo: FC<OwnProps> = ({
     circleRef.current.setAttribute('stroke-dashoffset', strokeDashOffset.toString());
   }, [isActivated, getThrottledProgress]);
 
-  const shouldPlay = Boolean(mediaData && isIntersecting);
+  const shouldPlay = Boolean(fullMediaData && isIntersecting);
 
   const stopPlaying = useLastCallback(() => {
     if (!playerRef.current) {
@@ -200,7 +201,7 @@ const RoundVideo: FC<OwnProps> = ({
       return;
     }
 
-    if (!mediaData) {
+    if (!fullMediaData) {
       setIsLoadAllowed((isAllowed) => !isAllowed);
 
       return;
@@ -246,8 +247,9 @@ const RoundVideo: FC<OwnProps> = ({
           className="play"
           nonInteractive
           iconName="play"
+          iconClassName="play-icon"
         />
-        <Icon name="view-once" />
+        <Icon name="view-once" className="view-once-icon" />
       </div>
     );
   }
@@ -263,10 +265,15 @@ const RoundVideo: FC<OwnProps> = ({
   return (
     <div
       ref={ref}
-      className={buildClassName('RoundVideo', 'media-inner', isInOneTimeModal && 'non-interactive', className)}
+      className={buildClassName(
+        'RoundVideo',
+        'media-inner',
+        isInOneTimeModal && 'non-interactive',
+        className,
+      )}
       onClick={handleClick}
     >
-      {mediaData && (
+      {fullMediaData && (
         <div className="video-wrapper">
           {shouldRenderSpoiler && (
             <MediaSpoiler
@@ -280,7 +287,7 @@ const RoundVideo: FC<OwnProps> = ({
           <OptimizedVideo
             canPlay={shouldPlay}
             ref={playerRef}
-            src={mediaData}
+            src={fullMediaData}
             className="full-media"
             width={ROUND_VIDEO_DIMENSIONS_PX}
             height={ROUND_VIDEO_DIMENSIONS_PX}
@@ -321,23 +328,23 @@ const RoundVideo: FC<OwnProps> = ({
         )}
       </div>
       {shouldRenderSpinner && (
-        <div ref={spinnerRef} className="media-loading">
+        <div ref={spinnerRef} className={buildClassName('media-loading', styles.loading)}>
           <ProgressSpinner progress={isDownloading ? downloadProgress : loadProgress} />
         </div>
       )}
       {shouldRenderSpoiler && !shouldRenderSpinner && renderPlayWrapper()}
-      {!mediaData && !isLoadAllowed && (
-        <Icon name="download" />
+      {!fullMediaData && !isLoadAllowed && (
+        <Icon name="download" className={buildClassName(styles.controlButton, styles.downloadButton)} />
       )}
       {!isInOneTimeModal && (
-        <div
+        <MediaBadge
           className={buildClassName(
             'message-media-duration', isMediaUnread && 'unread',
           )}
         >
           {isActivated ? formatMediaDuration(currentTime) : formatMediaDuration(video.duration)}
-          {(!isActivated || playerRef.current!.paused) && <Icon name="muted" />}
-        </div>
+          {(!isActivated || playerRef.current!.paused) && <Icon name="muted" className="muted-icon" />}
+        </MediaBadge>
       )}
       {canTranscribe && (
         <Button

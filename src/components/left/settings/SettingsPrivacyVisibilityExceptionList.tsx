@@ -1,4 +1,3 @@
-import type { FC } from '../../../lib/teact/teact';
 import {
   memo, useCallback, useEffect, useMemo, useState,
 } from '../../../lib/teact/teact';
@@ -43,7 +42,7 @@ type StateProps = {
 
 const PREMIUM_CATEGORY = [CUSTOM_PEER_PREMIUM];
 
-const SettingsPrivacyVisibilityExceptionList: FC<OwnProps & StateProps> = ({
+const SettingsPrivacyVisibilityExceptionList = ({
   isAllowList,
   withPremiumCategory,
   withMiniAppsCategory,
@@ -53,7 +52,7 @@ const SettingsPrivacyVisibilityExceptionList: FC<OwnProps & StateProps> = ({
   settings,
   usersOnly = false,
   onReset,
-}) => {
+}: OwnProps & StateProps) => {
   const { setPrivacySettings } = getActions();
 
   const oldLang = useOldLang();
@@ -183,7 +182,7 @@ const SettingsPrivacyVisibilityExceptionList: FC<OwnProps & StateProps> = ({
   }
 
   return (
-    <div className="NewChat-inner step-1">
+    <div className="Picker settings-picker-islands">
       <PeerPicker
         categories={getCustomCategory()}
         itemIds={displayedIds || []}
@@ -201,6 +200,7 @@ const SettingsPrivacyVisibilityExceptionList: FC<OwnProps & StateProps> = ({
         itemInputType="checkbox"
         withDefaultPadding
         withStatus
+        withIslands
       />
 
       <FloatingActionButton
@@ -234,6 +234,9 @@ function getCurrentPrivacySettings(global: GlobalState, screen: SettingsScreens)
     case SettingsScreens.PrivacyGiftsAllowedContacts:
     case SettingsScreens.PrivacyGiftsDeniedContacts:
       return privacy.gifts;
+    case SettingsScreens.PrivacySavedMusicAllowedContacts:
+    case SettingsScreens.PrivacySavedMusicDeniedContacts:
+      return privacy.savedMusic;
     case SettingsScreens.PrivacyPhoneCallAllowedContacts:
     case SettingsScreens.PrivacyPhoneCallDeniedContacts:
       return privacy.phoneCall;

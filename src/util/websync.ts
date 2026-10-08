@@ -10,6 +10,7 @@ import { hasStoredSession } from './sessions';
 const WEBSYNC_URLS = [
   't.me',
   'telegram.me',
+  'telegram.dog',
 ].map((domain) => `https://${domain}/_websync_?`);
 const WEBSYNC_VERSION = `${APP_VERSION} ${APP_CODE_NAME}`;
 const WEBSYNC_KEY = 'tgme_sync';
@@ -27,7 +28,7 @@ const saveSync = (authed: boolean) => {
   }));
 };
 
-let lastTimeout: NodeJS.Timeout | undefined;
+let lastTimeout: number | undefined;
 
 export const forceWebsync = (authed: boolean) => {
   if (IS_MOCKED_CLIENT || IS_TAURI) return undefined;

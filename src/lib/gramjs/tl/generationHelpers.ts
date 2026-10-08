@@ -1,4 +1,5 @@
 import { crc32 } from '../Helpers';
+import { bufferFromUtf8, concat, writeInt32LE } from '../../../util/encoding/buffer';
 
 export interface GenerationEntryConfig {
     name: string;
@@ -13,7 +14,7 @@ export interface GenerationEntryConfig {
 export interface GenerationArgConfig {
     isVector: boolean;
     isFlag: boolean;
-    skipConstructorId: boolean;
+    isBareType: boolean;
     flagGroup: number;
     flagIndex: number;
     flagIndicator: boolean;
@@ -39,18 +40,8 @@ const CORE_TYPES = new Set([
     0xc4b9f9bb, // error#c4b9f9bb code:int text:string = Error;
     0x56730bcc, // null#56730bcc = Null;
 ]);
-const AUTH_KEY_TYPES = new Set([
-    0x05162463, // resPQ,
-    0x83c95aec, // p_q_inner_data
-    0xa9f55f95, // p_q_inner_data_dc
-    0x3c6a84d4, // p_q_inner_data_temp
-    0x56fddf88, // p_q_inner_data_temp_dc
-    0xd0e8075c, // server_DH_params_ok
-    0xb5890dba, // server_DH_inner_data
-    0x6643b654, // client_DH_inner_data
-    0xd712e4be, // req_DH_params
-    0xf5045f1f, // set_client_DH_params
-    0x3072cfa1, // gzip_packed
+const PRIMITIVE_TYPES = new Set([
+    'int', 'long', 'int128', 'int256', 'double', 'string', 'bytes', 'date', 'true',
 ]);
 
 const findAll = (regex: RegExp, str: string, matches: string[][] = []) => {
@@ -109,7 +100,7 @@ const fromLine = (line: string, isFunction?: boolean) => {
             }
         }
 
-        currentConfig.constructorId = crc32(Buffer.from(representation, 'utf8'));
+        currentConfig.constructorId = crc32(representation);
     }
     for (const [brace, name, argType] of argsMatch) {
         if (brace === undefined) {
@@ -137,7 +128,7 @@ function buildArgConfig(name: string, argType: string) {
     const currentConfig: GenerationArgConfig = {
         isVector: false,
         isFlag: false,
-        skipConstructorId: false,
+        isBareType: false,
         flagGroup: 0,
         flagIndex: -1,
         flagIndicator: true,
@@ -185,7 +176,10 @@ function buildArgConfig(name: string, argType: string) {
             .pop()!
             .charAt(0))
         ) {
-            currentConfig.skipConstructorId = true;
+            currentConfig.isBareType = true;
+            if (!PRIMITIVE_TYPES.has(currentConfig.type)) {
+                currentConfig.type = snakeToCamelCase(currentConfig.type);
+            }
         }
 
         // The name may contain "date" in it, if this is the case and
@@ -262,66 +256,51 @@ export function* parseTl(content: string, methods: any[] = [], ignoreIds = CORE_
         }
     }
 
-    // Once all objects have been parsed, replace the
-    // string type from the arguments with references
-    for (const obj of objAll) {
-        // console.log(obj)
-        if (AUTH_KEY_TYPES.has(obj.constructorId)) {
-            for (const arg in obj.argsConfig) {
-                if (obj.argsConfig[arg].type === 'string') {
-                    obj.argsConfig[arg].type = 'bytes';
-                }
-            }
-        }
-    }
-
     for (const obj of objAll) {
         yield obj;
     }
 }
 
-export function serializeBytes(data: Buffer | string | any) {
-    if (!(data instanceof Buffer)) {
+export function serializeBytes(data: Uint8Array | string | any) {
+    if (!(data instanceof Uint8Array)) {
         if (typeof data === 'string') {
-            data = Buffer.from(data);
+            data = bufferFromUtf8(data);
         } else {
             throw Error(`Bytes or str expected, not ${data.constructor.name}`);
         }
     }
-    const r = [];
+    const r: Uint8Array[] = [];
     let padding;
     if (data.length < 254) {
         padding = (data.length + 1) % 4;
         if (padding !== 0) {
             padding = 4 - padding;
         }
-        r.push(Buffer.from([data.length]));
+        r.push(new Uint8Array([data.length]));
         r.push(data);
     } else {
         padding = data.length % 4;
         if (padding !== 0) {
             padding = 4 - padding;
         }
-        r.push(Buffer.from([254, data.length % 256, (data.length >> 8) % 256, (data.length >> 16) % 256]));
+        r.push(new Uint8Array([254, data.length % 256, (data.length >> 8) % 256, (data.length >> 16) % 256]));
         r.push(data);
     }
-    r.push(Buffer.alloc(padding)
-        .fill(0));
+    r.push(new Uint8Array(padding));
 
-    return Buffer.concat(r);
+    return concat(...r);
 }
 
 export function serializeDate(dt: Date | number) {
     if (!dt) {
-        return Buffer.alloc(4)
-            .fill(0);
+        return new Uint8Array(4);
     }
     if (dt instanceof Date) {
-        dt = Math.floor((Date.now() - dt.getTime()) / 1000);
+        dt = Math.floor(dt.getTime() / 1000);
     }
     if (typeof dt === 'number') {
-        const t = Buffer.alloc(4);
-        t.writeInt32LE(dt, 0);
+        const t = new Uint8Array(4);
+        writeInt32LE(t, dt);
         return t;
     }
     throw Error(`Cannot interpret "${dt}" as a date`);

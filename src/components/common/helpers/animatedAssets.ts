@@ -17,6 +17,7 @@ import Flame from '../../../assets/tgs/general/Flame.tgs';
 import Fragment from '../../../assets/tgs/general/Fragment.tgs';
 import Mention from '../../../assets/tgs/general/Mention.tgs';
 import PartyPopper from '../../../assets/tgs/general/PartyPopper.tgs';
+import PlayPause from '../../../assets/tgs/general/PlayPause.tgs';
 import Invite from '../../../assets/tgs/invites/Invite.tgs';
 import JoinRequest from '../../../assets/tgs/invites/Requests.tgs';
 import LastSeen from '../../../assets/tgs/LastSeen.tgs';
@@ -41,20 +42,27 @@ import FoldersShare from '../../../assets/tgs/settings/FoldersShare.tgs';
 import HandStop from '../../../assets/tgs/settings/HandStop.tgs';
 import Lock from '../../../assets/tgs/settings/Lock.tgs';
 import Passkeys from '../../../assets/tgs/settings/Passkeys.tgs';
+import UtyanDisappear from '../../../assets/tgs/settings/UtyanDisappear.tgs';
 import StarReaction from '../../../assets/tgs/stars/StarReaction.tgs';
 import StarReactionEffect from '../../../assets/tgs/stars/StarReactionEffect.tgs';
 import Unlock from '../../../assets/tgs/Unlock.tgs';
 import DuckNothingFoundPreview from '../../../assets/tgs-previews/DuckNothingFound.svg';
+import WritingPreview from '../../../assets/tgs-previews/message/Writing.svg';
+import PausePreview from '../../../assets/tgs-previews/Pause.svg';
+import PlayPreview from '../../../assets/tgs-previews/Play.svg';
 import SearchPreview from '../../../assets/tgs-previews/Search.svg';
 import HandStopPreview from '../../../assets/tgs-previews/settings/HandStopPreview.png';
 import PasskeysPreview from '../../../assets/tgs-previews/settings/Passkeys.svg';
 
 export const LOCAL_TGS_PREVIEW_URLS = {
   HandStop: HandStopPreview,
+  PlayPause: PlayPreview,
+  PlayPausePaused: PausePreview,
   BrokenGift: BrokenGiftPreview,
   DuckNothingFound: DuckNothingFoundPreview,
   Search: SearchPreview,
   Passkeys: PasskeysPreview,
+  Writing: WritingPreview,
 };
 
 export const LOCAL_TGS_URLS = {
@@ -81,6 +89,7 @@ export const LOCAL_TGS_URLS = {
   Congratulations,
   Experimental,
   PartyPopper,
+  PlayPause,
   Flame,
   ReadTime,
   Unlock,
@@ -98,6 +107,7 @@ export const LOCAL_TGS_URLS = {
   Search,
   DuckNothingFound,
   Passkeys,
+  UtyanDisappear,
   DuckCake,
   HandStop,
   Writing,

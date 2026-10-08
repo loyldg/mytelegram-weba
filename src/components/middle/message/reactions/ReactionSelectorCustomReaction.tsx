@@ -1,4 +1,3 @@
-import type { FC } from '../../../../lib/teact/teact';
 import { memo, useEffect, useRef } from '../../../../lib/teact/teact';
 
 import type { ApiReaction, ApiReactionCustomEmoji, ApiReactionPaid } from '../../../../api/types';
@@ -30,7 +29,7 @@ type OwnProps = {
   onShowPaidReactionModal?: NoneToVoidFunction;
 };
 
-const ReactionSelectorCustomReaction: FC<OwnProps> = ({
+const ReactionSelectorCustomReaction = ({
   reaction,
   chosen,
   isReady,
@@ -40,7 +39,7 @@ const ReactionSelectorCustomReaction: FC<OwnProps> = ({
   onToggleReaction,
   onSendPaidReaction,
   onShowPaidReactionModal,
-}) => {
+}: OwnProps) => {
   const ref = useRef<HTMLDivElement>();
   const handleClick = useLastCallback(() => {
     if (reaction.type === 'paid') {
@@ -96,7 +95,7 @@ const ReactionSelectorCustomReaction: FC<OwnProps> = ({
         />
       )}
       {isLocked && (
-        <Icon className={styles.lock} name="lock-badge" />
+        <Icon className={styles.lock} name="lock-filled" />
       )}
     </div>
   );

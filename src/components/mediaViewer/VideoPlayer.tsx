@@ -1,5 +1,4 @@
 import type { FC } from '../../lib/teact/teact';
-import type React from '../../lib/teact/teact';
 import {
   memo, useEffect, useRef, useSignal, useState,
 } from '../../lib/teact/teact';
@@ -22,7 +21,7 @@ import usePictureInPicture from '../../hooks/usePictureInPicture';
 import useShowTransitionDeprecated from '../../hooks/useShowTransitionDeprecated';
 import useVideoCleanup from '../../hooks/useVideoCleanup';
 import useFullscreen from '../../hooks/window/useFullscreen';
-import useControlsSignal from './hooks/useControlsSignal';
+import useControlsSignal, { isMouseInsideControls, registerPlayerElement } from './hooks/useControlsSignal';
 import useVideoWaitingSignal from './hooks/useVideoWaitingSignal';
 
 import Button from '../ui/Button';
@@ -113,30 +112,40 @@ const VideoPlayer: FC<OwnProps> = ({
 
   const [, toggleControls, lockControls] = useControlsSignal();
   const [getIsSeeking, setIsSeeking] = useSignal(false);
-  const lastMousePositionRef = useRef({ x: 0, y: 0 });
+  const lastMousePositionRef = useRef<{ x: number; y: number }>();
 
   useEffect(() => {
     const updateMousePosition = (e: MouseEvent | TouchEvent) => {
       lastMousePositionRef.current = getPointerPosition(e);
     };
 
+    const clearMousePosition = () => {
+      lastMousePositionRef.current = undefined;
+    };
+
     window.addEventListener('mousemove', updateMousePosition);
     window.addEventListener('touchmove', updateMousePosition);
+    document.documentElement.addEventListener('mouseleave', clearMousePosition);
 
     return () => {
       window.removeEventListener('mousemove', updateMousePosition);
       window.removeEventListener('touchmove', updateMousePosition);
+      document.documentElement.removeEventListener('mouseleave', clearMousePosition);
     };
+  }, []);
+
+  useEffect(() => {
+    registerPlayerElement(videoRef.current, () => lastMousePositionRef.current);
+    return () => registerPlayerElement(undefined);
   }, []);
 
   const checkMousePositionAndToggleControls = useLastCallback((clientX: number, clientY: number) => {
     const bounds = videoRef.current?.getBoundingClientRect();
     if (!bounds) return;
-    if (clientX <= bounds.left || clientX >= bounds.right
-      || clientY <= bounds.top || clientY >= bounds.bottom) {
-      if (!getIsSeeking()) {
-        toggleControls(false);
-      }
+    const isOutsideVideo = clientX <= bounds.left || clientX >= bounds.right
+      || clientY <= bounds.top || clientY >= bounds.bottom;
+    if (isOutsideVideo && !getIsSeeking() && !isMouseInsideControls()) {
+      toggleControls(false);
     }
   });
 
@@ -150,7 +159,7 @@ const VideoPlayer: FC<OwnProps> = ({
 
   const handleSeekingChange = useLastCallback((isSeeking: boolean) => {
     setIsSeeking(isSeeking);
-    if (!isSeeking) {
+    if (!isSeeking && lastMousePositionRef.current) {
       const { x, y } = lastMousePositionRef.current;
       checkMousePositionAndToggleControls(x, y);
     }
@@ -250,7 +259,7 @@ const VideoPlayer: FC<OwnProps> = ({
     if (isLooped) return;
     setCurrentTime(0);
     setIsPlaying(false);
-    toggleControls(true);
+    toggleControls(true, true);
   });
 
   const handleFullscreenChange = useLastCallback(() => {

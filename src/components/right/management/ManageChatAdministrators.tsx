@@ -1,4 +1,3 @@
-import type { FC } from '../../../lib/teact/teact';
 import { memo, useMemo } from '../../../lib/teact/teact';
 import { getActions, getGlobal, withGlobal } from '../../../global';
 
@@ -14,6 +13,7 @@ import useLastCallback from '../../../hooks/useLastCallback';
 import useOldLang from '../../../hooks/useOldLang';
 
 import PrivateChatInfo from '../../common/PrivateChatInfo';
+import Island, { IslandDescription } from '../../gili/layout/Island';
 import Checkbox from '../../ui/Checkbox';
 import FloatingActionButton from '../../ui/FloatingActionButton';
 import ListItem from '../../ui/ListItem';
@@ -33,7 +33,7 @@ type StateProps = {
   adminMembersById?: Record<string, ApiChatMember>;
 };
 
-const ManageChatAdministrators: FC<OwnProps & StateProps> = ({
+const ManageChatAdministrators = ({
   isActive,
   chat,
   isChannel,
@@ -42,7 +42,7 @@ const ManageChatAdministrators: FC<OwnProps & StateProps> = ({
   onScreenSelect,
   onChatMemberSelect,
   onClose,
-}) => {
+}: OwnProps & StateProps) => {
   const { toggleSignatures } = getActions();
   const lang = useOldLang();
 
@@ -54,7 +54,7 @@ const ManageChatAdministrators: FC<OwnProps & StateProps> = ({
   const areSignaturesEnabled = Boolean(chat?.areSignaturesShown);
   const areProfilesEnabled = Boolean(chat?.areProfilesShown);
 
-  const canAddNewAdmins = Boolean(chat?.isCreator || (chat && getHasAdminRight(chat, 'addAdmins')));
+  const canAddNewAdmins = Boolean(chat && getHasAdminRight(chat, 'addAdmins'));
   const canToggleSignatures = isChannel && getHasAdminRight(chat!, 'postMessages');
 
   const adminMembers = useMemo(() => {
@@ -111,24 +111,23 @@ const ManageChatAdministrators: FC<OwnProps & StateProps> = ({
   return (
     <div className="Management">
       <div className="panel-content custom-scroll">
-        <div className="section">
+        <Island>
           <ListItem
-            icon="recent"
+            icon="clock"
             multiline
             disabled
           >
             <span className="title">{lang('EventLog')}</span>
             <span className="subtitle">{lang(isChannel ? 'EventLogInfoDetailChannel' : 'EventLogInfoDetail')}</span>
           </ListItem>
-        </div>
+        </Island>
 
-        <div className="section" dir={lang.isRtl ? 'rtl' : undefined}>
-          <p className="section-help" dir="auto">
-            {lang(isChannel
-              ? 'Channel.Management.AddModeratorHelp'
-              : 'Group.Management.AddModeratorHelp')}
-          </p>
-
+        <IslandDescription dir="auto">
+          {lang(isChannel
+            ? 'Channel.Management.AddModeratorHelp'
+            : 'Group.Management.AddModeratorHelp')}
+        </IslandDescription>
+        <Island dir={lang.isRtl ? 'rtl' : undefined}>
           {adminMembers.map((member) => (
             <ListItem
               key={member.userId}
@@ -150,10 +149,10 @@ const ManageChatAdministrators: FC<OwnProps & StateProps> = ({
             ariaLabel={lang('Channel.Management.AddModerator')}
             iconName="add-user-filled"
           />
-        </div>
+        </Island>
 
         {canToggleSignatures && (
-          <div className="section">
+          <Island>
             <div className="ListItem narrow">
               <Checkbox
                 checked={areSignaturesEnabled}
@@ -170,12 +169,12 @@ const ManageChatAdministrators: FC<OwnProps & StateProps> = ({
                     onChange={handleToggleProfiles}
                   />
                 </div>
-                <p className="section-info section-info_push">
+                <IslandDescription>
                   {lang('ChannelSignProfilesInfo')}
-                </p>
+                </IslandDescription>
               </>
             )}
-          </div>
+          </Island>
         )}
       </div>
     </div>

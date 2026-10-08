@@ -1,4 +1,3 @@
-import type { FC } from '@teact';
 import { memo, useRef, useState } from '@teact';
 import { getActions, getGlobal } from '../../../global';
 
@@ -19,6 +18,7 @@ import SettingsPasscode from './passcode/SettingsPasscode';
 import PrivacyMessages from './PrivacyMessages';
 import SettingsActiveSessions from './SettingsActiveSessions';
 import SettingsActiveWebsites from './SettingsActiveWebsites';
+import SettingsAutoDeleteMessages from './SettingsAutoDeleteMessages';
 import SettingsCustomEmoji from './SettingsCustomEmoji';
 import SettingsDataStorage from './SettingsDataStorage';
 import SettingsDoNotTranslate from './SettingsDoNotTranslate';
@@ -84,6 +84,7 @@ const FOLDERS_SCREENS = [
 ];
 
 const PRIVACY_SCREENS = [
+  SettingsScreens.AutoDeleteMessages,
   SettingsScreens.PrivacyBlockedUsers,
   SettingsScreens.ActiveWebsites,
   SettingsScreens.Passkeys,
@@ -117,6 +118,11 @@ const PRIVACY_BIRTHDAY_SCREENS = [
 const PRIVACY_GIFTS_SCREENS = [
   SettingsScreens.PrivacyGiftsAllowedContacts,
   SettingsScreens.PrivacyGiftsDeniedContacts,
+];
+
+const PRIVACY_SAVED_MUSIC_SCREENS = [
+  SettingsScreens.PrivacySavedMusicAllowedContacts,
+  SettingsScreens.PrivacySavedMusicDeniedContacts,
 ];
 
 const PRIVACY_PHONE_CALL_SCREENS = [
@@ -155,10 +161,11 @@ export type OwnProps = {
   foldersDispatch: FolderEditDispatch;
   animationLevel: AnimationLevel;
   shouldSkipTransition?: boolean;
+  hasProfileBackground?: boolean;
   onReset: (forceReturnToChatList?: true | Event) => void;
 };
 
-const Settings: FC<OwnProps> = ({
+const Settings = ({
   isActive,
   currentScreen,
   foldersState,
@@ -166,7 +173,8 @@ const Settings: FC<OwnProps> = ({
   onReset,
   animationLevel,
   shouldSkipTransition,
-}) => {
+  hasProfileBackground,
+}: OwnProps) => {
   const { closeShareChatFolderModal, openSettingsScreen } = getActions();
 
   const containerRef = useRef<HTMLDivElement>();
@@ -176,7 +184,8 @@ const Settings: FC<OwnProps> = ({
 
   useScrollNotch({
     containerRef,
-    selector: '.settings-content',
+    selector: '.Transition_slide-active .settings-content,'
+      + ' .Transition_slide-active .settings-main-scroll',
   }, [currentScreen]);
 
   const handleReset = useLastCallback((forceReturnToChatList?: true | Event) => {
@@ -225,6 +234,7 @@ const Settings: FC<OwnProps> = ({
       [SettingsScreens.PrivacyBio]: PRIVACY_BIO_SCREENS.includes(activeScreen),
       [SettingsScreens.PrivacyBirthday]: PRIVACY_BIRTHDAY_SCREENS.includes(activeScreen),
       [SettingsScreens.PrivacyGifts]: PRIVACY_GIFTS_SCREENS.includes(activeScreen),
+      [SettingsScreens.PrivacySavedMusic]: PRIVACY_SAVED_MUSIC_SCREENS.includes(activeScreen),
       [SettingsScreens.PrivacyPhoneCall]: PRIVACY_PHONE_CALL_SCREENS.includes(activeScreen),
       [SettingsScreens.PrivacyPhoneP2P]: PRIVACY_PHONE_P2P_SCREENS.includes(activeScreen),
       [SettingsScreens.PrivacyForwarding]: PRIVACY_FORWARDING_SCREENS.includes(activeScreen),
@@ -289,6 +299,13 @@ const Settings: FC<OwnProps> = ({
             onReset={handleReset}
           />
         );
+      case SettingsScreens.AutoDeleteMessages:
+        return (
+          <SettingsAutoDeleteMessages
+            isActive={isScreenActive}
+            onReset={handleReset}
+          />
+        );
       case SettingsScreens.Language:
         return (
           <SettingsLanguage
@@ -349,6 +366,7 @@ const Settings: FC<OwnProps> = ({
       case SettingsScreens.PrivacyBio:
       case SettingsScreens.PrivacyBirthday:
       case SettingsScreens.PrivacyGifts:
+      case SettingsScreens.PrivacySavedMusic:
       case SettingsScreens.PrivacyPhoneCall:
       case SettingsScreens.PrivacyForwarding:
       case SettingsScreens.PrivacyVoiceMessages:
@@ -367,6 +385,7 @@ const Settings: FC<OwnProps> = ({
       case SettingsScreens.PrivacyBioAllowedContacts:
       case SettingsScreens.PrivacyBirthdayAllowedContacts:
       case SettingsScreens.PrivacyGiftsAllowedContacts:
+      case SettingsScreens.PrivacySavedMusicAllowedContacts:
       case SettingsScreens.PrivacyPhoneCallAllowedContacts:
       case SettingsScreens.PrivacyPhoneP2PAllowedContacts:
       case SettingsScreens.PrivacyForwardingAllowedContacts:
@@ -391,6 +410,7 @@ const Settings: FC<OwnProps> = ({
       case SettingsScreens.PrivacyBioDeniedContacts:
       case SettingsScreens.PrivacyBirthdayDeniedContacts:
       case SettingsScreens.PrivacyGiftsDeniedContacts:
+      case SettingsScreens.PrivacySavedMusicDeniedContacts:
       case SettingsScreens.PrivacyPhoneCallDeniedContacts:
       case SettingsScreens.PrivacyPhoneP2PDeniedContacts:
       case SettingsScreens.PrivacyForwardingDeniedContacts:
@@ -466,6 +486,8 @@ const Settings: FC<OwnProps> = ({
       case SettingsScreens.PasscodeChangePasscodeCurrent:
       case SettingsScreens.PasscodeChangePasscodeNew:
       case SettingsScreens.PasscodeChangePasscodeConfirm:
+      case SettingsScreens.PasscodePasskeyAddConfirm:
+      case SettingsScreens.PasscodePasskeyRemoveConfirm:
       case SettingsScreens.PasscodeCongratulations:
       case SettingsScreens.PasscodeEnabled:
       case SettingsScreens.PasscodeTurnOff:
@@ -513,6 +535,7 @@ const Settings: FC<OwnProps> = ({
           currentScreen={currentScreen}
           onReset={handleReset}
           editedFolderId={foldersState.folderId}
+          hasProfileBackground={hasProfileBackground}
         />
         {renderCurrentSectionContent(isScreenActive, activeKey)}
       </>

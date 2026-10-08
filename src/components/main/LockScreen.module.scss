@@ -1,4 +1,5 @@
 .container {
+  isolation: isolate;
   position: fixed;
   top: 0;
   right: 0;
@@ -36,5 +37,29 @@
 }
 
 .help {
-  margin-top: 2rem;
+  margin: 2rem 0 1.5rem;
+  font-size: 1rem;
+  line-height: 1.5rem;
+  color: var(--color-text-secondary);
+}
+
+.logOutLink {
+  color: var(--color-error);
+
+  &:hover {
+    color: var(--color-error);
+  }
+}
+
+.passkeyButton {
+  margin-top: 1rem;
+}
+
+.corruptedText {
+  margin-bottom: 1rem;
+  text-align: center;
+}
+
+.logOutAllButton {
+  margin-bottom: 1.5rem;
 }
