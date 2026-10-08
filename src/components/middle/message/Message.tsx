@@ -49,6 +49,7 @@ import { MAIN_THREAD_ID } from '../../../api/types';
 import { EMOJI_STATUS_LOOP_LIMIT, MESSAGE_APPEARANCE_DELAY } from '../../../config';
 import {
   areReactionsEmpty,
+  extractMessageText,
   getAllowedAttachmentOptions,
   getCanReplyToEphemeralMessage,
   getIsDownloading,
@@ -184,7 +185,6 @@ import PeerColorWrapper from '../../common/PeerColorWrapper';
 import RankBadge from '../../common/RankBadge';
 import ReactionStaticEmoji from '../../common/reactions/ReactionStaticEmoji';
 import Sparkles from '../../common/Sparkles';
-import TopicChip from '../../common/TopicChip';
 import { animateSnap } from '../../main/visualEffects/SnapEffectContainer';
 import Button from '../../ui/Button';
 import ConfirmDialog from '../../ui/ConfirmDialog';
@@ -320,7 +320,6 @@ type StateProps = {
   isPremium: boolean;
   senderChatMember?: ApiChatMember;
   messageTopic?: ApiTopic;
-  hasTopicChip?: boolean;
   chatTranslations?: ChatTranslatedMessages;
   areTranslationsEnabled?: boolean;
   shouldDetectChatLanguage?: boolean;
@@ -453,7 +452,6 @@ const Message = ({
   memoFirstUnreadIdRef,
   senderChatMember,
   messageTopic,
-  hasTopicChip,
   chatTranslations,
   areTranslationsEnabled,
   shouldDetectChatLanguage,
@@ -557,7 +555,7 @@ const Message = ({
     }
   }, [isContextMenuOpen, disableContextMenuHint]);
 
-  const noAppearanceAnimation = appearanceOrder <= 0;
+  const noAppearanceAnimation = appearanceOrder <= 0 || message.shouldSkipTypingAnimation;
   const [isShown, markShown] = useFlag(noAppearanceAnimation);
   useEffect(() => {
     if (noAppearanceAnimation) {
@@ -571,7 +569,7 @@ const Message = ({
   useShowTransition({
     ref,
     isOpen: isShown || isJustAdded,
-    noMountTransition: noAppearanceAnimation && !isJustAdded,
+    noMountTransition: message.shouldSkipTypingAnimation || (noAppearanceAnimation && !isJustAdded),
     className: false,
   });
 
@@ -660,7 +658,7 @@ const Message = ({
 
   const hasForwardedCustomShape = asForwarded && isCustomShape;
   const hasSubheader = message.isEphemeral
-    || hasTopicChip || hasMessageReply || hasStoryReply || hasForwardedCustomShape
+    || hasMessageReply || hasStoryReply || hasForwardedCustomShape
     || Boolean(isShowingSummary && summary?.text);
 
   const selectMessage = useLastCallback((e?: React.MouseEvent<HTMLDivElement, MouseEvent>, groupedId?: string) => {
@@ -735,7 +733,6 @@ const Message = ({
     handleFocus,
     handleFocusForwarded,
     handleDocumentGroupSelectAll,
-    handleTopicChipClick,
     handleStoryClick,
   } = useInnerHandlers({
     lang: oldLang,
@@ -752,7 +749,6 @@ const Message = ({
     senderPeer,
     botSender,
     guestFromSender,
-    messageTopic,
     isTranslatingChat: Boolean(requestedChatTranslationLanguage),
     story: replyStory && 'content' in replyStory ? replyStory : undefined,
     isReplyPrivate,
@@ -876,8 +872,9 @@ const Message = ({
     }
   }, [dice, memoFirstUnreadIdRef, messageId, isLocal]);
 
+  const textForLanguageDetection = useMemo(() => textMessage && extractMessageText(textMessage)?.text, [textMessage]);
   const detectedLanguage = useTextLanguage(
-    text?.text,
+    textForLanguageDetection,
     !(areTranslationsEnabled && shouldDetectChatLanguage) || isTypingDraft,
     getIsMessageListReady,
   );
@@ -891,13 +888,14 @@ const Message = ({
   const translationLanguageForHook = parsedManualTranslation?.languageCode || requestedChatTranslationLanguage;
   const translationToneForHook = parsedManualTranslation?.tone || requestedTranslationTone;
 
-  const { isPending: isTranslationPending, translatedText } = useMessageTranslation(
+  const { isPending: isTranslationPending, translatedText, translatedRichMessage } = useMessageTranslation(
     chatTranslations, chatId, shouldTranslate ? messageId : undefined, translationLanguageForHook,
     translationToneForHook,
   );
   const isSummaryPending = Boolean(summary?.isPending);
   const isNewTextPending = isTranslationPending || isSummaryPending;
   const previousTranslatedText = usePreviousDeprecated(translatedText, Boolean(shouldTranslate));
+  const previousTranslatedRichMessage = usePreviousDeprecated(translatedRichMessage, Boolean(shouldTranslate));
 
   useEffectWithPrevDeps(([prevIsShowingSummary]) => {
     if (summary?.text || (prevIsShowingSummary && !isShowingSummary)) {
@@ -906,6 +904,8 @@ const Message = ({
   }, [isShowingSummary, summary?.text]);
 
   const currentTranslatedText = shouldTranslate ? translatedText || previousTranslatedText : undefined;
+  const currentTranslatedRichMessage = shouldTranslate
+    ? translatedRichMessage || (isTranslationPending !== false ? previousTranslatedRichMessage : undefined) : undefined;
 
   const phoneCall = action?.type === 'phoneCall' ? action : undefined;
 
@@ -1115,6 +1115,7 @@ const Message = ({
       return (
         <MessageRichText
           message={textMessage}
+          forcedRichMessage={requestedTranslationLanguage ? currentTranslatedRichMessage : undefined}
           isOwn={isOwn}
           noAvatars={noAvatars}
           canAutoLoadMedia={canAutoLoadMedia}
@@ -1148,6 +1149,7 @@ const Message = ({
         maxTimestamp={maxTimestamp}
         threadId={threadId}
         shouldAnimateTyping={isTypingDraft}
+        noInitialTypingAnimation={message.shouldSkipTypingAnimation}
         canAnimateTextStreaming={canAnimateTextStreaming}
         onTypingAnimationEnd={handleTypingAnimationEnd}
       />
@@ -1210,7 +1212,7 @@ const Message = ({
           withQuickReactionButton && quickReactionPosition === 'in-meta' ? renderQuickReactionButton : undefined
         }
         availableReactions={availableReactions}
-        isTranslated={Boolean(requestedTranslationLanguage ? currentTranslatedText : undefined)}
+        isTranslated={Boolean(requestedTranslationLanguage && (currentTranslatedText || currentTranslatedRichMessage))}
         effectEmoji={effect?.emoticon}
         onClick={handleMetaClick}
         onEffectClick={handleEffectClick}
@@ -1279,13 +1281,6 @@ const Message = ({
                     : lang('EphemeralOnlyVisible')}
                 </span>
               </BadgeButton>
-            )}
-            {hasTopicChip && (
-              <TopicChip
-                topic={messageTopic}
-                onClick={handleTopicChipClick}
-                className="message-topic"
-              />
             )}
             {hasForwardedCustomShape && (
               <div className="forward-custom-shape-subheader">
@@ -1694,7 +1689,7 @@ const Message = ({
   function shouldRenderSenderName() {
     const media = photo || video || location || paidMedia;
     return !(isCustomShape && !hasViaSender) && (
-      (withSenderName && (!media || hasTopicChip)) || asForwarded || viaBotId
+      (withSenderName && !media) || asForwarded || viaBotId
       || (guestChatViaId && isFirstInGroup) || forceSenderName
     ) && !isInDocumentGroupNotFirst && !(hasMessageReply && isCustomShape);
   }
@@ -2132,7 +2127,7 @@ export default memo(withGlobal<OwnProps>(
     } = selectTabState(global);
     const {
       message, album, documentGroup, withSenderName, withAvatar, threadId, messageListType,
-      isLastInDocumentGroup, isFirstInGroup, shouldIgnoreSendFocus,
+      isLastInDocumentGroup, shouldIgnoreSendFocus,
     } = ownProps;
     const {
       id, chatId, viaBotId, guestChatViaId, isOutgoing, forwardInfo, transcriptionId, isPinned,
@@ -2247,7 +2242,6 @@ export default memo(withGlobal<OwnProps>(
     const hasUnreadReaction = readState?.unreadReactions?.includes(message.id);
     const hasUnreadPollVote = readState?.unreadPollVotes?.includes(message.id);
 
-    const hasTopicChip = threadId === MAIN_THREAD_ID && chat?.isForum && !chat.isBotForum && isFirstInGroup;
     const messageTopic = selectTopicFromMessage(global, message);
 
     const chatTranslations = selectChatTranslations(global, chatId);
@@ -2357,7 +2351,6 @@ export default memo(withGlobal<OwnProps>(
       isPremium,
       senderChatMember,
       messageTopic,
-      hasTopicChip,
       chatTranslations,
       areTranslationsEnabled,
       shouldDetectChatLanguage: selectShouldDetectChatLanguage(global, chatId),

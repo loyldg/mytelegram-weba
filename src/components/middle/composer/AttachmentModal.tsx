@@ -202,6 +202,7 @@ const AttachmentModal = ({
 
   const isOpen = Boolean(attachments.length);
   const renderingIsOpen = Boolean(renderingAttachments?.length);
+  const hasPreparingAttachments = attachments.some(({ isPreparing }) => isPreparing);
   const [isHovered, markHovered, unmarkHovered] = useFlag();
 
   const timerRef = useRef<number | undefined>();
@@ -324,33 +325,38 @@ const AttachmentModal = ({
     handleContextMenu,
     handleContextMenuClose,
     handleContextMenuHide,
-  } = useContextMenuHandlers(mainButtonRef, !canShowCustomSendMenu || !isOpen);
+  } = useContextMenuHandlers(
+    mainButtonRef, !canShowCustomSendMenu || !isOpen || hasPreparingAttachments,
+  );
 
   useEffect(() => {
     requestMeasure(() => {
       const input = inputRef.current;
-      if (!richText || !input) {
+      if (!isForMessage || !richText || !input) {
         setShouldShowAiButton(false);
         return;
       }
       const { totalLines } = calcTextLineHeightAndCount(input, true);
       setShouldShowAiButton(totalLines >= 3);
     });
-  }, [richText, isOpen]);
+  }, [isForMessage, richText, isOpen]);
 
   const handleOpenAiEditor = useLastCallback(() => {
+    if (!isForMessage) return;
     const { text, entities } = richValue ? getRichInputAsFormatted(richValue) || { text: '' } : { text: '' };
     openAiMessageEditorModal({
       chatId,
-      text: { text, entities },
+      threadId,
+      content: { type: 'text', text: { text, entities } },
       isFromAttachment: true,
+      isEditing: Boolean(editingMessage),
     });
   });
 
   const sendAttachments = useLastCallback((
     isSilent?: boolean, scheduledAt?: number | true, scheduleRepeatPeriod?: number,
   ) => {
-    if (!isOpen) return;
+    if (!isOpen || hasPreparingAttachments) return;
 
     const shouldSendScheduled = (shouldSchedule || scheduledAt) && isForMessage && !editingMessage;
     if (shouldSendScheduled) {
@@ -373,12 +379,14 @@ const AttachmentModal = ({
   });
 
   const handleSendWithAiResult = useLastCallback(() => {
-    if (!aiMessageEditorPendingResult?.shouldSendWithAttachments || !isOpen) return;
+    if (!isForMessage || !aiMessageEditorPendingResult?.shouldSendWithAttachments
+      || !isOpen || hasPreparingAttachments) return;
+    if (aiMessageEditorPendingResult.chatId !== chatId || aiMessageEditorPendingResult.threadId !== threadId) return;
 
-    const { text, isSilent, scheduledAt, scheduleRepeatPeriod } = aiMessageEditorPendingResult;
+    const { content, isSilent, scheduledAt, scheduleRepeatPeriod } = aiMessageEditorPendingResult;
 
-    if (text) {
-      richEditor.setValue(buildRichMessageFromFormatted(text));
+    if (content.type === 'text') {
+      richEditor.setValue(buildRichMessageFromFormatted(content.text));
     }
 
     sendAttachments(isSilent, scheduledAt, scheduleRepeatPeriod);
@@ -387,7 +395,7 @@ const AttachmentModal = ({
 
   useEffect(() => {
     handleSendWithAiResult();
-  }, [aiMessageEditorPendingResult, handleSendWithAiResult]);
+  }, [aiMessageEditorPendingResult, hasPreparingAttachments, handleSendWithAiResult]);
 
   const handleSendSilent = useLastCallback(() => {
     sendAttachments(true);
@@ -706,7 +714,7 @@ const AttachmentModal = ({
                       </MenuItem>
                     ) : (
 
-                      <MenuItem icon="photo" onClick={handleToggleShouldCompress}>
+                      <MenuItem icon="media" onClick={handleToggleShouldCompress}>
                         {lang(isMultiple ? 'AttachmentMenuSendAllAsMedia' : 'AttachmentMenuSendAsMedia')}
                       </MenuItem>
                     ))
@@ -871,6 +879,7 @@ const AttachmentModal = ({
                 className={styles.send}
                 size="smaller"
                 inline
+                disabled={hasPreparingAttachments}
                 onClick={handleSendClick}
                 onContextMenu={canShowCustomSendMenu ? handleContextMenu : undefined}
                 iconName={!editingMessage && !shouldSchedule && !paidMessagesStars ? 'new-send' : undefined}

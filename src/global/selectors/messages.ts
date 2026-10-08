@@ -31,7 +31,7 @@ import { IS_TRANSLATION_SUPPORTED } from '../../util/browser/windowEnvironment';
 import { isUserId } from '../../util/entities/ids';
 import { getCurrentTabId } from '../../util/establishMultitabRole';
 import { getMessageKey, isLocalMessageId } from '../../util/keys/messageKey';
-import { parseTranslationCacheKey } from '../../util/keys/translationKey';
+import { getTranslationCacheKey, parseTranslationCacheKey } from '../../util/keys/translationKey';
 import { isIpRevealingMedia } from '../../util/media/ipRevealingMedia';
 import { MEMO_EMPTY_ARRAY } from '../../util/memo';
 import { getServerTime } from '../../util/serverTime';
@@ -79,6 +79,7 @@ import {
   selectIsChatWithBot,
   selectIsChatWithSelf,
   selectRequestedChatTranslationLanguage,
+  selectRequestedChatTranslationTone,
 } from './chats';
 import { selectCurrentLimit } from './limits';
 import { selectMessageDownloadableMedia } from './media';
@@ -114,6 +115,22 @@ export function selectCurrentMessageList<T extends GlobalState>(
   return undefined;
 }
 
+export function selectCanOpenMessageList<T extends GlobalState>(
+  global: T,
+  chatId: string | undefined,
+  threadId: ThreadId | undefined,
+  type: MessageListType = 'thread',
+  ...[tabId = getCurrentTabId()]: TabArgs<T>
+) {
+  if (!selectTabState(global, tabId).richMediaUploadBlockingCount) return true;
+
+  const currentMessageList = selectCurrentMessageList(global, tabId);
+  return Boolean(currentMessageList
+    && currentMessageList.chatId === chatId
+    && currentMessageList.threadId === threadId
+    && currentMessageList.type === type);
+}
+
 export function selectCurrentChat<T extends GlobalState>(
   global: T,
   ...[tabId = getCurrentTabId()]: TabArgs<T>
@@ -125,6 +142,18 @@ export function selectCurrentChat<T extends GlobalState>(
 
 export function selectChatMessages<T extends GlobalState>(global: T, chatId: string) {
   return global.messages.byChatId[chatId]?.byId;
+}
+
+export function selectStoppableTypingDraftId<T extends GlobalState>(global: T, chatId: string, threadId: ThreadId) {
+  const drafts = selectThreadLocalStateParam(global, chatId, threadId, 'typingDraftIdByRandomId');
+  if (!drafts) return undefined;
+
+  for (const [randomId, messageId] of Object.entries(drafts)) {
+    const message = selectChatMessage(global, chatId, messageId);
+    if (message?.isTypingDraft && message.typingDraft?.canStop) return randomId;
+  }
+
+  return undefined;
 }
 
 export function selectChatEphemeralMessages<T extends GlobalState>(global: T, chatId: string) {
@@ -1439,6 +1468,21 @@ export function selectMessageTranslations<T extends GlobalState>(
   global: T, chatId: string, cacheKey: string,
 ) {
   return selectChatTranslations(global, chatId)?.byLangCode[cacheKey] || {};
+}
+
+export function selectMessageCopyContent<T extends GlobalState>(
+  global: T, message: ApiMessage, ...[tabId = getCurrentTabId()]: TabArgs<T>
+) {
+  if (message.isEphemeral) return message.content;
+
+  const chatLanguage = selectRequestedChatTranslationLanguage(global, message.chatId, tabId);
+  const messageLanguage = selectRequestedMessageTranslationLanguage(global, message.chatId, message.id, tabId);
+  const cacheKey = chatLanguage
+    ? getTranslationCacheKey(chatLanguage, selectRequestedChatTranslationTone(global, message.chatId, tabId))
+    : messageLanguage;
+
+  const translation = cacheKey ? selectMessageTranslations(global, message.chatId, cacheKey)[message.id] : undefined;
+  return translation?.text || translation?.richMessage ? translation : message.content;
 }
 
 export function selectRequestedMessageTranslationLanguage<T extends GlobalState>(

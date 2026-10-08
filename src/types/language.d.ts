@@ -193,6 +193,7 @@ export interface LangPair {
   'VoipGroupEndChat': undefined;
   'VoipGroupEnd': undefined;
   'Cancel': undefined;
+  'Retry': undefined;
   'ThisIsYou': undefined;
   'VoipGroupMutedForMe': undefined;
   'WantsToSpeak': undefined;
@@ -674,7 +675,6 @@ export interface LangPair {
   'SettingsPerformanceComposer': undefined;
   'SettingsPerformanceContextAnimation': undefined;
   'SettingsPerformanceContextBlur': undefined;
-  'SettingsPerformanceMessageBlur': undefined;
   'SettingsPerformanceRightColumn': undefined;
   'SettingsPerformanceThanos': undefined;
   'SettingsPerformanceTextStreaming': undefined;
@@ -1649,6 +1649,9 @@ export interface LangPair {
   'PrivacyGifts': undefined;
   'PrivacyGiftsTitle': undefined;
   'PrivacyGiftsInfo': undefined;
+  'PrivacyMusic': undefined;
+  'PrivacyMusicTitle': undefined;
+  'PrivacyMusicInfo': undefined;
   'PrivacyAcceptedGiftTitle': undefined;
   'PrivacyAcceptedGiftInfo': undefined;
   'PrivacyValueBots': undefined;
@@ -1861,6 +1864,8 @@ export interface LangPair {
   'ActionGiveawayResultTitle': undefined;
   'ActionGiftPremiumText': undefined;
   'ActionGiftStarsText': undefined;
+  'RichEditorTableCompact': undefined;
+  'BotDraftStop': undefined;
   'CommunityOpenPanel': undefined;
   'CommunityShowAsOneChat': undefined;
   'CommunityShowAsOneChatHint': undefined;
@@ -2337,6 +2342,10 @@ export interface LangPair {
   'NoForwardsRequestReject': undefined;
   'NoForwardsRequestAccept': undefined;
   'AiMessageEditor': undefined;
+  'AiEditorPrompt': undefined;
+  'AiEditorRewritePlaceholder': undefined;
+  'AiEditorGeneratePlaceholder': undefined;
+  'AiEditorGenerate': undefined;
   'AiMessageEditorTranslate': undefined;
   'AiMessageEditorStyle': undefined;
   'AiMessageEditorFix': undefined;
@@ -2396,6 +2405,10 @@ export interface LangPair {
   'SettingsPerformanceDesc': undefined;
   'SettingsStickersDesc': undefined;
   'SettingsSessionsDesc': undefined;
+  'RichMediaCollage': undefined;
+  'RichMediaSlideshow': undefined;
+  'RichMediaRetry': undefined;
+  'RichMediaUploadFailed': undefined;
   'WebLoginInvalid': undefined;
   'RichButtons': undefined;
   'RichButtonInline': undefined;
@@ -3602,6 +3615,10 @@ export interface LangPairWithVariables<V = LangVariable> {
     'from': V;
     'community': V;
   };
+  'ActionJoinedViaCommunity': {
+    'from': V;
+    'community': V;
+  };
   'ActionRemovedFromCommunity': {
     'from': V;
   };
@@ -4725,6 +4742,9 @@ export interface LangPairPluralWithVariables<V = LangVariable> {
     'count': V;
   };
   'PollModalAddMoreText': {
+    'count': V;
+  };
+  'RichMediaSkippedFiles': {
     'count': V;
   };
 }

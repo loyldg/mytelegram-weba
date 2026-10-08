@@ -129,7 +129,7 @@ import type { WebApp, WebAppOutboundEvent } from '../../types/webapp';
 import type { RegularLangFnParameters } from '../../util/localization';
 import type { DownloadableMedia } from '../helpers';
 import type { SharedState } from './sharedState';
-import type { ReactionDeletionContext, TabState } from './tabState';
+import type { AiEditorContent, ReactionDeletionContext, TabState } from './tabState';
 
 export type WithTabId = { tabId?: number };
 
@@ -730,6 +730,11 @@ export interface ActionPayloads {
     chatId: string;
     threadId: ThreadId;
   };
+  stopTypingDraft: {
+    chatId: string;
+    threadId: ThreadId;
+    randomId: string;
+  } & WithTabId;
   reportChannelSpam: {
     chatId: string;
     participantId: string;
@@ -1074,7 +1079,7 @@ export interface ActionPayloads {
     screen?: ManagementScreens;
   } & WithTabId) | undefined;
   closeManagement: WithTabId | undefined;
-  checkPublicLink: { username: string } & WithTabId;
+  checkPublicLink: { chatId: string; username: string } & WithTabId;
   updatePublicLink: { username: string; shouldDisableUsernames?: boolean } & WithTabId;
   updatePrivateLink: WithTabId | undefined;
   resetManagementError: { chatId: string } & WithTabId;
@@ -1635,6 +1640,7 @@ export interface ActionPayloads {
   markMessagesTranslationPending: {
     chatId: string;
     messageIds: number[];
+    requestId?: string;
     toLanguageCode?: string;
     tone?: TranslationTone;
   };
@@ -1976,6 +1982,7 @@ export interface ActionPayloads {
   loadShufflePlaylist: WithTabId | undefined;
   loadSavedMusicIds: undefined;
   toggleMusicInProfile: { audio: ApiAudio } & WithTabId;
+  reportMusicListen: { audio: ApiAudio; listenedDuration: number; isPageUnload?: boolean };
   reorderSavedMusic: { audioId: string; afterAudioId?: string } & WithTabId;
 
   // Downloads
@@ -2121,6 +2128,9 @@ export interface ActionPayloads {
   } & WithTabId;
   setIsRichInputExpanded: {
     isRichInputExpanded?: boolean;
+  } & WithTabId;
+  changeRichMediaUploadBlocking: {
+    delta: 1 | -1;
   } & WithTabId;
 
   // Replies
@@ -2793,9 +2803,11 @@ export interface ActionPayloads {
 
   openAiMessageEditorModal: {
     chatId: string;
-    text: ApiFormattedText;
+    threadId: ThreadId;
+    content: AiEditorContent;
     initialTab?: 'translate' | 'style' | 'fix';
     isFromAttachment?: boolean;
+    isEditing?: boolean;
   } & WithTabId;
   closeAiMessageEditorModal: WithTabId | undefined;
   setAiMessageEditorTab: {
@@ -2809,6 +2821,7 @@ export interface ActionPayloads {
   } & WithTabId;
   setAiMessageEditorStyleOptions: {
     selectedTone?: ApiInputAiComposeTone;
+    customPrompt?: string;
     shouldEmojify?: boolean;
     clearResult?: boolean;
   } & WithTabId;
@@ -3008,6 +3021,8 @@ export interface ActionPayloads {
     peerId: string;
     slug: string;
     price: ApiTypeCurrencyAmount;
+    shouldShowName?: true;
+    message?: ApiFormattedText;
   } & WithTabId;
   sendPremiumGiftByStars: {
     userId: string;

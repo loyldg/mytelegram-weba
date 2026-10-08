@@ -225,6 +225,7 @@
 "VoipGroupEndChat" = "End video chat";
 "VoipGroupEnd" = "End";
 "Cancel" = "Cancel";
+"Retry" = "Retry";
 "ThisIsYou" = "this is you";
 "VoipGroupMutedForMe" = "muted for you";
 "WantsToSpeak" = "wants to speak";
@@ -784,7 +785,6 @@
 "SettingsPerformanceComposer" = "Message Composer Animations";
 "SettingsPerformanceContextAnimation" = "Context Menu Animation";
 "SettingsPerformanceContextBlur" = "Context Menu Blur";
-"SettingsPerformanceMessageBlur" = "Message Blur";
 "SettingsPerformanceRightColumn" = "Right Column Animation";
 "SettingsPerformanceThanos" = "Dust-effect deletion";
 "SettingsPerformanceTextStreaming" = "Text Streaming";
@@ -2060,6 +2060,9 @@
 "PrivacyGifts" = "Gifts";
 "PrivacyGiftsTitle" = "Who can display gifts on my profile?";
 "PrivacyGiftsInfo" = "Choose whether gifts from specific senders need your approval before they're visible to others on your profile.";
+"PrivacyMusic" = "Saved Music";
+"PrivacyMusicTitle" = "Who can see my saved music in profile?";
+"PrivacyMusicInfo" = "You can restrict who can see your saved music with granular precision.";
 "PrivacyAcceptedGiftTitle" = "Accepted gift types";
 "PrivacyAcceptedGiftInfo" = "Choose the types of gifts that you allow others to send you.";
 "PrivacyValueBots" = "Mini Apps";
@@ -2452,6 +2455,9 @@
 "ActionMigratedFrom" = "Migrated from {chat}";
 "ActionMigratedTo" = "Migrated to {chat}";
 "ActionAddedToCommunity" = "{from} added this chat to {community}";
+"ActionJoinedViaCommunity" = "{from} joined via {community} community";
+"RichEditorTableCompact" = "Compact Table";
+"BotDraftStop" = "Stop";
 "ActionRemovedFromCommunity" = "{from} removed this chat from the community";
 "CommunityOpenPanel" = "Show community chats";
 "CommunityShowAsOneChat" = "Show as One Chat";
@@ -3187,6 +3193,10 @@
 "NoForwardsRequestReject" = "Reject";
 "NoForwardsRequestAccept" = "Accept";
 "AiMessageEditor" = "AI Editor";
+"AiEditorPrompt" = "Prompt";
+"AiEditorRewritePlaceholder" = "Describe how to rewrite the text…";
+"AiEditorGeneratePlaceholder" = "Generate text, formulas, or tables…";
+"AiEditorGenerate" = "Generate";
 "AiMessageEditorTranslate" = "Translate";
 "AiMessageEditorStyle" = "Style";
 "AiMessageEditorFix" = "Fix";
@@ -3257,6 +3267,12 @@
 "SettingsStickersDesc" = "Stickers, Emoji, Reactions";
 "SettingsLanguageDesc" = "{language}, Translate Messages";
 "SettingsSessionsDesc" = "Sessions, Automatically terminate";
+"RichMediaCollage" = "Collage";
+"RichMediaSlideshow" = "Slideshow";
+"RichMediaRetry" = "Retry upload";
+"RichMediaUploadFailed" = "Upload failed";
+"RichMediaSkippedFiles_one" = "Skipped {count} file.";
+"RichMediaSkippedFiles_other" = "Skipped {count} files.";
 "WebLoginInvalid" = "This login link is invalid or has expired. Open a fresh link or log in normally.";
 "RichButtons" = "Buttons";
 "RichButtonInline" = "Inline Button";

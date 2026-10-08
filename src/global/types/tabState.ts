@@ -12,7 +12,6 @@ import type {
   ApiChatType,
   ApiCheckedGiftCode,
   ApiCollectibleInfo,
-  ApiComposedMessageWithAI,
   ApiDialog,
   ApiEmojiStatusCollectible,
   ApiFormattedText,
@@ -21,6 +20,7 @@ import type {
   ApiGroupStatistics,
   ApiInputAiComposeTone,
   ApiInputInvoice,
+  ApiInputRichMessage,
   ApiLimitTypeWithModal,
   ApiMessage,
   ApiMissingInvitedUser,
@@ -121,9 +121,27 @@ export type ReactionDeletionContext = {
   count: number;
 };
 
+export type AiEditorContent = {
+  type: 'text';
+  text: ApiFormattedText;
+} | {
+  type: 'rich';
+  richMessage: ApiInputRichMessage;
+};
+
+export type AiEditorResult = {
+  type: 'text';
+  text: ApiFormattedText;
+  diffText?: ApiFormattedText;
+} | {
+  type: 'rich';
+  richMessage: ApiInputRichMessage;
+};
+
 export type AiEditorTabBase = {
   isLoading?: boolean;
-  result?: ApiComposedMessageWithAI;
+  requestId?: number;
+  result?: AiEditorResult;
   error?: 'floodPremium' | 'aiError' | 'generic';
 };
 
@@ -161,6 +179,7 @@ export type TabState = {
   inactiveReason?: 'auth' | 'otherClient';
   shouldPreventComposerAnimation?: boolean;
   isRichInputExpanded?: boolean;
+  richMediaUploadBlockingCount?: number;
   inviteHash?: string;
   canInstall?: boolean;
   isStatisticsShown?: boolean;
@@ -694,22 +713,25 @@ export type TabState = {
 
   aiMessageEditorModal?: {
     chatId: string;
-    text: ApiFormattedText;
+    threadId: ThreadId;
+    content: AiEditorContent;
     activeTab: 'translate' | 'style' | 'fix';
     isFromAttachment?: boolean;
+    isEditing?: boolean;
     translateTab?: AiEditorTabBase & {
       selectedLanguage?: string;
       selectedTone?: ApiInputAiComposeTone;
       shouldEmojify?: boolean;
-      cache?: Record<string, ApiComposedMessageWithAI>;
+      cache?: Record<string, AiEditorResult>;
     };
     styleTab?: AiEditorTabBase & {
       selectedTone?: ApiInputAiComposeTone;
+      customPrompt?: string;
       shouldEmojify?: boolean;
-      cache?: Record<string, ApiComposedMessageWithAI>;
+      cache?: Record<string, AiEditorResult>;
     };
     fixTab?: AiEditorTabBase & {
-      cache?: ApiComposedMessageWithAI;
+      cache?: AiEditorResult;
     };
   };
 
@@ -726,8 +748,10 @@ export type TabState = {
   };
 
   aiMessageEditorPendingResult?: {
-    text?: ApiFormattedText;
-    shouldClear?: boolean;
+    content: AiEditorContent;
+    chatId: string;
+    threadId: ThreadId;
+    shouldSend?: boolean;
     shouldSendWithAttachments?: boolean;
     isSilent?: boolean;
     scheduledAt?: number;

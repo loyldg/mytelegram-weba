@@ -83,14 +83,14 @@
       color: var(--color-composer-button);
     }
 
-    .icon-new-send,
-    .icon-schedule,
-    .icon-forward,
-    .main-button-microphone,
-    .icon-check,
     .icon-view-once,
     .icon-one-filled {
       position: absolute;
+    }
+
+    .main-button-state-icon {
+      position: absolute;
+      animation: hide-icon 0.4s forwards ease-out;
     }
 
     &.recording {
@@ -99,85 +99,15 @@
       transition: box-shadow 0.1s;
     }
 
-    &.send, &.sendOneTime {
-      .icon-new-send {
-        animation: grow-icon 0.4s ease-out;
-      }
-
-      .main-button-microphone,
-      .icon-forward,
-      .icon-check,
-      .icon-schedule {
-        animation: hide-icon 0.4s forwards ease-out;
-      }
-    }
-
-    &.schedule {
-      .icon-schedule {
-        animation: grow-icon 0.4s ease-out;
-      }
-
-      .main-button-microphone,
-      .icon-check,
-      .icon-forward,
-      .icon-new-send {
-        animation: hide-icon 0.4s forwards ease-out;
-      }
-    }
-
-    &.record {
-      .main-button-microphone {
-        animation: grow-icon 0.4s ease-out;
-      }
-
-      .icon-new-send,
-      .icon-check,
-      .icon-forward,
-      .icon-schedule {
-        animation: hide-icon 0.4s forwards ease-out;
-      }
-    }
-
-    .icon-round-video {
-      position: absolute;
-      transform: scale(0);
-    }
-
-    &.record.record-video {
-      .main-button-microphone {
-        animation: hide-icon 0.4s forwards ease-out;
-      }
-
-      .icon-round-video {
-        transform: scale(1);
-        animation: grow-icon 0.4s ease-out;
-      }
-    }
-
-    &.edit {
-      .icon-check {
-        animation: grow-icon 0.4s ease-out;
-      }
-
-      .icon-new-send,
-      .icon-forward,
-      .main-button-microphone,
-      .icon-schedule {
-        animation: hide-icon 0.4s forwards ease-out;
-      }
-    }
-
-    &.forward {
-      .icon-forward {
-        animation: grow-icon 0.4s ease-out;
-      }
-
-      .icon-new-send,
-      .icon-check,
-      .main-button-microphone,
-      .icon-schedule {
-        animation: hide-icon 0.4s forwards ease-out;
-      }
+    &.send .icon-new-send,
+    &.sendOneTime .icon-new-send,
+    &.schedule .icon-schedule,
+    &.record:not(.record-video) .main-button-microphone,
+    &.record.record-video .icon-round-video,
+    &.edit .icon-check,
+    &.forward .icon-forward,
+    &.stop .icon-stop-square {
+      animation: grow-icon 0.4s ease-out;
     }
 
     &.view-once {
@@ -204,11 +134,7 @@
 
   &:not(.mounted) > .Button,
   body.no-message-composer-animations & > .Button {
-    .icon-new-send,
-    .main-button-microphone,
-    .icon-check,
-    .icon-round-video,
-    .icon-schedule {
+    .main-button-state-icon {
       animation-duration: 0ms !important;
     }
   }
@@ -412,7 +338,7 @@
         }
 
         .form-control {
-          min-height: calc(100% - var(--rich-editor-header-height));
+          min-height: calc(var(--rich-editor-scroller-height) - var(--rich-editor-header-height));
         }
 
         .placeholder-text {
@@ -496,18 +422,13 @@
       --height: var(--composer-main-button-height);
       --icon-width: var(--composer-icon-size);
 
-      align-self: center;
       margin-bottom: 0;
     }
 
     .bot-commands {
-      align-self: center;
-
       width: var(--composer-main-button-height);
       height: var(--composer-main-button-height);
-
       color: white !important;
-
       background: var(--color-primary) !important;
 
       &.activated {
@@ -533,6 +454,11 @@
       z-index: 2;
       top: 0;
       right: calc(-1 * (var(--composer-main-button-gap) + var(--composer-main-button-width) / 2 + 1.25rem));
+    }
+
+    .ai-composer-button {
+      z-index: 2;
+      top: 0;
     }
   }
 
@@ -712,7 +638,8 @@
   position: relative;
   display: flex;
 
-  .rich-editor-button {
+  .rich-editor-button,
+  .ai-composer-button {
     position: absolute;
     z-index: 1;
     top: 0.4375rem;
@@ -723,14 +650,24 @@
     transition: opacity 150ms ease-out, background-color 150ms ease-out;
   }
 
+  .ai-composer-button {
+    right: auto;
+    left: 0;
+  }
+
   &.is-voice-recording > :not(.voice-record-bar) {
     visibility: hidden;
   }
 
-  .rich-editor-button-hidden {
+  .rich-editor-button-hidden,
+  .ai-composer-button-hidden {
     pointer-events: none;
     opacity: 0;
     transition: opacity 150ms ease-out;
+  }
+
+  .ai-composer-button-hidden {
+    visibility: hidden;
   }
 
   .rich-editor-history {

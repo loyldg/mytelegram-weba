@@ -1,6 +1,5 @@
 @use "sass:map";
 @use "../../../styles/icons";
-@use "../../../styles/mixins";
 
 @mixin subheader-styles() {
   overflow: hidden;
@@ -13,8 +12,7 @@
 
   font-size: calc(var(--message-text-size, 1rem) - 0.125rem);
 
-  @include mixins.action-message-bg;
-
+  background-color: var(--action-message-bg);
   box-shadow: 0 1px 2px var(--color-default-shadow);
 
   @media (max-width: 600px) {
@@ -478,10 +476,6 @@
     }
   }
 
-  .message-topic {
-    align-self: flex-start;
-  }
-
   &.has-shadow {
     box-shadow: 0 1px 2px var(--color-default-shadow);
   }
@@ -797,8 +791,7 @@
   > .WebPage-text,
   > .Reactions,
   & ~ .Reactions.is-outside {
-    width: 0;
-    min-width: 100%;
+    contain: inline-size;
   }
 }
 
@@ -864,7 +857,7 @@
   }
 
   .message-media-duration {
-    @include mixins.action-message-bg;
+    background-color: var(--action-message-bg);
   }
 
   .media-inner {

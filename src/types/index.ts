@@ -31,6 +31,7 @@ import type {
   ApiPhoto,
   ApiReaction,
   ApiReactionWithPaid,
+  ApiRichMessage,
   ApiStarGiftAttributeIdBackdrop,
   ApiStarGiftAttributeIdPattern,
   ApiStarGiftRegular,
@@ -120,7 +121,7 @@ export type AnimationLevel = 0 | 1 | 2;
 export type FoldersPosition = 'top' | 'left';
 export type PerformanceTypeKey = (
   'pageTransitions' | 'messageSendingAnimations' | 'mediaViewerAnimations'
-  | 'messageComposerAnimations' | 'contextMenuAnimations' | 'contextMenuBlur' | 'messageBlur'
+  | 'messageComposerAnimations' | 'contextMenuAnimations' | 'contextMenuBlur'
   | 'rightColumnAnimations' | 'animatedEmoji' | 'loopAnimatedStickers' | 'reactionEffects' | 'stickerEffects'
   | 'autoplayGifs' | 'autoplayVideos' | 'storyRibbonAnimations' | 'snapEffect' | 'textStreaming'
 );
@@ -222,6 +223,7 @@ export enum SettingsScreens {
   PrivacyBio,
   PrivacyBirthday,
   PrivacyGifts,
+  PrivacySavedMusic,
   PrivacyPhoneCall,
   PrivacyPhoneP2P,
   PrivacyForwarding,
@@ -240,6 +242,8 @@ export enum SettingsScreens {
   PrivacyBirthdayDeniedContacts,
   PrivacyGiftsAllowedContacts,
   PrivacyGiftsDeniedContacts,
+  PrivacySavedMusicAllowedContacts,
+  PrivacySavedMusicDeniedContacts,
   PrivacyPhoneCallAllowedContacts,
   PrivacyPhoneCallDeniedContacts,
   PrivacyPhoneP2PAllowedContacts,
@@ -757,7 +761,9 @@ export interface TopicsInfo {
 
 export type TranslatedMessage = {
   isPending?: boolean;
+  requestId?: string;
   text?: ApiFormattedText;
+  richMessage?: ApiRichMessage;
   summary?: TextSummary;
 };
 

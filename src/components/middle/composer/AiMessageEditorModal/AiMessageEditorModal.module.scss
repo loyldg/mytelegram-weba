@@ -1,3 +1,5 @@
+@use '../../../../styles/mixins';
+
 .modal {
   max-width: 26rem;
 }
@@ -48,12 +50,16 @@
 }
 
 .tabContent {
+  scrollbar-gutter: stable;
+
   overflow: auto;
   flex-grow: 1;
 
   min-height: 0;
   padding: 1rem;
   padding-top: 3.125rem;
+
+  @include mixins.adapt-padding-to-scrollbar(1rem);
 }
 
 .editorBlock {
@@ -65,10 +71,21 @@
 
   min-height: 100%;
   padding: 0.75rem;
+  padding-bottom: 1.75rem;
   border-radius: 1.5rem;
 
   background: var(--color-background);
   box-shadow: 0 1px 4px 0 rgba(0, 0, 0, 0.05);
+}
+
+.promptOnly {
+  .transitionWrapper {
+    margin-top: 0;
+  }
+
+  .tabContent {
+    padding-top: 0;
+  }
 }
 
 .footer {

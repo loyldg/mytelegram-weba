@@ -186,6 +186,7 @@ function appendPageBlockUsage(block: ApiPageBlock, depth: number, usage: RichMes
       appendPageCaptionUsage(block.caption, depth + 1, usage);
       break;
     case 'audio':
+    case 'document':
       usage.mediaCount++;
       appendPageCaptionUsage(block.caption, depth + 1, usage);
       break;
@@ -312,6 +313,7 @@ function appendPageBlockPreviewText(block: ApiPageBlock, parts: string[], maxLen
       return appendPageTablePreviewText(block, parts, maxLength);
     case 'photo':
     case 'video':
+    case 'audio':
       return appendPageCaptionPreviewText(block.caption, parts, maxLength);
     case 'math':
       return appendBlockText(parts, getMathPreviewText(), maxLength);
@@ -324,11 +326,12 @@ function appendPageBlockPreviewText(block: ApiPageBlock, parts: string[], maxLen
       return appendPageMediaGroupPreviewText(block, parts, maxLength);
     case 'map':
       return appendPageMapPreviewText(block, parts, maxLength);
+    case 'document':
+      return appendBlockText(parts, getRichTextPlainText(block.caption.text) || block.document.fileName, maxLength);
     case 'unsupported':
     case 'divider':
     case 'anchor':
     case 'channel':
-    case 'audio':
     case 'relatedArticles':
       return maxLength;
   }
