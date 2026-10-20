@@ -15,7 +15,7 @@ export const SERVER_KEYS = [
         e: 65537
     }
 ].reduce((acc, { fingerprint, ...keyInfo }) => {
-  acc.set(fingerprint.toString(), keyInfo);
+  acc.set(fingerprint, keyInfo);
   return acc;
 }, new Map<string, { n: bigint; e: number }>());
 
