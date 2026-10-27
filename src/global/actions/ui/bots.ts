@@ -3,6 +3,7 @@ import type { ActionReturnType } from '../../types';
 
 import { getCurrentTabId } from '../../../util/establishMultitabRole';
 import { selectTabBrowserState } from '../../helpers';
+import { addTabStateResetterAction } from '../../helpers/meta';
 import { addActionHandler, getGlobal, setGlobal } from '../../index';
 import { updateSharedSettings } from '../../reducers';
 import {
@@ -304,3 +305,30 @@ addActionHandler('closeLocationAccessModal', (global, actions, payload): ActionR
     locationAccessModal: undefined,
   }, tabId);
 });
+
+addActionHandler('openRequestPeerModal', (global, actions, payload): ActionReturnType => {
+  const {
+    botId, chatId, messageId, buttonId, maxQuantity, peerType, tabId = getCurrentTabId(),
+  } = payload;
+
+  return updateTabState(global, {
+    requestPeerModal: {
+      botId,
+      chatId,
+      messageId,
+      buttonId,
+      maxQuantity,
+      peerType,
+    },
+  }, tabId);
+});
+
+addActionHandler('closeRequestPeerModal', (global, actions, payload): ActionReturnType => {
+  const { tabId = getCurrentTabId() } = payload || {};
+
+  return updateTabState(global, {
+    requestPeerModal: undefined,
+  }, tabId);
+});
+
+addTabStateResetterAction('closeBotCreationModal', 'botCreationModal');

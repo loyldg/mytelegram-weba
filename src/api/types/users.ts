@@ -11,6 +11,7 @@ import type {
   ApiTypePeerColor,
 } from './peers';
 import type { ApiSavedStarGift, ApiStarsRating } from './stars';
+import type { ApiWalletCard } from './wallet';
 
 export interface ApiUser {
   id: string;
@@ -49,6 +50,7 @@ export interface ApiUser {
   paidMessagesStars?: number;
   isBotForum?: boolean;
   canManageBotForumTopics?: boolean;
+  canManageBots?: boolean;
   isGuestChatBot?: boolean;
   isGuardBot?: boolean;
 }
@@ -93,6 +95,8 @@ export interface ApiUserFullInfo {
   noForwardsMyEnabled?: boolean;
   noForwardsPeerEnabled?: boolean;
   isUnofficialSecurityRisk?: boolean;
+  botManagerId?: string;
+  walletCard?: ApiWalletCard;
 }
 
 export type ApiUserType = 'userTypeBot' | 'userTypeRegular' | 'userTypeDeleted' | 'userTypeUnknown';

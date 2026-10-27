@@ -78,10 +78,12 @@ export { default as AiToneEmojiPickerModal }
   from '../components/middle/composer/AiMessageEditorModal/AiToneEmojiPickerModal';
 export { default as AiTonePreviewModal }
   from '../components/modals/aiTonePreview/AiTonePreviewModal';
+export { default as LanguageModal } from '../components/modals/language/LanguageModal';
 
 export { default as AttachmentModal } from '../components/middle/composer/AttachmentModal';
 export { default as MediaEditor } from '../components/ui/mediaEditor/MediaEditor';
 export { default as PollModal } from '../components/modals/poll/PollModal';
+export { default as MusicPickerModal } from '../components/modals/musicPicker/MusicPickerModal';
 export { default as ToDoListModal } from '../components/middle/composer/ToDoListModal';
 export { default as SymbolMenu } from '../components/middle/composer/SymbolMenu';
 export { default as ChatCommandTooltip } from '../components/common/tooltips/ChatCommandTooltip';
@@ -121,4 +123,6 @@ export { default as StealthModeModal } from '../components/modals/storyStealthMo
 export { default as LeaveGroupModal } from '../components/modals/leaveGroup/LeaveGroupModal';
 export { default as TwoFaCheckModal } from '../components/modals/twoFaCheck/TwoFaCheckModal';
 export { default as QuickChatPickerModal } from '../components/modals/quickChatPicker/QuickChatPickerModal';
+export { default as RequestPeerModal } from '../components/modals/requestPeer/RequestPeerModal';
+export { default as BotCreationModal } from '../components/modals/botCreation/BotCreationModal';
 export { default as CocoonModal } from '../components/modals/cocoon/CocoonModal';

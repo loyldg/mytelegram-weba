@@ -199,7 +199,7 @@ addActionHandler('connectToActiveGroupCall', async (global, actions, payload): P
   if (!groupCall) return;
 
   if (groupCall.connectionState === 'discarded') {
-    actions.showNotification({ message: 'This voice chat is not active', tabId });
+    actions.showNotification({ message: { key: 'VoiceChatInactive' }, tabId });
     return;
   }
 
@@ -221,8 +221,7 @@ addActionHandler('connectToActiveGroupCall', async (global, actions, payload): P
   const params = await joinGroupCall(localParticipantId, audioContext, audioElement, actions.apiUpdate);
   if (!params) {
     actions.showNotification({
-      // TODO[lang] Localize error message
-      message: 'Failed to join voice chat',
+      message: { key: 'VoiceChatJoinFailed' },
       tabId,
     });
     actions.leaveGroupCall({ tabId });
@@ -240,8 +239,7 @@ addActionHandler('connectToActiveGroupCall', async (global, actions, payload): P
 
   if (!result) {
     actions.showNotification({
-      // TODO[lang] Localize error message
-      message: 'Failed to join voice chat',
+      message: { key: 'VoiceChatJoinFailed' },
       tabId,
     });
     actions.leaveGroupCall({ tabId });
@@ -289,10 +287,10 @@ addActionHandler('connectToActivePhoneCall', async (global, actions): Promise<vo
   }
 });
 
-addActionHandler('acceptCall', async (global): Promise<void> => {
+addActionHandler('acceptCall', async (global, actions): Promise<void> => {
   const { phoneCall } = global;
 
-  if (!phoneCall) return;
+  if (!phoneCall?.gAHash) return;
 
   const dhConfig = await callApi('fetchDhConfig');
   if (!dhConfig) return;
@@ -302,8 +300,44 @@ addActionHandler('acceptCall', async (global): Promise<void> => {
     shouldUseSctp: phoneCall.customParameters?.shouldUseSctp ?? true,
   });
 
-  const gB = await callApi('acceptPhoneCall', dhConfig);
-  await callApi('acceptCall', { call: phoneCall, gB });
+  let gB;
+  try {
+    gB = await callApi('acceptPhoneCall', { ...dhConfig, gAHash: phoneCall.gAHash });
+  } catch (err) {
+    logPhoneCallDebug('Failed to accept phone call', {
+      callId: phoneCall.id,
+      error: summarizeError(err),
+    });
+    if ('hangUp' in actions) actions.hangUp({ tabId: getCurrentTabId() });
+    return;
+  }
+
+  global = getGlobal();
+  if (global.phoneCall?.id !== phoneCall.id) return;
+
+  global = {
+    ...global,
+    phoneCall: {
+      ...global.phoneCall,
+      isKeyExchangeOwner: true,
+    },
+  };
+  setGlobal(global);
+
+  const isAccepted = await callApi('acceptCall', { call: phoneCall, gB });
+  if (isAccepted) return;
+
+  global = getGlobal();
+  if (global.phoneCall?.id !== phoneCall.id) return;
+
+  global = {
+    ...global,
+    phoneCall: {
+      ...global.phoneCall,
+      isKeyExchangeOwner: undefined,
+    },
+  };
+  setGlobal(global);
 });
 
 addActionHandler('sendSignalingData', (global, actions, payload): ActionReturnType => {

@@ -1,14 +1,13 @@
 import { addCallback } from '../../../lib/teact/teactn';
 
 import type { ActionReturnType, GlobalState } from '../../types';
-import { type LangCode, LeftColumnContent, SettingsScreens } from '../../../types';
+import { LeftColumnContent, SettingsScreens } from '../../../types';
 
 import { requestMutation } from '../../../lib/fasterdom/fasterdom';
 import { IS_IOS } from '../../../util/browser/windowEnvironment';
 import { disableDebugConsole, initDebugConsole } from '../../../util/debugConsole';
 import { getCurrentTabId } from '../../../util/establishMultitabRole';
-import { setTimeFormat as setLocalizedTimeFormat } from '../../../util/localization';
-import { oldSetLanguage, setTimeFormat as setLegacyTimeFormat } from '../../../util/oldLangProvider';
+import { loadAndChangeLanguage, setTimeFormat } from '../../../util/localization';
 import { applyPerformanceSettings } from '../../../util/perfomanceSettings';
 import switchTheme from '../../../util/switchTheme';
 import { updatePeerColors } from '../../../util/theme';
@@ -22,6 +21,8 @@ import { replaceSettings, updateSharedSettings, updateThemeSettings } from '../.
 import { updateTabState } from '../../reducers/tabs';
 import { selectCanAnimateInterface, selectChatFolder, selectTabState } from '../../selectors';
 import { selectSharedSettings } from '../../selectors/sharedState';
+
+const MAX_RECENTLY_FOUND_SETTINGS = 5;
 
 let prevGlobal: GlobalState | undefined;
 
@@ -57,12 +58,19 @@ addCallback((global: GlobalState) => {
   }
 
   if (sharedSettings.language !== oldSharedSettings.language) {
-    oldSetLanguage(sharedSettings.language as LangCode);
+    const langCode = sharedSettings.language;
+    void loadAndChangeLanguage(langCode).then((hasChanged) => {
+      global = getGlobal();
+      if (!hasChanged || selectSharedSettings(global).language !== langCode) return undefined;
+      return callApi('setLanguageCode', { langCode });
+    }).catch((err) => {
+      // eslint-disable-next-line no-console
+      console.warn('Failed to announce language:', err);
+    });
   }
 
   if (sharedSettings.timeFormat !== oldSharedSettings.timeFormat) {
-    setLocalizedTimeFormat(sharedSettings.timeFormat);
-    setLegacyTimeFormat(sharedSettings.timeFormat);
+    setTimeFormat(sharedSettings.timeFormat);
   }
 
   if (sharedSettings.messageTextSize !== oldSharedSettings.messageTextSize) {
@@ -189,7 +197,7 @@ addActionHandler('openLeftColumnContent', (global, actions, payload): ActionRetu
 });
 
 addActionHandler('openSettingsScreen', (global, actions, payload): ActionReturnType => {
-  const { screen, tabId = getCurrentTabId() } = payload;
+  const { screen, highlight, tabId = getCurrentTabId() } = payload;
   const tabState = selectTabState(global, tabId);
 
   actions.loadPrivacySettings({ skipIfCached: true });
@@ -199,8 +207,41 @@ addActionHandler('openSettingsScreen', (global, actions, payload): ActionReturnT
     leftColumn: {
       ...tabState.leftColumn,
       settingsScreen: screen || SettingsScreens.Main,
+      settingsHighlight: highlight,
     },
   }, tabId);
+});
+
+addActionHandler('clearSettingsHighlight', (global, actions, payload): ActionReturnType => {
+  const { tabId = getCurrentTabId() } = payload || {};
+  const tabState = selectTabState(global, tabId);
+  if (!tabState.leftColumn.settingsHighlight) return undefined;
+
+  return updateTabState(global, {
+    leftColumn: {
+      ...tabState.leftColumn,
+      settingsHighlight: undefined,
+    },
+  }, tabId);
+});
+
+addActionHandler('addRecentlyFoundSettingId', (global, actions, payload): ActionReturnType => {
+  const { id } = payload;
+  const otherIds = global.recentlyFoundSettingIds?.filter((recentId) => recentId !== id) || [];
+
+  return {
+    ...global,
+    recentlyFoundSettingIds: [id, ...otherIds].slice(0, MAX_RECENTLY_FOUND_SETTINGS),
+  };
+});
+
+addActionHandler('removeRecentlyFoundSettingId', (global, actions, payload): ActionReturnType => {
+  const { id } = payload;
+
+  return {
+    ...global,
+    recentlyFoundSettingIds: global.recentlyFoundSettingIds?.filter((recentId) => recentId !== id),
+  };
 });
 
 addActionHandler('openEditChatFolder', (global, actions, payload): ActionReturnType => {
@@ -263,3 +304,14 @@ addActionHandler('openPasskeyModal', (global, actions, payload): ActionReturnTyp
 });
 
 addTabStateResetterAction('closePasskeyModal', 'isPasskeyModalOpen');
+addTabStateResetterAction('closeLanguageModal', 'languageModal');
+
+addActionHandler('removeCustomLanguage', (global, actions, payload): ActionReturnType => {
+  const { langCode } = payload;
+  const { language, customLanguages } = selectSharedSettings(global);
+  if (language === langCode) return undefined;
+
+  return updateSharedSettings(global, {
+    customLanguages: customLanguages?.filter((customLanguage) => customLanguage.langCode !== langCode),
+  });
+});

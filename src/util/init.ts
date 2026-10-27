@@ -1,6 +1,6 @@
 import type { GlobalState } from '../global/types';
 
-import { DEBUG, IS_MOCKED_CLIENT, IS_SCREEN_LOCKED_CACHE_KEY } from '../config';
+import { DEBUG, IS_SCREEN_LOCKED_CACHE_KEY } from '../config';
 import {
   loadCache, loadCachedSharedState, migrateCache, migrateSharedCache, removeAllGlobalCaches, setupCaching,
 } from '../global/cache';
@@ -16,6 +16,7 @@ import { purgePasscodeCaches } from './cacheApi';
 import { cloneDeep } from './iteratees';
 import { ACCOUNT_SLOT } from './multiaccount';
 import { unsubscribeLocally } from './notifications';
+import { parseJsonWithBigInt } from './numbers';
 import {
   abortPasscodeDisable,
   clearLegacyEncryptedSessionIfAllowed,
@@ -45,7 +46,6 @@ export async function initGlobal(force: boolean = false, prevGlobal?: GlobalStat
   const initial = cloneDeep(INITIAL_GLOBAL_STATE);
   const cache = await loadCache(initial);
   let global = cache || initial;
-  if (IS_MOCKED_CLIENT) global.auth.state = 'authorizationStateReady';
 
   global = await applyPasscodeStateOnBoot(global);
 
@@ -229,7 +229,7 @@ function buildLockedGlobal<T extends GlobalState>(
 }
 
 function restoreGlobal<T extends GlobalState>(global: T, globalJson?: string): T {
-  const restoredGlobal = globalJson ? JSON.parse(globalJson) as T : cloneDeep(INITIAL_GLOBAL_STATE) as T;
+  const restoredGlobal = globalJson ? parseJsonWithBigInt<T>(globalJson) : cloneDeep(INITIAL_GLOBAL_STATE) as T;
   restoredGlobal.byTabId = global.byTabId;
   restoredGlobal.sharedState = global.sharedState;
   if (globalJson) migrateCache(restoredGlobal, cloneDeep(INITIAL_GLOBAL_STATE));

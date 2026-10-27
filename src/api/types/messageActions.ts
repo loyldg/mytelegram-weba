@@ -123,6 +123,16 @@ export interface ApiMessageActionBotAllowed extends ActionMediaType {
   app?: ApiBotApp;
 }
 
+export interface ApiMessageActionRequestedPeer extends ActionMediaType {
+  type: 'requestedPeer';
+  peerIds: string[];
+}
+
+export interface ApiMessageActionManagedBotCreated extends ActionMediaType {
+  type: 'managedBotCreated';
+  botId: string;
+}
+
 export interface ApiMessageActionContactSignUp extends ActionMediaType {
   type: 'contactSignUp';
 }
@@ -160,7 +170,7 @@ export interface ApiMessageActionGiftPremium extends ActionMediaType {
   amount: number;
   days: number;
   cryptoCurrency?: string;
-  cryptoAmount?: number;
+  cryptoAmount?: bigint;
   message?: ApiFormattedText;
 }
 
@@ -199,7 +209,7 @@ export interface ApiMessageActionGiftCode extends ActionMediaType {
   currency?: string;
   amount?: number;
   cryptoCurrency?: string;
-  cryptoAmount?: number;
+  cryptoAmount?: bigint;
   message?: ApiFormattedText;
 }
 
@@ -233,7 +243,7 @@ export interface ApiMessageActionGiftStars extends ActionMediaType {
   amount: number;
   stars: number;
   cryptoCurrency?: string;
-  cryptoAmount?: number;
+  cryptoAmount?: bigint;
   transactionId?: string;
 }
 
@@ -242,8 +252,31 @@ export interface ApiMessageActionGiftTon extends ActionMediaType {
   currency: string;
   amount: number;
   cryptoCurrency: string;
-  cryptoAmount: number;
+  cryptoAmount: bigint;
   transactionId?: string;
+}
+
+export interface ApiMessageActionWalletTonConnectRequest extends ActionMediaType {
+  type: 'walletTonConnectRequest';
+  sessionId: string;
+  expires: number;
+  topic?: string;
+  traceId?: string;
+  dappName?: string;
+  isAccepted?: boolean;
+  isDeclined?: boolean;
+}
+
+// The service account reports transfers from senders the server cannot name, e.g. outside wallets
+export interface ApiMessageActionGramTransfer extends ActionMediaType {
+  type: 'gramTransfer';
+  // Nanotons, always positive
+  amount: bigint;
+  peerAddress: string;
+  transactionId: string;
+  comment?: string;
+  // Base64, decrypted on the client
+  encryptedComment?: string;
 }
 
 export interface ApiMessageActionPrizeStars extends ActionMediaType {
@@ -415,6 +448,7 @@ export type ApiMessageAction = ApiMessageActionUnsupported | ApiMessageActionCha
   | ApiMessageActionGameScore | ApiMessageActionPaymentSent | ApiMessageActionPhoneCall
   | ApiMessageActionScreenshotTaken | ApiMessageActionCustomAction | ApiMessageActionBotAllowed
   | ApiMessageActionBoostApply | ApiMessageActionContactSignUp | ApiMessageActionExpiredContent
+  | ApiMessageActionRequestedPeer | ApiMessageActionManagedBotCreated
   | ApiMessageActionGroupCall | ApiMessageActionInviteToGroupCall | ApiMessageActionGroupCallScheduled
   | ApiMessageActionChatJoinedByRequest | ApiMessageActionChatJoinedViaCommunity
   | ApiMessageActionWebViewDataSent | ApiMessageActionGiftPremium
@@ -429,4 +463,4 @@ export type ApiMessageAction = ApiMessageActionUnsupported | ApiMessageActionCha
   | ApiMessageActionStarGiftPurchaseOffer
   | ApiMessageActionStarGiftPurchaseOfferDeclined | ApiMessageActionNewCreatorPending
   | ApiMessageActionChangeCreator | ApiMessageActionNoForwardsToggle | ApiMessageActionNoForwardsRequest
-  | ApiMessageActionChangeCommunity;
+  | ApiMessageActionChangeCommunity | ApiMessageActionGramTransfer | ApiMessageActionWalletTonConnectRequest;

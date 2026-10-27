@@ -89,6 +89,7 @@ import { preventMessageInputBlur } from './helpers/preventMessageInputBlur';
 
 import useInterval from '../../hooks/schedulers/useInterval';
 import useEffectWithPrevDeps from '../../hooks/useEffectWithPrevDeps';
+import useLang from '../../hooks/useLang';
 import useLastCallback from '../../hooks/useLastCallback';
 import useLayoutEffectWithPrevDeps from '../../hooks/useLayoutEffectWithPrevDeps';
 import useNativeCopySelectedMessages from '../../hooks/useNativeCopySelectedMessages';
@@ -159,6 +160,7 @@ type StateProps = {
   isEmptyThread?: boolean;
   isForum?: boolean;
   withTopicSeparators?: boolean;
+  isBotForum?: boolean;
   currentUserId: string;
   isAccountFrozen?: boolean;
   areAdsEnabled?: boolean;
@@ -233,6 +235,7 @@ const MessageList = ({
   isChatLoaded,
   isForum,
   withTopicSeparators,
+  isBotForum,
   isChannelChat,
   isGroupChat,
   isChannelWithAvatars,
@@ -294,6 +297,7 @@ const MessageList = ({
     loadViewportMessages, setScrollOffset, loadSponsoredMessages, loadMessageReactions, copyMessagesByIds,
     loadMessageViews, loadPeerStoriesByIds, loadFactChecks, requestChatTranslation,
   } = getActions();
+  const lang = useLang();
 
   const restrictionReasons = useMemo(() => getApplicableRestrictionReasons(
     rawRestrictionReasons, ignoreRestrictionReasons,
@@ -1344,7 +1348,9 @@ const MessageList = ({
     return activeKey === Content.Restricted ? (
       <div className="empty">
         <span>
-          {restrictionReasons?.[0]?.text || `This is a private ${isChannelChat ? 'channel' : 'chat'}`}
+          {restrictionReasons?.[0]?.text || lang(
+            isChannelChat ? 'RestictionReasonPrivateChannel' : 'RestictionReasonPrivateChat',
+          )}
         </span>
       </div>
     ) : activeKey === Content.StarsRequired ? (
@@ -1401,6 +1407,7 @@ const MessageList = ({
         canPost={canPost}
         canManageBotForumTopics={canManageBotForumTopics}
         withTopicSeparators={withTopicSeparators}
+        isBotForum={isBotForum}
         shouldScrollToBottom={shouldScrollToBottom}
         onScrollDownToggle={onScrollDownToggle}
         onContentResize={handleContentResize}
@@ -1530,7 +1537,8 @@ export default memo(withGlobal<OwnProps>(
       noMessageSendingAnimation: !selectPerformanceSettingsValue(global, 'messageSendingAnimations'),
       isServiceNotificationsChat: chatId === SERVICE_NOTIFICATIONS_USER_ID,
       isForum: chat.isForum,
-      withTopicSeparators: chat.isForum && !chat.isBotForum && threadId === MAIN_THREAD_ID,
+      withTopicSeparators: chat.isForum && threadId === MAIN_THREAD_ID,
+      isBotForum: chat.isBotForum,
       isEmptyThread,
       currentUserId,
       isChatProtected: selectIsChatProtected(global, chatId),

@@ -1,4 +1,3 @@
-import type { FC } from '../../../lib/teact/teact';
 import {
   memo, useMemo,
   useState,
@@ -13,8 +12,8 @@ import { filterPeersByQuery } from '../../../global/helpers/peers';
 import { unique } from '../../../util/iteratees';
 import sortChatIds from '../../common/helpers/sortChatIds';
 
+import useLang from '../../../hooks/useLang';
 import useLastCallback from '../../../hooks/useLastCallback';
-import useOldLang from '../../../hooks/useOldLang';
 
 import PeerPicker from '../../common/pickers/PeerPicker';
 import PickerModal from '../../common/pickers/PickerModal';
@@ -32,16 +31,16 @@ interface StateProps {
   archivedListIds?: string[];
 }
 
-const StarsGiftingPickerModal: FC<OwnProps & StateProps> = ({
+const StarsGiftingPickerModal = ({
   isOpen,
   currentUserId,
   activeListIds,
   archivedListIds,
   userIds,
-}) => {
+}: OwnProps & StateProps) => {
   const { closeStarsGiftingPickerModal, openStarsGiftModal } = getActions();
 
-  const oldLang = useOldLang();
+  const lang = useLang();
 
   const [searchQuery, setSearchQuery] = useState<string>('');
 
@@ -82,18 +81,18 @@ const StarsGiftingPickerModal: FC<OwnProps & StateProps> = ({
       className={styles.root}
       isOpen={isOpen}
       onClose={closeStarsGiftingPickerModal}
-      title={oldLang('GiftStarsTitle')}
+      title={lang('GiftStarsTitle')}
       hasCloseButton
-      shouldAdaptToSearch
       withFixedHeight
-      confirmButtonText={oldLang('Continue')}
+      confirmButtonText={lang('Continue')}
       onEnter={closeStarsGiftingPickerModal}
     >
       <PeerPicker
+        withIslands
         className={styles.picker}
         itemIds={displayedUserIds}
         filterValue={searchQuery}
-        filterPlaceholder={oldLang('Search')}
+        filterPlaceholder={lang('Search')}
         onFilterChange={setSearchQuery}
         isSearchable
         withDefaultPadding

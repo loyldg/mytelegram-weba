@@ -46,7 +46,7 @@ import {
   getButtonColor,
   getButtonRowAlign,
   RICH_BUTTON_NODE_NAME,
-} from '../../../util/tiptap/extensions/richButton';
+} from '../../../util/tiptap/richButton';
 import {
   buildRichMediaItemBlock,
   EMPTY_RICH_MEDIA_CAPTION,
@@ -893,6 +893,7 @@ function getNestedSupportedRichText(text: ApiRichText): ApiRichText {
     case 'autoEmail':
     case 'autoPhone':
     case 'bankCard':
+    case 'tonAddress':
       return text.text;
     default:
       return EMPTY_RICH_TEXT;

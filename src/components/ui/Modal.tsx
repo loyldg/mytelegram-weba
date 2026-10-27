@@ -8,14 +8,15 @@ import type { TextPart } from '../../types';
 import buildClassName from '../../util/buildClassName';
 import captureKeyboardListeners from '../../util/captureKeyboardListeners';
 import { disableDirectTextInput, enableDirectTextInput } from '../../util/directInputManager';
+import { countOpenModal } from '../../util/openModals';
 import trapFocus from '../../util/trapFocus';
 
 import useContextMenuHandlers from '../../hooks/useContextMenuHandlers';
 import useFrozenProps from '../../hooks/useFrozenProps';
 import useHistoryBack from '../../hooks/useHistoryBack';
+import useLang from '../../hooks/useLang';
 import useLastCallback from '../../hooks/useLastCallback';
 import useLayoutEffectWithPrevDeps from '../../hooks/useLayoutEffectWithPrevDeps';
-import useOldLang from '../../hooks/useOldLang';
 import useShowTransition from '../../hooks/useShowTransition';
 
 import Button, { type OwnProps as ButtonProps } from './Button';
@@ -211,16 +212,19 @@ const Modal = (props: OwnProps) => {
   useLayoutEffectWithPrevDeps(([prevIsOpen]) => {
     document.body.classList.toggle('has-open-dialog', Boolean(isOpen));
 
+    const stopCounting = isOpen ? countOpenModal() : undefined;
+
     if (isOpen || (!isOpen && prevIsOpen !== undefined)) {
       beginHeavyAnimation(ANIMATION_DURATION);
     }
 
     return () => {
       document.body.classList.remove('has-open-dialog');
+      stopCounting?.();
     };
   }, [isOpen]);
 
-  const lang = useOldLang();
+  const lang = useLang();
 
   if (!shouldRender) {
     return undefined;

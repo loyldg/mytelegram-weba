@@ -5,6 +5,7 @@ import {
 import { getGlobal } from '../../../global';
 
 import type { CustomPeerType, UniqueCustomPeer } from '../../../types';
+import type { RegularLangKey } from '../../../types/language';
 
 import { DEBUG } from '../../../config';
 import { requestMeasure } from '../../../lib/fasterdom/fasterdom';
@@ -19,7 +20,6 @@ import { MEMO_EMPTY_ARRAY } from '../../../util/memo';
 import useInfiniteScroll from '../../../hooks/useInfiniteScroll';
 import useLang from '../../../hooks/useLang';
 import useLastCallback from '../../../hooks/useLastCallback';
-import useOldLang from '../../../hooks/useOldLang';
 
 import Island from '../../gili/layout/Island';
 import Checkbox from '../../ui/Checkbox';
@@ -32,6 +32,7 @@ import FullNameTitle from '../FullNameTitle';
 import Icon from '../icons/Icon';
 import PeerChip from '../PeerChip';
 import PickerItem from './PickerItem';
+import PickerSearchField, { type PickerSearchChip } from './PickerSearchField';
 
 import styles from './PickerStyles.module.scss';
 
@@ -81,7 +82,7 @@ type OwnProps<CategoryType extends string> = {
   lockedUnselectedSubtitle?: string;
   filterValue?: string;
   filterPlaceholder?: string;
-  categoryPlaceholderKey?: string;
+  categoryPlaceholderKey?: RegularLangKey;
   notFoundText?: string;
   searchInputId?: string;
   itemClassName?: string;
@@ -95,6 +96,7 @@ type OwnProps<CategoryType extends string> = {
   withPeerUsernames?: boolean;
   withDefaultPadding?: boolean;
   withIslands?: boolean;
+  subheader?: TeactNode;
   onFilterChange?: (value: string) => void;
   onDisabledClick?: (id: string, isSelected: boolean) => void;
   onLoadMore?: () => void;
@@ -128,12 +130,12 @@ const PeerPicker = <CategoryType extends string = CustomPeerType>({
   withPeerUsernames,
   withDefaultPadding,
   withIslands,
+  subheader,
   onFilterChange,
   onDisabledClick,
   onLoadMore,
   ...optionalProps
 }: OwnProps<CategoryType>) => {
-  const oldLang = useOldLang();
   const lang = useLang();
 
   const itemIds = useMemo(() => {
@@ -260,8 +262,7 @@ const PeerPicker = <CategoryType extends string = CustomPeerType>({
         ref={inputRef}
         value={filterValue}
         onChange={handleFilterChange}
-        placeholder={filterPlaceholder || oldLang('SelectChat')}
-        noMargin={withIslands}
+        placeholder={filterPlaceholder || lang('SelectChat')}
       />
     );
   }
@@ -280,8 +281,7 @@ const PeerPicker = <CategoryType extends string = CustomPeerType>({
       if (DEBUG) {
         return (
           <div key={id}>
-            No peer or category with ID
-            {id}
+            {lang('PeerPickerUnknownPeer', { id })}
           </div>
         );
       }
@@ -301,7 +301,7 @@ const PeerPicker = <CategoryType extends string = CustomPeerType>({
         return <Radio checked={isChecked} disabled={isLocked} onlyInput />;
       }
       if (itemInputType === 'checkbox') {
-        return <Checkbox checked={isChecked} disabled={isLocked} onlyInput />;
+        return <Checkbox checked={isChecked} disabled={isLocked} onlyInput isRound />;
       }
       return undefined;
     }
@@ -324,14 +324,14 @@ const PeerPicker = <CategoryType extends string = CustomPeerType>({
 
         const userStatus = selectUserStatus(global, peer.id);
         return [
-          getUserStatus(oldLang, peer, userStatus),
+          getUserStatus(lang, peer, userStatus),
           buildClassName(isUserOnline(peer, userStatus, true) && styles.onlineStatus),
         ];
       }
 
       if (withPeerTypes) {
         const langKey = getPeerTypeKey(peer);
-        return langKey && [oldLang(langKey)];
+        return langKey && [lang(langKey)];
       }
 
       return undefined;
@@ -365,21 +365,56 @@ const PeerPicker = <CategoryType extends string = CustomPeerType>({
       />
     );
   }, [
-    categoriesByType, forceShowSelf, isViewOnly, itemClassName, itemInputType, oldLang, lockedSelectedIdsSet,
+    categoriesByType, forceShowSelf, isViewOnly, itemClassName, itemInputType, lang, lockedSelectedIdsSet,
     lockedUnselectedIdsSet, lockedUnselectedSubtitle, onDisabledClick, selectedCategories, selectedIds,
-    withPeerTypes, withStatus, withPeerUsernames, lang,
+    withPeerTypes, withStatus, withPeerUsernames,
   ]);
+
+  const searchChips = useMemo(() => {
+    if (!withIslands) return undefined;
+
+    const chips: PickerSearchChip[] = [];
+    selectedCategories?.forEach((category) => {
+      chips.push({ key: category, customPeer: categoriesByType[category], canClose: true });
+    });
+    lockedSelectedIds?.forEach((id, i) => {
+      chips.push({
+        key: id,
+        peerId: id,
+        forceShowSelf,
+        isMinimized: shouldMinimize && i < selectedIds.length - ALWAYS_FULL_ITEMS_COUNT,
+      });
+    });
+    unlockedSelectedIds.forEach((id, i) => {
+      chips.push({
+        key: id,
+        peerId: id,
+        forceShowSelf,
+        canClose: true,
+        isMinimized: shouldMinimize
+          && i + (lockedSelectedIds?.length || 0) < selectedIds.length - ALWAYS_FULL_ITEMS_COUNT,
+      });
+    });
+    return chips;
+  }, [
+    withIslands, selectedCategories, lockedSelectedIds, unlockedSelectedIds, categoriesByType, forceShowSelf,
+    shouldMinimize, selectedIds.length,
+  ]);
+
+  const handleSearchFieldChange = useLastCallback((value: string) => {
+    onFilterChange?.(value);
+  });
 
   const beforeChildren = useMemo(() => {
     if (!categories?.length) return undefined;
     return (
       <div key="categories">
-        {categoryPlaceholderKey && <div className={styles.pickerCategoryTitle}>{oldLang(categoryPlaceholderKey)}</div>}
+        {categoryPlaceholderKey && <div className={styles.pickerCategoryTitle}>{lang(categoryPlaceholderKey)}</div>}
         {categories?.map((category) => renderItem(category.type, true))}
-        <div className={styles.pickerCategoryTitle}>{oldLang('FilterChats')}</div>
+        <div className={styles.pickerCategoryTitle}>{lang('FilterChats')}</div>
       </div>
     );
-  }, [categories, categoryPlaceholderKey, oldLang, renderItem]);
+  }, [categories, categoryPlaceholderKey, lang, renderItem]);
 
   const renderItems = useCallback(() => {
     if (!sections) {
@@ -403,7 +438,6 @@ const PeerPicker = <CategoryType extends string = CustomPeerType>({
     ? sections.some((s) => s.ids.length > 0)
     : Boolean(viewportIds?.length);
 
-  const SearchWrapper = withIslands ? Island : 'div';
   const ListWrapper = withIslands ? Island : 'div';
 
   function renderListWrapper(content: TeactNode) {
@@ -415,52 +449,60 @@ const PeerPicker = <CategoryType extends string = CustomPeerType>({
   return (
     <div className={buildClassName(styles.container, className)}>
       {isSearchable && (
-        <>
-          {(!withIslands || selectedIds.length > 0 || (selectedCategories && selectedCategories.length > 0)) && (
-            <SearchWrapper
-              className={buildClassName(withIslands ? styles.islandHeader : styles.header, 'custom-scroll')}
-              dir={oldLang.isRtl ? 'rtl' : undefined}
-            >
-              {selectedCategories?.map((category) => (
-                <PeerChip
-                  className={styles.peerChip}
-                  customPeer={categoriesByType[category]}
-                  onClick={handleItemClick}
-                  clickArg={category}
-                  canClose
-                />
-              ))}
-              {lockedSelectedIds?.map((id, i) => (
-                <PeerChip
-                  className={styles.peerChip}
-                  peerId={id}
-                  isMinimized={shouldMinimize && i < selectedIds.length - ALWAYS_FULL_ITEMS_COUNT}
-                  forceShowSelf={forceShowSelf}
-                  onClick={handleItemClick}
-                  clickArg={id}
-                />
-              ))}
-              {unlockedSelectedIds.map((id, i) => (
-                <PeerChip
-                  className={styles.peerChip}
-                  peerId={id}
-                  isMinimized={
-                    shouldMinimize
-                    && i + (lockedSelectedIds?.length || 0) < selectedIds.length - ALWAYS_FULL_ITEMS_COUNT
-                  }
-                  canClose
-                  onClick={handleItemClick}
-                  clickArg={id}
-                />
-              ))}
-              {!withIslands && renderSearchInput()}
-            </SearchWrapper>
-          )}
-          {withIslands && (
-            <Island>{renderSearchInput()}</Island>
-          )}
-        </>
+        withIslands ? (
+          <PickerSearchField
+            inputRef={inputRef}
+            inputId={searchInputId}
+            className={styles.islandSearch}
+            value={filterValue}
+            placeholder={filterPlaceholder || lang('SelectChat')}
+            chips={searchChips}
+            onChange={handleSearchFieldChange}
+            onChipClick={handleItemClick}
+          />
+        ) : (
+          <div
+            className={buildClassName(styles.header, 'custom-scroll')}
+            dir={lang.isRtl ? 'rtl' : undefined}
+          >
+            {selectedCategories?.map((category) => (
+              <PeerChip
+                className={styles.peerChip}
+                customPeer={categoriesByType[category]}
+                onClick={handleItemClick}
+                clickArg={category}
+                canClose
+              />
+            ))}
+            {lockedSelectedIds?.map((id, i) => (
+              <PeerChip
+                className={styles.peerChip}
+                peerId={id}
+                isMinimized={shouldMinimize && i < selectedIds.length - ALWAYS_FULL_ITEMS_COUNT}
+                forceShowSelf={forceShowSelf}
+                onClick={handleItemClick}
+                clickArg={id}
+              />
+            ))}
+            {unlockedSelectedIds.map((id, i) => (
+              <PeerChip
+                className={styles.peerChip}
+                peerId={id}
+                isMinimized={
+                  shouldMinimize
+                  && i + (lockedSelectedIds?.length || 0) < selectedIds.length - ALWAYS_FULL_ITEMS_COUNT
+                }
+                canClose
+                onClick={handleItemClick}
+                clickArg={id}
+              />
+            ))}
+            {renderSearchInput()}
+          </div>
+        )
       )}
+
+      {subheader}
 
       {hasContent ? (
         renderListWrapper(
@@ -476,7 +518,7 @@ const PeerPicker = <CategoryType extends string = CustomPeerType>({
           </InfiniteScroll>,
         )
       ) : !isLoading && viewportIds && !viewportIds.length ? (
-        <p className={styles.noResults}>{notFoundText || 'Sorry, nothing found.'}</p>
+        <p className={styles.noResults}>{notFoundText || lang('NothingFound')}</p>
       ) : (
         <Loading />
       )}

@@ -1,0 +1,534 @@
+@use 'sass:math';
+
+$card-width: 336;
+$card-height: 205;
+
+$tilt-angle: 8deg;
+// About 2.2 card widths away. An absolute length, tuned to the card's own width.
+$card-perspective: 52rem;
+// The edge of the Android card is 1.25% of its width
+$edge-layer-gap: 0.0625rem;
+
+// The motion of the Android app: the card lags the scroll by half its height, shrinks toward its top edge, tilts back
+// until it stands edge-on and fades out over the last quarter. Android lags it by a further 24dp, which under this
+// perspective brings the edge down onto the buttons.
+$fold-scale: 0.8;
+$fold-fade-start: 0.75;
+$fold-steps: 20;
+
+// Card metrics from the mockup against the card's inline size, so the composition scales down together
+@function cq($px) {
+  @return calc(#{$px} / #{$card-width} * 100cqi);
+}
+
+@function parallax($shift) {
+  @return calc(var(--tilt-x) * #{$shift}) calc(var(--tilt-y) * #{$shift});
+}
+
+// No tilt for the first percent of the way, then a quick lean back
+@function fold-angle($progress) {
+  @return math.max(0deg, 90deg * math.sqrt($progress) - 10deg + 10deg * $progress);
+}
+
+// Measures the pointer for `useCardTilt` and stays flat while the card inside rotates. It also fades the card out:
+// opacity on the layer below would flatten its 3D and drop the edge.
+.root {
+  --tilt-x: 0;
+  --tilt-y: 0;
+  --glare-angle: calc(var(--tilt-x) * 90deg + var(--tilt-y) * 60deg);
+
+  // A horizontal drag tilts the card, a vertical one scrolls the screen
+  touch-action: pan-y;
+  width: 100%;
+  perspective: $card-perspective;
+  transition: scale 0.25s;
+}
+
+.pressed {
+  scale: 1.012;
+}
+
+// Holds the face and the layers of its edge in one 3D space. The pointer tilts it through `transform`, while the fold
+// goes through the separate transform properties, which apply on top.
+.fold {
+  transform-style: preserve-3d;
+  transform: rotateY(calc(var(--tilt-x) * #{$tilt-angle})) rotateX(calc(var(--tilt-y) * -#{$tilt-angle}));
+}
+
+// A stack of layers behind the face, which shows as the edge once the card turns
+.edgeLayer {
+  position: absolute;
+  inset: 0;
+  transform: translateZ(calc(var(--layer) * -#{$edge-layer-gap}));
+
+  border-radius: 1.75rem;
+
+  background-image: linear-gradient(to bottom, #2a64c4, #0f3a8c);
+}
+
+.edgeRim {
+  background-image: linear-gradient(to bottom, #6fb4ff, #2f74d8);
+}
+
+// The deepest layer casts the shadow, so it stays behind the edge as well as the face
+.edgeShadow {
+  box-shadow: 0 0.625rem 1.625rem -0.875rem rgb(0 96 230 / 60%);
+  transition: box-shadow 0.25s;
+}
+
+.pressed .edgeShadow {
+  box-shadow: 0 0.4375rem 1rem rgb(0 0 0 / 18%);
+}
+
+@supports (animation-timeline: view()) {
+  .root {
+    animation-name: card-fade;
+    view-timeline: --wallet-card block;
+  }
+
+  // The scroll padding of the screen insets the timeline by the header, so the fold runs from the card top meeting
+  // the header to its bottom edge passing under it. The scroll drives it directly, so it never lags behind a frame.
+  .root,
+  .fold {
+    animation-duration: auto;
+    animation-timing-function: linear;
+    animation-fill-mode: both;
+    animation-timeline: --wallet-card;
+    animation-range: exit;
+  }
+
+  .fold {
+    animation-name: card-fold;
+  }
+
+  :global(body.no-page-transitions) .root,
+  :global(body.no-page-transitions) .fold {
+    animation: none;
+  }
+}
+
+// The shift keeps the top edge in place under the scale and adds the lag; the keyframes trace the curve of the angle
+@keyframes card-fold {
+  @for $i from 0 through $fold-steps {
+    $progress: math.div($i, $fold-steps);
+
+    #{$progress * 100%} {
+      translate: 0 ($progress * 50% * $fold-scale);
+      rotate: x fold-angle($progress);
+      scale: 1 - (1 - $fold-scale) * $progress;
+    }
+  }
+}
+
+@keyframes card-fade {
+  #{$fold-fade-start * 100%} {
+    opacity: 1;
+  }
+
+  to {
+    opacity: 0;
+  }
+}
+
+.card {
+  isolation: isolate;
+  position: relative;
+
+  container-type: inline-size;
+  overflow: clip;
+
+  aspect-ratio: #{$card-width} / #{$card-height};
+  width: 100%;
+  // `cq()` is unavailable here: an element cannot query the container it establishes
+  border-radius: 1.75rem;
+
+  color: #ffffff;
+
+  background-image: linear-gradient(145deg, #5cc8ff 0%, #0088ff 46%, #0057c2 100%);
+}
+
+.backdrop {
+  position: absolute;
+  inset: 0;
+}
+
+.texture {
+  pointer-events: none;
+
+  position: absolute;
+  inset: -40%;
+
+  opacity: 0.15;
+  background:
+    repeating-radial-gradient(
+      circle at 50% 50%,
+      rgb(255 255 255 / 42%) 0 0.01375rem,
+      rgb(0 0 0 / 20%) 0.01375rem 0.04375rem,
+      transparent 0.04375rem 0.090625rem,
+      rgb(255 255 255 / 18%) 0.090625rem 0.09875rem,
+      transparent 0.09875rem 0.15625rem,
+      rgb(0 0 0 / 16%) 0.15625rem 0.215625rem,
+      transparent 0.215625rem 0.38125rem
+    ),
+    repeating-radial-gradient(
+      circle at 50% 50%,
+      rgb(0 0 0 / 18%) 0 0.028125rem,
+      transparent 0.028125rem 0.071875rem,
+      rgb(255 255 255 / 28%) 0.071875rem 0.121875rem,
+      rgb(0 0 0 / 12%) 0.121875rem 0.134375rem,
+      transparent 0.134375rem 0.2625rem,
+      rgb(255 255 255 / 12%) 0.2625rem 0.27375rem,
+      transparent 0.27375rem 0.51875rem
+    ),
+    repeating-radial-gradient(
+      circle at 50% 50%,
+      rgb(255 255 255 / 22%) 0 0.00875rem,
+      transparent 0.00875rem 0.059375rem,
+      rgb(0 0 0 / 14%) 0.059375rem 0.115625rem,
+      rgb(255 255 255 / 16%) 0.115625rem 0.16875rem,
+      transparent 0.16875rem 0.325rem
+    ),
+    repeating-radial-gradient(
+      circle at 50% 50%,
+      rgb(255 255 255 / 32%) 0 0.04375rem,
+      rgb(0 0 0 / 18%) 0.04375rem 0.078125rem,
+      transparent 0.078125rem 0.73125rem
+    );
+  mix-blend-mode: overlay;
+}
+
+.stars {
+  pointer-events: none;
+
+  position: absolute;
+  inset: 0;
+
+  container-type: size;
+
+  color: #ffffff;
+
+  mix-blend-mode: plus-lighter;
+}
+
+// The glare lobes peak at 54deg and 234deg of its gradient
+.star {
+  --star-azimuth: atan2(calc(var(--star-x) * 1cqw), calc(var(--star-y) * 1cqh));
+  --star-light:
+    max(
+      (cos(var(--glare-angle) + 54deg - var(--star-azimuth)) + 1) / 2,
+      (cos(var(--glare-angle) + 234deg - var(--star-azimuth)) + 1) / 2
+    );
+  // The fourth power narrows the light to the lobes
+  --star-lit: calc(var(--star-light) * var(--star-light) * var(--star-light) * var(--star-light));
+
+  position: absolute;
+  transform: translate(-50%, -50%) scale(calc(1 + var(--star-lit) * 0.3));
+  opacity: calc(var(--star-opacity) * (1 + var(--star-lit) * 1.4));
+}
+
+.sparkle {
+  display: block;
+  width: 100%;
+  height: 100%;
+  animation: twinkle 7s ease-in-out var(--star-delay) infinite;
+}
+
+// Safari leaves a blended layer out of the rounded clip of the card, so the glare cuts its blurred lobes off itself
+.glare {
+  pointer-events: none;
+
+  position: absolute;
+  inset: 0;
+
+  overflow: hidden;
+
+  border-radius: inherit;
+
+  opacity: 0.64;
+  mix-blend-mode: plus-lighter;
+
+  &::before {
+    content: "";
+
+    position: absolute;
+    inset: -25%;
+
+    background-image:
+      conic-gradient(
+        from var(--glare-angle),
+        transparent 0deg 4deg,
+        rgb(255 255 255 / 6.75%) 28deg,
+        rgb(255 255 255 / 16.875%) 42deg,
+        rgb(255 255 255 / 37.5%) 54deg,
+        rgb(255 255 255 / 16.875%) 66deg,
+        rgb(255 255 255 / 6.75%) 86deg,
+        transparent 124deg 184deg,
+        rgb(255 255 255 / 6.75%) 208deg,
+        rgb(255 255 255 / 16.875%) 222deg,
+        rgb(255 255 255 / 37.5%) 234deg,
+        rgb(255 255 255 / 16.875%) 246deg,
+        rgb(255 255 255 / 6.75%) 266deg,
+        transparent 304deg 360deg
+      );
+    filter: blur(cq(18));
+  }
+}
+
+.balanceGlint {
+  pointer-events: none;
+
+  position: absolute;
+  inset: 0;
+  transform: translateX(-110%);
+
+  background-image: linear-gradient(105deg, transparent 30%, rgb(200 242 255 / 50%) 50%, transparent 70%);
+}
+
+// Firefox rebuilds the blend group of a blended layer inside the 3D-transformed card every frame, and
+// the content blinks; plain alpha compositing keeps it stable
+@supports (-moz-appearance: none) {
+  .glare {
+    mix-blend-mode: normal;
+  }
+}
+
+.amount {
+  position: absolute;
+  top: cq(71);
+  // The QR button sits at `cq(46)` from the right and is `cq(48)` wide
+  right: cq(100);
+  left: cq(25.5);
+  translate: parallax(0.25rem);
+
+  overflow: hidden;
+
+  font-family: var(--font-family-monospace);
+  font-size: cq(22);
+  font-weight: var(--font-weight-medium);
+  line-height: cq(28);
+  white-space: nowrap;
+}
+
+// The held diamond grows out of the line and over the labels below, and keeps doing so while it shrinks back
+.amount:has([data-raised]) {
+  z-index: 1;
+  overflow: visible;
+}
+
+.amountContent {
+  transform-origin: left center;
+  transform: scale(var(--fit-scale, 1));
+
+  display: flex;
+  gap: cq(4.5);
+  align-items: center;
+
+  width: max-content;
+}
+
+.amountFraction {
+  font-size: cq(18);
+}
+
+// About the size of the first digit, as on the iOS card
+.diamond {
+  width: cq(27);
+  height: cq(22.5);
+}
+
+.ticker {
+  color: #6ddcff;
+}
+
+.amountContent:has(.amountFraction) .ticker {
+  font-size: cq(18);
+}
+
+.fiat {
+  position: absolute;
+  top: cq(102);
+  left: cq(24);
+  translate: parallax(0.21875rem);
+
+  font-family: var(--font-family-monospace);
+  font-size: cq(13);
+  font-weight: var(--font-weight-medium);
+  line-height: 1.2;
+  color: #87efff;
+}
+
+.ownerName {
+  position: absolute;
+  right: cq(65);
+  bottom: cq(17);
+  left: cq(24);
+  translate: parallax(0.1875rem);
+
+  overflow: hidden;
+
+  font-family: var(--font-family-monospace);
+  font-size: cq(13);
+  font-weight: var(--font-weight-medium);
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.address {
+  pointer-events: none;
+
+  position: absolute;
+  top: cq(18);
+  right: cq(12);
+  bottom: cq(18);
+  translate: parallax(0.125rem);
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  width: cq(22);
+}
+
+.addressRotator {
+  transform-origin: center;
+  transform: rotate(90deg);
+
+  display: flex;
+  flex-direction: column;
+
+  width: cq(#{$card-height - 36});
+  height: cq(22);
+}
+
+.addressLine {
+  font-family: var(--font-family-monospace);
+  font-size: cq(10);
+  line-height: 1.15;
+  color: rgb(5 90 196 / 80%);
+  text-align: center;
+  // The line is turned a quarter clockwise, so its horizontal offset casts the highlight downwards on the card
+  text-shadow: cq(1) 0 0 rgb(255 255 255 / 10%);
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.qrButton {
+  position: absolute;
+  top: cq(74);
+  right: cq(46);
+
+  overflow: clip;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  width: cq(48) !important;
+  height: cq(36);
+  min-height: auto;
+  padding: 0;
+  border: 0;
+  border-radius: cq(8);
+
+  background-image: linear-gradient(172deg, #f4f9ff 27%, #a8c7ed 97%);
+  box-shadow:
+    inset 0 0 0 cq(1) #0c73d5,
+    inset 0 cq(1.5) cq(4) rgb(255 255 255 / 85%),
+    0 0 0 cq(1.2) rgb(0 0 0 / 10%),
+    0 cq(2) cq(6) rgb(0 50 140 / 25%);
+
+  transition: scale 0.15s;
+
+  &::before {
+    content: "";
+
+    position: absolute;
+    inset: -40% -60%;
+    translate: calc(var(--tilt-x) * 28% + var(--tilt-y) * 16%) 0;
+
+    background-image:
+      linear-gradient(
+        115deg,
+        transparent 38%,
+        rgb(255 255 255 / 50%) 47%,
+        rgb(255 255 255 / 85%) 50%,
+        rgb(255 255 255 / 40%) 53%,
+        transparent 62%
+      );
+  }
+
+  &:active {
+    scale: 0.94;
+
+    :global(body.no-page-transitions) & {
+      scale: none;
+    }
+  }
+}
+
+// Without a handler the plate is only a picture, so it does not shrink under a press
+.qrPlate {
+  pointer-events: none;
+}
+
+.qrIcon {
+  position: relative;
+  width: cq(24);
+  height: cq(24);
+  filter: drop-shadow(0 cq(1) 0 #e6edf5);
+}
+
+.innerShadow {
+  --shadow-angle: calc(212deg + (var(--tilt-x) * 60deg));
+
+  pointer-events: none;
+
+  position: absolute;
+  inset: 0;
+
+  border-radius: inherit;
+
+  box-shadow:
+    inset
+    calc(-1 * sin(var(--shadow-angle)) * #{cq(1)})
+    calc(cos(var(--shadow-angle)) * #{cq(1)})
+    cq(1)
+    rgb(0 0 0 / 14%),
+    inset 0 0.0625rem rgb(120 214 255 / 35%),
+    inset 0.0625rem 0 rgb(120 214 255 / 18%);
+}
+
+.withBackdrop {
+  .edgeLayer {
+    background-color: var(--card-edge-color);
+    background-image: none;
+  }
+
+  &:not(.pressed) .edgeShadow {
+    box-shadow: 0 0.625rem 1.625rem -0.875rem var(--card-edge-color);
+  }
+
+  .ticker,
+  .fiat,
+  .addressLine {
+    color: var(--card-accent-color);
+  }
+}
+
+@keyframes twinkle {
+  0%,
+  100% {
+    transform: scale(0.6);
+    opacity: 0.55;
+  }
+
+  50% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+:global(body.no-page-transitions) .sparkle {
+  animation: none;
+}

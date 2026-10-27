@@ -325,8 +325,8 @@ export function buildStarsTransactionCustomPeer(
     return {
       avatarIcon: 'star',
       isCustomPeer: true,
-      titleKey: 'Stars.Intro.Transaction.AppleTopUp.Title',
-      subtitleKey: 'Stars.Intro.Transaction.AppleTopUp.Subtitle',
+      titleKey: 'StarsIntroTransactionAppleTopUpTitle',
+      subtitleKey: 'StarsIntroTransactionAppleTopUpSubtitle',
       peerColorId: 5,
     };
   }
@@ -335,8 +335,8 @@ export function buildStarsTransactionCustomPeer(
     return {
       avatarIcon: 'star',
       isCustomPeer: true,
-      titleKey: 'Stars.Intro.Transaction.GoogleTopUp.Title',
-      subtitleKey: 'Stars.Intro.Transaction.GoogleTopUp.Subtitle',
+      titleKey: 'StarsIntroTransactionGoogleTopUpTitle',
+      subtitleKey: 'StarsIntroTransactionGoogleTopUpSubtitle',
       peerColorId: 3,
     };
   }
@@ -346,16 +346,16 @@ export function buildStarsTransactionCustomPeer(
       return {
         avatarIcon: 'fragment',
         isCustomPeer: true,
-        titleKey: 'Stars.Gift.Received.Title',
-        subtitleKey: 'Stars.Intro.Transaction.Gift.UnknownUser',
+        titleKey: 'StarsGiftReceivedTitle',
+        subtitleKey: 'StarsIntroTransactionGiftUnknownUser',
         customPeerAvatarColor: '#000000',
       };
     }
     return {
       avatarIcon: 'fragment',
       isCustomPeer: true,
-      titleKey: 'Stars.Intro.Transaction.FragmentTopUp.Title',
-      subtitleKey: 'Stars.Intro.Transaction.FragmentTopUp.Subtitle',
+      titleKey: 'StarsIntroTransactionFragmentTopUpTitle',
+      subtitleKey: 'StarsIntroTransactionFragmentTopUpSubtitle',
       customPeerAvatarColor: '#000000',
     };
   }
@@ -364,8 +364,8 @@ export function buildStarsTransactionCustomPeer(
     return {
       avatarIcon: 'star',
       isCustomPeer: true,
-      titleKey: 'Stars.Intro.Transaction.PremiumBotTopUp.Title',
-      subtitleKey: 'Stars.Intro.Transaction.PremiumBotTopUp.Subtitle',
+      titleKey: 'StarsIntroTransactionPremiumBotTopUpTitle',
+      subtitleKey: 'StarsIntroTransactionPremiumBotTopUpSubtitle',
       peerColorId: 1,
       withPremiumGradient: true,
     };
@@ -375,8 +375,8 @@ export function buildStarsTransactionCustomPeer(
     return {
       avatarIcon: 'star',
       isCustomPeer: true,
-      titleKey: 'Stars.Intro.Transaction.TelegramAds.Title',
-      subtitleKey: 'Stars.Intro.Transaction.TelegramAds.Subtitle',
+      titleKey: 'StarsIntroTransactionTelegramAdsTitle',
+      subtitleKey: 'StarsIntroTransactionTelegramAdsSubtitle',
       peerColorId: 2,
     };
   }
@@ -385,8 +385,8 @@ export function buildStarsTransactionCustomPeer(
     return {
       avatarIcon: 'bots',
       isCustomPeer: true,
-      titleKey: 'Stars.Intro.Transaction.TelegramBotApi.Title',
-      subtitleKey: 'Stars.Intro.Transaction.TelegramBotApi.Subtitle',
+      titleKey: 'StarsIntroTransactionTelegramBotApiTitle',
+      subtitleKey: 'StarsIntroTransactionTelegramBotApiSubtitle',
       peerColorId: 4,
     };
   }
@@ -394,8 +394,8 @@ export function buildStarsTransactionCustomPeer(
   return {
     avatarIcon: 'star',
     isCustomPeer: true,
-    titleKey: 'Stars.Intro.Transaction.Unsupported.Title',
-    subtitleKey: 'Stars.Intro.Transaction.Unsupported.Title',
+    titleKey: 'StarsIntroTransactionUnsupportedTitle',
+    subtitleKey: 'StarsIntroTransactionUnsupportedTitle',
     peerColorId: 0,
   };
 }
@@ -497,4 +497,16 @@ export function getPrizeStarsTransactionFromGiveaway(message: ApiMessage): ApiSt
 
 export function areInputSavedGiftsEqual(one: ApiInputSavedStarGift, two: ApiInputSavedStarGift) {
   return areRecordsShallowEqual(one, two);
+}
+
+export function buildStarsAmount(amount: number): ApiStarsAmount {
+  return { currency: STARS_CURRENCY_CODE, amount, nanos: 0 };
+}
+
+export function areCurrencyAmountsEqual(one?: ApiTypeCurrencyAmount, two?: ApiTypeCurrencyAmount) {
+  if (one?.currency === STARS_CURRENCY_CODE && two?.currency === STARS_CURRENCY_CODE) {
+    return one.amount === two.amount && one.nanos === two.nanos;
+  }
+
+  return one?.currency === two?.currency && one?.amount === two?.amount;
 }

@@ -1,13 +1,14 @@
-import type { ChangeEvent } from 'react';
-import type { FC } from '../../../lib/teact/teact';
 import { memo } from '../../../lib/teact/teact';
+
+import type { RegularLangKey } from '../../../types/language';
 
 import buildClassName from '../../../util/buildClassName';
 
+import useLang from '../../../hooks/useLang';
 import useLastCallback from '../../../hooks/useLastCallback';
-import useOldLang from '../../../hooks/useOldLang';
 
 import Icon from '../../common/icons/Icon';
+import IconBackdrop from '../../gili/primitives/IconBackdrop';
 
 import styles from './GiveawayTypeOption.module.scss';
 
@@ -15,32 +16,32 @@ type ApiGiveawayType = 'premium_giveaway' | 'stars_giveaway';
 
 type OwnProps = {
   option: ApiGiveawayType;
-  name: string;
-  text: string;
-  img: string;
+  name: RegularLangKey;
+  text: RegularLangKey;
   checked?: boolean;
   isLink: boolean;
   className?: string;
-  onChange: (value: ApiGiveawayType) => void;
-  onClickAction?: () => void;
   userNames?: string;
   selectedMemberIds?: string[];
+  onChange: (value: ApiGiveawayType) => void;
+  onClickAction?: () => void;
 };
 
-const GiveawayTypeOption: FC<OwnProps> = ({
+const GiveawayTypeOption = ({
   option, checked,
-  name, text, img,
+  name, text,
   isLink, onChange, onClickAction, className,
   userNames, selectedMemberIds,
-}) => {
-  const lang = useOldLang();
+}: OwnProps) => {
+  const lang = useLang();
+  const isStars = option === 'stars_giveaway';
 
   let displayText: string | undefined = lang(text);
   if (isLink && selectedMemberIds?.length) {
     displayText = selectedMemberIds.length > 2 ? selectedMemberIds.length.toString() : userNames;
   }
 
-  const handleChange = useLastCallback((e: ChangeEvent<HTMLInputElement>) => {
+  const handleChange = useLastCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.checked) {
       onChange(option);
     }
@@ -67,7 +68,11 @@ const GiveawayTypeOption: FC<OwnProps> = ({
         onClick={(e) => e.stopPropagation()}
       />
       <div className={styles.content}>
-        <img className={styles.optionImg} src={img} alt="" draggable={false} />
+        <IconBackdrop
+          className={styles.optionIcon}
+          color={isStars ? 'orange' : 'blue'}
+          icon={isStars ? 'star' : 'gift-filled'}
+        />
         <div className={styles.giveaway}>
           <h3 className={styles.title}>
             {lang(name)}

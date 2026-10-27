@@ -19,13 +19,13 @@ import { getCurrentTabId } from '../../../util/establishMultitabRole';
 import { pick } from '../../../util/iteratees.ts';
 import { type AdvancedLangFnParameters, getTranslationFn } from '../../../util/localization';
 import { formatStarsAsText } from '../../../util/localization/format';
-import { oldTranslate } from '../../../util/oldLangProvider';
 import requestActionTimeout from '../../../util/requestActionTimeout';
 import { debounce } from '../../../util/schedulers';
 import { extractCurrentThemeParams } from '../../../util/themeStyle';
 import { callApi } from '../../../api/gramjs';
 import {
   getMainUsername,
+  getUserFullName,
   getWebAppKey,
   isChatAdmin,
   isKeyboardButtonUnsupportedForEphemeral,
@@ -64,7 +64,9 @@ import {
   selectCurrentMessageList,
   selectEphemeralMessage,
   selectIsCurrentUserFrozen,
+  selectIsCurrentUserPremium,
   selectIsTrustedBot,
+  selectLanguageCode,
   selectMessageReplyInfo,
   selectPeer,
   selectSendAs,
@@ -74,7 +76,7 @@ import {
   selectUserFullInfo,
   selectWebApp,
 } from '../../selectors';
-import { selectSharedSettings } from '../../selectors/sharedState';
+import { selectCurrentLimit, selectPremiumLimit } from '../../selectors/limits';
 import { selectDraft } from '../../selectors/threads.ts';
 import { fetchChatByUsername } from './chats';
 import { getPeerStarsForMessage, sendEphemeralMessages } from './messages';
@@ -123,7 +125,13 @@ addActionHandler('clickBotInlineButton', (global, actions, payload): ActionRetur
 
     case 'copy': {
       copyTextToClipboard(button.action.copyText);
-      actions.showNotification({ message: oldTranslate('ExactTextCopied', button.action.copyText), tabId });
+      actions.showNotification({ message: {
+        key: 'ExactTextCopied',
+        variables: {
+          text: button.action.copyText,
+        },
+        options: { withNodes: true, withMarkdown: true, renderTextFilters: ['br', 'links'] },
+      }, tabId });
       return;
     }
 
@@ -167,6 +175,21 @@ addActionHandler('clickBotInlineButton', (global, actions, payload): ActionRetur
         threadId,
         messageListType: 'thread',
         isQuiz: button.action.isQuiz,
+        tabId,
+      });
+      break;
+    }
+
+    case 'requestPeer': {
+      const { buttonId, maxQuantity, peerType } = button.action;
+      const botId = message.senderId || chatId;
+      actions.openRequestPeerModal({
+        botId,
+        chatId,
+        messageId: message.id,
+        buttonId,
+        maxQuantity,
+        peerType,
         tabId,
       });
       break;
@@ -1028,7 +1051,10 @@ addActionHandler('requestAppWebView', async (global, actions, payload): Promise<
   global = getGlobal();
 
   if (!botApp) {
-    actions.showNotification({ message: oldTranslate('lng_username_app_not_found'), tabId });
+    actions.showNotification({ message: {
+      key: 'UsernameAppNotFound',
+      options: { withNodes: true, withMarkdown: true, renderTextFilters: ['br', 'links'] },
+    }, tabId });
     return;
   }
 
@@ -1326,6 +1352,7 @@ addActionHandler('acceptBotUrlAuth', async (global, actions, payload): Promise<v
     isWriteAllowed,
     wasPhoneShared,
     matchCode: providedMatchCode || tabState.urlAuth.matchCode,
+    walletSessionId: tabState.urlAuth.request?.walletRequest?.sessionId,
   });
   if (!result) return;
   global = getGlobal();
@@ -1368,6 +1395,7 @@ addActionHandler('acceptLinkUrlAuth', async (global, actions, payload): Promise<
     isWriteAllowed,
     wasPhoneShared,
     matchCode: providedMatchCode || tabState.urlAuth.matchCode,
+    walletSessionId: tabState.urlAuth.request?.walletRequest?.sessionId,
   });
   if (!result) return;
   global = getGlobal();
@@ -1402,6 +1430,10 @@ addActionHandler('checkUrlAuthMatchCode', async (global, actions, payload): Prom
     },
   }, tabId);
   setGlobal(global);
+
+  if (tabState.urlAuth.request?.walletRequest) {
+    actions.openWalletTonConnectOauth({ tabId });
+  }
 });
 
 addActionHandler('declineUrlAuth', async (global, actions, payload): Promise<void> => {
@@ -1447,6 +1479,7 @@ function handleUrlAuthResult<T extends GlobalState>(
       urlAuth: {
         ...tabState.urlAuth,
         matchCode: undefined,
+        isWalletConnected: undefined,
         request: {
           ...request,
           botId: bot.id,
@@ -1454,6 +1487,13 @@ function handleUrlAuthResult<T extends GlobalState>(
       },
     }, tabId);
     setGlobal(global);
+
+    // A login that asks for the wallet starts with the wallet's connection screen, after the emoji code if any
+    const isMatchCodeFirst = Boolean(request.matchCodesFirst && request.matchCodes?.length);
+
+    if (request.walletRequest && !isMatchCodeFirst) {
+      actions.openWalletTonConnectOauth({ tabId });
+    }
     return;
   }
 
@@ -1602,7 +1642,10 @@ async function answerCallbackButton<T extends GlobalState>(
   const { message, alert: isError, url } = result;
 
   if (isError) {
-    showDialog({ data: { type: 'error', message: message || 'Error' }, tabId });
+    showDialog({
+      data: message ? { type: 'error', message } : { type: 'localized', text: { key: 'ErrorUnspecified' } },
+      tabId,
+    });
   } else if (message) {
     showNotification({ message, tabId });
   } else if (url) {
@@ -1623,7 +1666,7 @@ addActionHandler('setBotInfo', async (global, actions, payload): Promise<void> =
   } = payload;
 
   let { langCode } = payload;
-  if (!langCode) langCode = selectSharedSettings(global).language;
+  if (!langCode) langCode = selectLanguageCode(global);
 
   const { currentUserId } = global;
   if (!currentUserId || !bot) {
@@ -1729,4 +1772,126 @@ addActionHandler('loadBotFreezeAppeal', async (global): Promise<void> => {
     botFreezeAppealId: chat?.id,
   };
   setGlobal(global);
+});
+
+addActionHandler('sendBotRequestedPeer', async (global, actions, payload): Promise<void> => {
+  const {
+    chatId, messageId, buttonId, requestedPeerIds,
+  } = payload;
+
+  const chat = selectChat(global, chatId);
+
+  const requestedPeers = requestedPeerIds
+    .map((peerId) => selectPeer(global, peerId))
+    .filter(Boolean);
+  if (!chat || requestedPeers.length !== requestedPeerIds.length) {
+    return;
+  }
+
+  await callApi('sendBotRequestedPeer', {
+    chat,
+    messageId,
+    buttonId,
+    requestedPeers,
+  });
+});
+
+addActionHandler('openBotCreationModal', async (global, actions, payload): Promise<void> => {
+  const {
+    managerUsername, suggestedName, suggestedUsername, tabId = getCurrentTabId(),
+  } = payload;
+
+  const { user: manager } = await callApi('getChatByUsername', managerUsername) || {};
+  if (!manager) {
+    actions.showNotification({ message: { key: 'NoUsernameFound' }, tabId });
+    return;
+  }
+
+  if (!manager.canManageBots) {
+    actions.showNotification({
+      message: {
+        key: 'CreateBotUnsupported',
+        variables: { bot: `@${managerUsername}` },
+        options: { withNodes: true, withMarkdown: true },
+      },
+      tabId,
+    });
+    return;
+  }
+
+  global = getGlobal();
+  if (selectTabState(global, tabId).botCreationModal) return;
+
+  global = updateUser(global, manager.id, manager);
+  global = updateTabState(global, {
+    botCreationModal: {
+      managerId: manager.id,
+      suggestedName,
+      suggestedUsername,
+    },
+  }, tabId);
+  setGlobal(global);
+});
+
+addActionHandler('createBot', async (global, actions, payload): Promise<void> => {
+  const { name, username, tabId = getCurrentTabId() } = payload;
+
+  const modal = selectTabState(global, tabId).botCreationModal;
+  const manager = modal && selectUser(global, modal.managerId);
+  if (!manager) return;
+
+  const result = await callApi('createBot', {
+    manager, name, username, isViaDeepLink: true,
+  });
+  if (!result) return;
+
+  global = getGlobal();
+  const isSameModal = selectTabState(global, tabId).botCreationModal === modal;
+
+  if ('error' in result) {
+    if (result.errorMessage === 'BOT_CREATE_LIMIT_EXCEEDED') {
+      const limit = selectCurrentLimit(global, 'botsCreate');
+      const isPremium = selectIsCurrentUserPremium(global);
+      actions.showNotification({
+        title: { key: 'CreateBotLimitTitle' },
+        message: isPremium ? {
+          key: 'CreateBotLimitText', variables: { count: limit }, options: { pluralValue: limit },
+        } : {
+          key: 'CreateBotLimitTextPremium',
+          variables: { limit, premiumLimit: selectPremiumLimit(global, 'botsCreate') },
+          options: { withNodes: true, withMarkdown: true },
+        },
+        action: isPremium ? undefined : { action: 'openPremiumModal', payload: { tabId } },
+        actionText: isPremium ? undefined : { key: 'PremiumMore' },
+        tabId,
+      });
+      return;
+    }
+
+    if (result.errorMessage === 'USERNAME_OCCUPIED' && isSameModal) {
+      global = updateTabState(global, { botCreationModal: { ...modal, occupiedUsername: username } }, tabId);
+      setGlobal(global);
+      return;
+    }
+
+    actions.showNotification({ message: result.messageKey, tabId });
+    return;
+  }
+
+  global = updateUser(global, result.id, result);
+  setGlobal(global);
+
+  if (isSameModal) actions.closeBotCreationModal({ tabId });
+  actions.openChat({ id: result.id, tabId });
+
+  const lang = getTranslationFn();
+  actions.showNotification({
+    title: { key: 'CreateBotCreatedTitle', variables: { name: getUserFullName(lang, result) } },
+    message: {
+      key: 'CreateBotCreatedText',
+      variables: { bot: getUserFullName(lang, manager) },
+      options: { withNodes: true, withMarkdown: true },
+    },
+    tabId,
+  });
 });

@@ -66,7 +66,6 @@ import { getMessageKey, isLocalMessageId } from '../../../util/keys/messageKey';
 import { parseTranslationCacheKey } from '../../../util/keys/translationKey';
 import { getTranslationFn, type RegularLangFnParameters } from '../../../util/localization';
 import { formatStarsAsText } from '../../../util/localization/format';
-import { oldTranslate } from '../../../util/oldLangProvider';
 import { debounce, onTickEnd, rafPromise } from '../../../util/schedulers';
 import { getServerTime } from '../../../util/serverTime';
 import { callApi, cancelApiProgress } from '../../../api/gramjs';
@@ -617,24 +616,22 @@ addActionHandler('sendMessage', async (global, actions, payload): Promise<void> 
   const messagePriceInStars = await getPeerStarsForMessage(global, chatId!);
 
   const suggestedPostPrice = draftSuggestedPostInfo?.price;
-  const suggestedPostCurrency = suggestedPostPrice?.currency || STARS_CURRENCY_CODE;
-  const suggestedPostAmount = suggestedPostPrice?.amount || 0;
-  if (suggestedPostAmount && !draftReplyInfo) {
-    if (suggestedPostCurrency === STARS_CURRENCY_CODE) {
+  if (suggestedPostPrice?.amount && !draftReplyInfo) {
+    if (suggestedPostPrice.currency === STARS_CURRENCY_CODE) {
       const currentBalance = global.stars?.balance?.amount || 0;
 
-      if (suggestedPostAmount > currentBalance) {
+      if (suggestedPostPrice.amount > currentBalance) {
         actions.openStarsBalanceModal({
           topup: {
-            balanceNeeded: suggestedPostAmount,
+            balanceNeeded: suggestedPostPrice.amount,
           },
           tabId,
         });
         return;
       }
-    } else if (suggestedPostCurrency === TON_CURRENCY_CODE) {
-      const currentTonBalance = global.ton?.balance?.amount || 0;
-      if (suggestedPostAmount > currentTonBalance) {
+    } else {
+      const currentTonBalance = global.ton?.balance?.amount || 0n;
+      if (suggestedPostPrice.amount > currentTonBalance) {
         actions.openStarsBalanceModal({
           currency: TON_CURRENCY_CODE,
           tabId,
@@ -843,7 +840,7 @@ addActionHandler('sendInviteMessages', async (global, actions, payload): Promise
     if (!chat) {
       return Promise.resolve(undefined);
     }
-    const userFullName = getUserFullName(selectUser(global, userId));
+    const userFullName = getUserFullName(getTranslationFn(), selectUser(global, userId));
     if (userFullName) {
       userFullNames.push(userFullName);
     }
@@ -853,7 +850,13 @@ addActionHandler('sendInviteMessages', async (global, actions, payload): Promise
     });
   }));
   return actions.showNotification({
-    message: oldTranslate('Conversation.ShareLinkTooltip.Chat.One', userFullNames.join(', ')),
+    message: {
+      key: 'ConversationShareLinkTooltipChatOne',
+      variables: {
+        user: userFullNames.join(', '),
+      },
+      options: { withNodes: true, withMarkdown: true, renderTextFilters: ['br', 'links'] },
+    },
     tabId,
   });
 });
@@ -1556,8 +1559,11 @@ addActionHandler('reportMessages', async (global, actions, payload): Promise<voi
   if (result.type === 'reported') {
     actions.showNotification({
       message: result
-        ? oldTranslate('ReportPeer.AlertSuccess')
-        : 'An error occurred while submitting your report. Please, try again later.',
+        ? {
+          key: 'ReportPeerAlertSuccess',
+          options: { withNodes: true, withMarkdown: true, renderTextFilters: ['br', 'links'] },
+        }
+        : { key: 'ReportSubmitError' },
       tabId,
     });
     actions.closeReportModal({ tabId });
@@ -1699,14 +1705,27 @@ addActionHandler('markMessageListRead', (global, actions, payload): ActionReturn
   return global;
 });
 
-addActionHandler('markMessagesRead', (global, actions, payload): ActionReturnType => {
+const pendingMediaReadIdsByChat = new Map<string, Set<number>>();
+
+addActionHandler('markMessagesRead', async (global, actions, payload): Promise<void> => {
   const { chatId, messageIds } = payload;
   const chat = selectChat(global, chatId);
   if (!chat) {
     return;
   }
 
-  void callApi('markMessagesRead', { chat, messageIds });
+  const pendingIds = pendingMediaReadIdsByChat.get(chatId) || new Set<number>();
+  const unreadIds = messageIds.filter((id) => !pendingIds.has(id));
+  if (!unreadIds.length) return;
+
+  pendingMediaReadIdsByChat.set(chatId, pendingIds);
+  unreadIds.forEach((id) => pendingIds.add(id));
+  try {
+    await callApi('markMessagesRead', { chat, messageIds: unreadIds });
+  } finally {
+    unreadIds.forEach((id) => pendingIds.delete(id));
+    if (!pendingIds.size) pendingMediaReadIdsByChat.delete(chatId);
+  }
 });
 
 addActionHandler('loadWebPagePreview', async (global, actions, payload): Promise<void> => {
@@ -2775,7 +2794,10 @@ addActionHandler('reportSponsored', async (global, actions, payload): Promise<vo
 
   if (result.type === 'reported' || result.type === 'hidden') {
     actions.showNotification({
-      message: oldTranslate(result.type === 'reported' ? 'AdReported' : 'AdHidden'),
+      message: {
+        key: result.type === 'reported' ? 'AdReported' : 'AdHidden',
+        options: { withNodes: true, withMarkdown: true, renderTextFilters: ['br', 'links'] },
+      },
       tabId,
     });
     actions.closeReportAdModal({ tabId });
@@ -2828,7 +2850,10 @@ addActionHandler('hideSponsored', async (global, actions, payload): Promise<void
   });
   setGlobal(global);
   actions.showNotification({
-    message: oldTranslate('AdHidden'),
+    message: {
+      key: 'AdHidden',
+      options: { withNodes: true, withMarkdown: true, renderTextFilters: ['br', 'links'] },
+    },
     tabId,
   });
 });
@@ -2902,24 +2927,22 @@ addActionHandler('approveSuggestedPost', async (global, actions, payload): Promi
 
   const isAdmin = selectIsMonoforumAdmin(global, chatId);
 
-  if (!isAdmin && message?.suggestedPostInfo?.price?.amount) {
-    const neededAmount = message.suggestedPostInfo.price.amount;
-    const isCurrencyStars = message.suggestedPostInfo.price.currency === STARS_CURRENCY_CODE;
-
-    if (isCurrencyStars) {
+  const price = message?.suggestedPostInfo?.price;
+  if (!isAdmin && price?.amount) {
+    if (price.currency === STARS_CURRENCY_CODE) {
       const currentBalance = global.stars?.balance?.amount || 0;
-      if (neededAmount > currentBalance) {
+      if (price.amount > currentBalance) {
         actions.openStarsBalanceModal({
           topup: {
-            balanceNeeded: neededAmount,
+            balanceNeeded: price.amount,
           },
           tabId,
         });
         return;
       }
     } else {
-      const currentTonBalance = global.ton?.balance?.amount || 0;
-      if (neededAmount > currentTonBalance) {
+      const currentTonBalance = global.ton?.balance?.amount || 0n;
+      if (price.amount > currentTonBalance) {
         actions.openStarsBalanceModal({
           currency: TON_CURRENCY_CODE,
           tabId,
@@ -3199,7 +3222,10 @@ addActionHandler('openChatOrTopicWithReplyInDraft', (global, actions, payload): 
   if (currentReplyInfo.type === 'ephemeral') return;
 
   if (!selectReplyCanBeSentToChat(global, toChatId, currentChatId, currentReplyInfo)) {
-    actions.showNotification({ message: oldTranslate('Chat.SendNotAllowedText'), tabId });
+    actions.showNotification({ message: {
+      key: 'ChatSendNotAllowedText',
+      options: { withNodes: true, withMarkdown: true, renderTextFilters: ['br', 'links'] },
+    }, tabId });
     return;
   }
 
@@ -3234,7 +3260,7 @@ addActionHandler('setForwardChatOrTopic', async (global, actions, payload): Prom
         text: {
           key: 'NoVoiceMessagesAllowed',
           variables: {
-            user: getUserFullName(user),
+            user: getUserFullName(getTranslationFn(), user),
           },
           options: {
             withNodes: true,
@@ -3551,6 +3577,24 @@ addActionHandler('forwardAudio', async (global, actions, payload): Promise<void>
     isShareMessageModalShown: false,
   }, tabId);
   setGlobal(global);
+});
+
+addActionHandler('sendAudioToSavedMessages', (global, actions, payload): ActionReturnType => {
+  const { audio, tabId = getCurrentTabId() } = payload;
+
+  const chat = selectChat(global, global.currentUserId!);
+  if (!chat) return;
+
+  void sendMessage(global, {
+    chat,
+    audio,
+    lastMessageId: selectChatLastMessageId(global, chat.id),
+  });
+
+  actions.showNotification({
+    message: { key: 'AudioForwardedToSaved', options: { withNodes: true, withMarkdown: true } },
+    tabId,
+  });
 });
 
 addActionHandler('requestMessageTranslation', (global, actions, payload): ActionReturnType => {
@@ -3875,13 +3919,19 @@ addActionHandler('copyMessageLink', async (global, actions, payload): Promise<vo
   const chat = selectChat(global, chatId);
   if (!chat) {
     actions.showNotification({
-      message: oldTranslate('ErrorOccurred'),
+      message: {
+        key: 'GeneralError',
+        options: { withNodes: true, withMarkdown: true, renderTextFilters: ['br', 'links'] },
+      },
       tabId,
     });
     return;
   }
   const showErrorOccurredNotification = () => actions.showNotification({
-    message: oldTranslate('ErrorOccurred'),
+    message: {
+      key: 'GeneralError',
+      options: { withNodes: true, withMarkdown: true, renderTextFilters: ['br', 'links'] },
+    },
     tabId,
   });
 
@@ -3890,7 +3940,10 @@ addActionHandler('copyMessageLink', async (global, actions, payload): Promise<vo
     return;
   }
   const showLinkCopiedNotification = () => actions.showNotification({
-    message: oldTranslate('LinkCopied'),
+    message: {
+      key: 'LinkCopied',
+      options: { withNodes: true, withMarkdown: true, renderTextFilters: ['br', 'links'] },
+    },
     tabId,
   });
   const callApiExportMessageLinkPromise = callApi('exportMessageLink', {

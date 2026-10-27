@@ -11,15 +11,14 @@ import { selectIsMonoforumAdmin, selectMonoforumChannel,
   selectReplyMessage,
   selectSender } from '../../../../global/selectors';
 import buildClassName from '../../../../util/buildClassName';
-import { formatScheduledDateTime, formatShortDuration } from '../../../../util/dates/oldDateFormat';
-import { convertTonFromNanos } from '../../../../util/formatCurrency';
+import { formatShortDuration } from '../../../../util/dates/duration';
+import { formatCalendarDate, secondsToDate } from '../../../../util/localization/dateFormat';
 import { formatStarsAsText, formatTonAsText } from '../../../../util/localization/format';
 import { getServerTime } from '../../../../util/serverTime';
 import renderText from '../../../common/helpers/renderText';
 import { renderPeerLink, translateWithYou } from '../helpers/messageActions';
 
 import useLang from '../../../../hooks/useLang';
-import useOldLang from '../../../../hooks/useOldLang';
 
 import styles from '../ActionMessage.module.scss';
 
@@ -48,7 +47,7 @@ const SuggestedPostApproval = ({
   onClick,
 }: OwnProps & StateProps) => {
   const lang = useLang();
-  const oldLang = useOldLang();
+
   const { scheduleDate, amount } = action;
 
   const chatTitle = chat && getPeerFullTitle(lang, chat);
@@ -58,18 +57,15 @@ const SuggestedPostApproval = ({
   const originalSenderLink = renderPeerLink(originalSender?.id, originalSenderTitle || lang('ActionFallbackUser'));
 
   const publishDate = scheduleDate
-    ? formatScheduledDateTime(scheduleDate, lang, oldLang)
+    ? formatCalendarDate(lang, secondsToDate(scheduleDate), { isShort: true, withTime: true })
     : lang('SuggestMessageAnytime');
 
   const isPostPublished = scheduleDate ? scheduleDate <= getServerTime() : false;
 
-  const currency = amount?.currency;
-  const amountValue = amount?.amount || 0;
-
-  const formattedAmount = amountValue > 0
-    ? (currency === TON_CURRENCY_CODE
-      ? formatTonAsText(lang, convertTonFromNanos(amountValue))
-      : formatStarsAsText(lang, amountValue))
+  const formattedAmount = amount?.amount
+    ? (amount.currency === TON_CURRENCY_CODE
+      ? formatTonAsText(lang, amount.amount)
+      : formatStarsAsText(lang, amount.amount))
     : undefined;
 
   const duration = formatShortDuration(lang, ageMinSeconds, true);

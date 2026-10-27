@@ -18,6 +18,7 @@ import {
 import { getPeerTitle } from '../../../global/helpers/peers';
 import {
   selectChat,
+  selectIsMessageProtected,
   selectSender, selectTabState,
 } from '../../../global/selectors';
 import {
@@ -111,6 +112,7 @@ type StateProps = {
   hasPlaybackModes: boolean;
   savedMusicById?: Record<string, true>;
   isSavedMusicLoading?: boolean;
+  isMessageProtected: boolean;
   hasPendingSavedMusicStep: boolean;
   isSavedMusicListLoading?: boolean;
   savedMusicListLength?: number;
@@ -161,6 +163,7 @@ const AudioPlayer = ({
   hasPlaybackModes,
   savedMusicById,
   isSavedMusicLoading,
+  isMessageProtected,
   hasPendingSavedMusicStep,
   isSavedMusicListLoading,
   savedMusicListLength,
@@ -197,13 +200,15 @@ const AudioPlayer = ({
     item: renderingItem,
     sender: renderingSender,
     chat: renderingChat,
+    isMessageProtected: isRenderingMessageProtected,
   } = useFrozenProps({
-    message, media, item, sender, chat,
+    message, media, item, sender, chat, isMessageProtected,
   }, !isOpen);
 
   const audio = renderingMedia?.mediaType === 'audio' ? renderingMedia : undefined;
   const isLocalMessage = Boolean(message && isMessageLocal(message));
   const isVoice = renderingMedia?.mediaType === 'voice' || renderingMedia?.mediaType === 'video';
+  const voiceTitle = lang(renderingMedia?.mediaType === 'video' ? 'AttachVideoMessage' : 'AttachAudio');
   const isMusicSaved = Boolean(audio && savedMusicById?.[audio.id]);
   const shouldRenderPlaybackButton = isVoice || (audio?.duration || 0) > PLAYBACK_RATE_FOR_AUDIO_MIN_DURATION;
   const senderName = renderingSender ? getPeerTitle(lang, renderingSender) : undefined;
@@ -240,8 +245,9 @@ const AudioPlayer = ({
   useEffect(() => {
     if (!nextTrackKey || !nextTrackMediaData) return undefined;
 
-    return prefetchTrack(nextTrackKey, nextTrackMediaData);
-  }, [nextTrackKey, nextTrackMediaData]);
+    const isNextVideo = nextTrackMedia?.mediaType === 'video' && nextTrackMedia.isRound;
+    return prefetchTrack(nextTrackKey, nextTrackMediaData, isNextVideo);
+  }, [nextTrackKey, nextTrackMediaData, nextTrackMedia]);
 
   const {
     playPause,
@@ -255,8 +261,9 @@ const AudioPlayer = ({
   } = useAudioPlayback({
     trackKey: currentTrackKey,
     mediaType: isVoice ? 'voice' : 'audio',
+    isVideo: renderingMedia?.mediaType === 'video' && renderingMedia.isRound,
     capabilities: capabilities!,
-    src: mediaData,
+    src: renderingMedia?.mediaType === 'video' ? renderingMedia.blobUrl || mediaData : mediaData,
     originalDuration: mediaDuration || 0,
     metadata: mediaMetadata,
     shouldPlay: true,
@@ -349,7 +356,10 @@ const AudioPlayer = ({
     }
 
     const { chatId, id } = renderingMessage;
-    focusMessage({ chatId, threadId, messageId: id });
+    focusMessage({
+      chatId, threadId, messageId: id,
+      messageListType: renderingItem?.type === 'message' && renderingItem.isScheduled ? 'scheduled' : undefined,
+    });
   });
 
   const withPlaylistNav = Boolean(playbackSource && playbackSource.type !== 'single');
@@ -531,7 +541,7 @@ const AudioPlayer = ({
           />
         </Button>
         <div className={styles.content} {...contentClickableProps}>
-          {audio ? renderAudio(audio, timeNode) : renderVoice(lang('AttachAudio'), senderName)}
+          {audio ? renderAudio(audio, timeNode) : renderVoice(voiceTitle, senderName)}
           <RippleEffect />
         </div>
         <Button
@@ -608,13 +618,15 @@ const AudioPlayer = ({
       )}
 
       <div className={styles.content} {...contentClickableProps}>
-        {audio ? renderAudio(audio, timeNode) : renderVoice(lang('AttachAudio'), senderName)}
+        {audio ? renderAudio(audio, timeNode) : renderVoice(voiceTitle, senderName)}
         <RippleEffect />
       </div>
 
       <ShowTransition
-        isOpen={Boolean(audio && renderingItem?.type !== 'instantView' && !isLocalMessage && savedMusicById)}
+        isOpen={Boolean(audio && renderingItem?.type !== 'instantView'
+          && !isLocalMessage && !isRenderingMessageProtected && savedMusicById)}
         className={styles.profileMusicButtonWrapper}
+        noCloseTransition
         shouldAnimateFirstRender
       >
         <Button
@@ -846,6 +858,7 @@ export default withGlobal<OwnProps>(
       hasPlaybackModes: selectHasPlaybackModes(global),
       savedMusicById: global.users.savedMusicById,
       isSavedMusicLoading: global.users.isSavedMusicLoading,
+      isMessageProtected: selectIsMessageProtected(global, message),
       hasPendingSavedMusicStep: Boolean(audioPlayer.pendingStep) && audioPlayer.source?.type === 'savedMusic',
       isSavedMusicListLoading: savedMusicList?.isLoading,
       savedMusicListLength: savedMusicList?.ids.length,

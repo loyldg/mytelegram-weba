@@ -10,7 +10,7 @@ import useLastCallback from '../../../hooks/useLastCallback.ts';
 
 import InteractiveSparkles from '../../common/InteractiveSparkles';
 import StickerView from '../../common/StickerView';
-import SpeedingDiamond from './SpeedingDiamond.tsx';
+import WalletDiamond from '../wallet/WalletDiamond';
 import SwayingStar from './SwayingStar.tsx';
 
 import styles from './ParticlesHeader.module.scss';
@@ -18,7 +18,7 @@ import styles from './ParticlesHeader.module.scss';
 import Cocoon from '../../../assets/cocoon.webp';
 
 interface OwnProps {
-  model: 'swaying-star' | 'speeding-diamond' | 'ai-egg' | 'sticker';
+  model: 'swaying-star' | 'diamond-3d' | 'ai-egg' | 'sticker';
   sticker?: ApiSticker;
   color: 'purple' | 'gold' | 'blue';
   title: TeactNode;
@@ -26,9 +26,11 @@ interface OwnProps {
   isDisabled?: boolean;
   className?: string;
   modelClassName?: string;
+  titleClassName?: string;
 }
 
 const GIFT_STICKER_SIZE = 8 * REM;
+const DIAMOND_3D_SIZE = 130;
 
 const PARTICLE_PARAMS = {
   centerShift: [0, -36] as const,
@@ -43,6 +45,7 @@ function ParticlesHeader({
   isDisabled,
   className,
   modelClassName,
+  titleClassName,
 }: OwnProps) {
   const stickerRef = useRef<HTMLDivElement>();
   const triggerSparklesRef = useRef<(() => void) | undefined>();
@@ -82,8 +85,10 @@ function ParticlesHeader({
           draggable={false}
           onMouseMove={handleMouseMove}
         />
-      ) : model === 'speeding-diamond' ? (
-        <SpeedingDiamond className={modelClassName} onMouseMove={handleMouseMove} />
+      ) : model === 'diamond-3d' ? (
+        <div className={buildClassName(styles.diamond3d, modelClassName)} onMouseMove={handleMouseMove}>
+          <WalletDiamond size={DIAMOND_3D_SIZE} />
+        </div>
       ) : model === 'sticker' && sticker && (
         <div
           ref={stickerRef}
@@ -101,7 +106,7 @@ function ParticlesHeader({
         </div>
       )}
 
-      <h2 className={styles.title}>
+      <h2 className={buildClassName(styles.title, titleClassName)}>
         {title}
       </h2>
 

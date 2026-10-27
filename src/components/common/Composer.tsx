@@ -40,6 +40,7 @@ import type {
   ThemeKey,
   ThreadId,
 } from '../../types';
+import type { RegularLangKey } from '../../types/language';
 import type { RichEditorTooltipsConfig } from './tooltips/types';
 import { ApiMediaFormat, ApiMessageEntityTypes, MAIN_THREAD_ID } from '../../api/types';
 
@@ -85,6 +86,7 @@ import {
   selectCanManageAutoDelete,
   selectCanPlayAnimatedEmojis,
   selectCanScheduleUntilOnline,
+  selectCanSendMoneyToUser,
   selectChat,
   selectChatFullInfo,
   selectChatHistoryTtl,
@@ -102,6 +104,7 @@ import {
   selectIsPremiumPurchaseBlocked,
   selectIsReactionPickerOpen,
   selectIsRightColumnShown,
+  selectLanguageCode,
   selectNewestMessageWithBotKeyboardButtons,
   selectNotifyDefaults,
   selectNotifyException,
@@ -132,7 +135,7 @@ import {
 } from '../../util/browser/windowEnvironment';
 import buildClassName from '../../util/buildClassName';
 import captureEscKeyListener from '../../util/captureEscKeyListener';
-import { formatCountdown, formatMediaDuration } from '../../util/dates/oldDateFormat';
+import { formatCountdown, formatMediaDuration } from '../../util/dates/duration';
 import { processDeepLink } from '../../util/deeplink';
 import { tryParseDeepLink } from '../../util/deepLinkParser';
 import calcTextLineHeightAndCount from '../../util/element/calcTextLineHeightAndCount';
@@ -145,6 +148,7 @@ import { MEMO_EMPTY_ARRAY } from '../../util/memo';
 import { getServerTime } from '../../util/serverTime';
 import stopEvent from '../../util/stopEvent';
 import { getUtf8Length } from '../../util/textFormat';
+import { EMPTY_RICH_MEDIA_CAPTION } from '../../util/tiptap/richMedia';
 import windowSize from '../../util/windowSize';
 import applyIosAutoCapitalizationFix from '../middle/composer/helpers/applyIosAutoCapitalizationFix';
 import buildAttachment, {
@@ -160,6 +164,7 @@ import {
   isValidInputRichMessage,
 } from '../ui/textInput/richText';
 import renderText from './helpers/renderText';
+import { hasActiveRichEditorTooltip } from './tooltips/helpers';
 
 import useInterval from '../../hooks/schedulers/useInterval';
 import useTimeout from '../../hooks/schedulers/useTimeout';
@@ -171,7 +176,6 @@ import useFlag from '../../hooks/useFlag';
 import useForceUpdate from '../../hooks/useForceUpdate';
 import useLang from '../../hooks/useLang';
 import useLastCallback from '../../hooks/useLastCallback';
-import useOldLang from '../../hooks/useOldLang';
 import usePeerColor from '../../hooks/usePeerColor';
 import usePreviousDeprecated from '../../hooks/usePreviousDeprecated';
 import useResizeObserver from '../../hooks/useResizeObserver';
@@ -223,7 +227,6 @@ import Icon from './icons/Icon';
 import PaymentMessageConfirmDialog from './PaymentMessageConfirmDialog';
 import ReactionAnimatedEmoji from './reactions/ReactionAnimatedEmoji';
 import RemoveFormattingModal from './RemoveFormattingModal';
-import { hasActiveRichEditorTooltip } from './tooltips/extensions/RichEditorTooltips';
 
 import './Composer.scss';
 
@@ -262,6 +265,7 @@ type StateProps = {
   currentMessageList?: MessageList;
   isChatWithBot?: boolean;
   isChatWithSelf?: boolean;
+  canSendMoney?: boolean;
   isChannel?: boolean;
   isForCurrentMessageList: boolean;
   isRightColumnShown?: boolean;
@@ -299,6 +303,7 @@ type StateProps = {
   editingDraft?: EditingDraft;
   requestedDraft?: ApiFormattedText;
   requestedDraftFiles?: File[];
+  requestedRichInputMedia?: TabState['requestedRichInputMedia'];
   attachBots: GlobalState['attachMenu']['bots'];
   attachMenuPeerType?: ApiAttachMenuPeerType;
   theme: ThemeKey;
@@ -406,6 +411,7 @@ const Composer = ({
   canSendVoiceByPrivacy,
   isChatWithBot,
   isChatWithSelf,
+  canSendMoney,
   isChannel,
   fileSizeLimit,
   isRightColumnShown,
@@ -442,6 +448,7 @@ const Composer = ({
   editingDraft,
   requestedDraft,
   requestedDraftFiles,
+  requestedRichInputMedia,
   botMenuButton,
   attachBots,
   attachMenuPeerType,
@@ -508,6 +515,7 @@ const Composer = ({
     sendInlineBotResult,
     loadSendAs,
     resetOpenChatWithDraft,
+    resetRichInputMediaRequest,
     callAttachBot,
     addRecentCustomEmoji,
     showNotification,
@@ -533,7 +541,6 @@ const Composer = ({
     openAiMessageEditorModal,
   } = getActions();
 
-  const oldLang = useOldLang();
   const lang = useLang();
   const isEditingMedia = Boolean(editingMessage && hasMessageMedia(editingMessage));
 
@@ -1191,21 +1198,21 @@ const Composer = ({
     const notificationNumber = customEmojiNotificationNumberRef.current;
     if (!notificationNumber) {
       showNotification({
-        message: oldLang('UnlockPremiumEmojiHint'),
+        message: lang('UnlockPremiumEmojiHint'),
         action: {
           action: 'openPremiumModal',
           payload: { initialSection: 'animated_emoji' },
         },
-        actionText: oldLang('PremiumMore'),
+        actionText: lang('PremiumMore'),
       });
     } else {
       showNotification({
-        message: oldLang('UnlockPremiumEmojiHint2'),
+        message: lang('UnlockPremiumEmojiHint2'),
         action: {
           action: 'openChat',
           payload: { id: currentUserId, shouldReplaceHistory: true },
         },
-        actionText: oldLang('Open'),
+        actionText: lang('Open'),
       });
     }
     customEmojiNotificationNumberRef.current = Number(!notificationNumber);
@@ -1854,6 +1861,36 @@ const Composer = ({
     }
   }, [handleFileSelect, requestedDraftFiles, resetOpenChatWithDraft]);
 
+  const applyRichInputMediaRequest = useLastCallback((request: NonNullable<TabState['requestedRichInputMedia']>) => {
+    if (
+      request.chatId !== chatId
+      || request.threadId !== threadId
+      || request.messageListType !== messageListType
+    ) return;
+    if (!isRichInputExpansionActive || !richEditor.editor) return;
+
+    if (request.files) {
+      handleRichMediaSelect(request.files);
+      return;
+    }
+    if (!request.audio) return;
+
+    const isInserted = richEditor.insertMedia(
+      [{ type: 'audio', media: request.audio, caption: EMPTY_RICH_MEDIA_CAPTION }],
+      richEditor.editor.state.selection.from,
+    );
+    if (!isInserted) {
+      showNotification({ message: lang('RichMediaSkippedFiles', { count: 1 }, { pluralValue: 1 }) });
+    }
+  });
+
+  useEffect(() => {
+    if (!requestedRichInputMedia) return;
+
+    resetRichInputMediaRequest();
+    applyRichInputMediaRequest(requestedRichInputMedia);
+  }, [applyRichInputMediaRequest, requestedRichInputMedia, resetRichInputMediaRequest]);
+
   useEffect(() => {
     if (requestedDraftFiles?.length) {
       updateShouldSaveAttachmentsCompression({ shouldSave: true });
@@ -2446,7 +2483,7 @@ const Composer = ({
                   variables: { user: chat?.title ?? '' },
                   options: { withNodes: true, withMarkdown: true },
                 }
-                : oldLang('VoiceMessagesRestrictedByPrivacy', chat?.title),
+                : lang('NoVoiceMessagesAllowed', { user: chat?.title }),
             });
           } else if (isRecordingVideoMode ? !canSendRoundVideos : !canSendVoices) {
             showAllowedMessageTypesNotification({ chatId, messageListType });
@@ -2497,17 +2534,17 @@ const Composer = ({
     mainButtonContextMenuHandler = canSwitchRecordMode ? handleRecordModeContextMenu : stopEvent;
   }
 
-  let sendButtonAriaLabel = 'SendMessage';
+  let sendButtonAriaLabel: RegularLangKey = 'SendMessage';
   switch (mainButtonState) {
     case MainButtonState.Forward:
       sendButtonAriaLabel = 'Forward';
       break;
     case MainButtonState.Edit:
-      sendButtonAriaLabel = 'Save edited message';
+      sendButtonAriaLabel = 'EditMessageAriaLabel';
       break;
     case MainButtonState.Record:
       if (!canAttachMedia) {
-        sendButtonAriaLabel = 'Conversation.DefaultRestrictedMedia';
+        sendButtonAriaLabel = 'ConversationDefaultRestrictedMedia';
       } else {
         sendButtonAriaLabel = isRecordingVideoMode ? 'AccDescrVideoMessage' : 'AccDescrVoiceMessage';
       }
@@ -2850,7 +2887,7 @@ const Composer = ({
                   disabled={botCommands === undefined}
                   color="translucent"
                   onActivate={handleActivateBotCommandMenu}
-                  ariaLabel="Open bot command keyboard"
+                  ariaLabel={lang('AriaOpenBotMenu')}
                 >
                   <Icon name="hamburger" />
                 </ResponsiveHoverButton>
@@ -2860,7 +2897,7 @@ const Composer = ({
                   round
                   color="translucent"
                   onClick={isSendAsMenuOpen ? closeSendAsMenu : handleSendAsMenuOpen}
-                  ariaLabel={oldLang('SendMessageAsTitle')}
+                  ariaLabel={lang('SendMessageAsTitle')}
                   className={buildClassName(
                     'send-as-button',
                     'composer-action-button',
@@ -2897,6 +2934,7 @@ const Composer = ({
               onTodoListCreate={handleTodoListCreate}
               isScheduled={isInScheduledList}
               attachBots={isInMessageList ? attachBots : undefined}
+              canSendMoney={isInMessageList ? canSendMoney : undefined}
               peerType={attachMenuPeerType}
               shouldCollectDebugLogs={shouldCollectDebugLogs}
               theme={theme}
@@ -3162,7 +3200,7 @@ const Composer = ({
               onClick={handleLikeStory}
               onContextMenu={handleStoryPickerContextMenu}
               onMouseDown={handleBeforeStoryPickerContextMenu}
-              ariaLabel={oldLang('AccDescrLike')}
+              ariaLabel={lang('AccDescrLike')}
               ref={storyReactionRef}
             >
               {sentStoryReaction && (
@@ -3214,7 +3252,7 @@ const Composer = ({
         disabled={areRecordingsNotAllowed || hasRichMediaBlocking}
         allowDisabledClick
         noFastClick
-        ariaLabel={mainButtonState === MainButtonState.Stop ? lang('BotDraftStop') : oldLang(sendButtonAriaLabel)}
+        ariaLabel={mainButtonState === MainButtonState.Stop ? lang('BotDraftStop') : lang(sendButtonAriaLabel)}
         onClick={mainButtonHandler}
         onContextMenu={mainButtonContextMenuHandler}
       >
@@ -3325,7 +3363,8 @@ export default memo(withGlobal<OwnProps>(
       shouldSuggestStickers, shouldSuggestCustomEmoji, shouldUpdateStickerSetOrder, shouldPaidMessageAutoApprove,
       lastRecordMessageMode,
     } = global.settings.byKey;
-    const { language, shouldCollectDebugLogs } = selectSharedSettings(global);
+    const { shouldCollectDebugLogs } = selectSharedSettings(global);
+    const language = selectLanguageCode(global);
     const {
       forwardMessages: { messageIds: forwardMessageIds },
       messageMediaEditorRequest,
@@ -3419,6 +3458,7 @@ export default memo(withGlobal<OwnProps>(
       user,
       isChatWithBot,
       isChatWithSelf,
+      canSendMoney: selectCanSendMoneyToUser(global, chatId),
       isForCurrentMessageList,
       canScheduleUntilOnline: selectCanScheduleUntilOnline(global, chatId),
       isChannel: chat ? isChatChannel(chat) : undefined,
@@ -3459,6 +3499,7 @@ export default memo(withGlobal<OwnProps>(
       editingDraft,
       requestedDraft,
       requestedDraftFiles,
+      requestedRichInputMedia: type === 'messageList' ? tabState.requestedRichInputMedia : undefined,
       attachBots: global.attachMenu.bots,
       attachMenuPeerType: selectChatType(global, chatId),
       theme: selectTheme(global),

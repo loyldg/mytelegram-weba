@@ -17,6 +17,7 @@ import type {
 import { buildCollectionByCallback, omitUndefined } from '../../../util/iteratees';
 import { addDocumentToLocalDb, addPhotoToLocalDb } from '../helpers/localDb';
 import { buildApiPhoto, buildPrivacyRules } from './common';
+import { buildApiAudioFromDocument } from './media';
 import { buildApiDocument, buildGeoPoint, buildMessageMediaContent, buildMessageTextContent } from './messageContent';
 import { buildApiMessage } from './messages';
 import { buildApiPeerId, getApiChatIdFromMtpPeer } from './peers';
@@ -49,7 +50,7 @@ export function buildApiStory(peerId: string, story: GramJs.TypeStoryItem): ApiT
     edited, pinned, expireDate, id, date, caption,
     entities, media, privacy, views,
     public: isPublic, noforwards, closeFriends, contacts, selectedContacts,
-    mediaAreas, sentReaction, out, fwdFrom, fromId,
+    mediaAreas, sentReaction, out, fwdFrom, fromId, music,
   } = story;
 
   const content: MediaContent = {
@@ -82,6 +83,7 @@ export function buildApiStory(peerId: string, story: GramJs.TypeStoryItem): ApiT
     sentReaction: reaction,
     forwardInfo: fwdFrom && buildApiStoryForwardInfo(fwdFrom),
     fromId: fromId && getApiChatIdFromMtpPeer(fromId),
+    music: music instanceof GramJs.Document ? buildApiAudioFromDocument(music) : undefined,
   });
 }
 
@@ -152,7 +154,7 @@ export function buildApiStealthMode(stealthMode: GramJs.TypeStoriesStealthMode):
   };
 }
 
-function buildApiMediaAreaCoordinates(coordinates: GramJs.TypeMediaAreaCoordinates): ApiMediaAreaCoordinates {
+export function buildApiMediaAreaCoordinates(coordinates: GramJs.TypeMediaAreaCoordinates): ApiMediaAreaCoordinates {
   const {
     x, y, w, h, rotation, radius,
   } = coordinates;

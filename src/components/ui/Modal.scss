@@ -91,6 +91,7 @@
     }
 
     .modal-dialog {
+      isolation: isolate;
       position: relative;
       transform: translate3d(0, -1rem, 0);
 
@@ -109,6 +110,8 @@
       transition:
         transform 0.2s ease,
         opacity 0.2s ease;
+
+      corner-shape: squircle;
 
       body.no-page-transitions & {
         transform: none !important;

@@ -6,7 +6,6 @@ import { BOT_VERIFICATION_PEERS_LIMIT, SAVED_MUSIC_SLICE } from '../../../config
 import { isUserId } from '../../../util/entities/ids';
 import { getCurrentTabId } from '../../../util/establishMultitabRole';
 import { buildCollectionByKey, unique } from '../../../util/iteratees';
-import * as langProvider from '../../../util/oldLangProvider';
 import { callApi } from '../../../api/gramjs';
 import {
   addActionHandler, getActions, getGlobal, setGlobal,
@@ -159,9 +158,9 @@ addActionHandler('loadCommonChats', async (global, actions, payload): Promise<vo
 
   global = getGlobal();
   global = updateUserCommonChats(global, user.id, {
-    maxId: chatIds.length ? chatIds[chatIds.length - 1] : undefined,
+    maxId: chatIds.length ? chatIds[chatIds.length - 1] : commonChats?.maxId,
     ids,
-    isFullyLoaded: ids.length >= count,
+    isFullyLoaded: ids.length >= count || !chatIds.length,
   });
 
   setGlobal(global);
@@ -472,7 +471,10 @@ addActionHandler('importContact', async (global, actions, payload): Promise<void
   const result = await callApi('importContact', { phone, firstName, lastName });
   if (!result) {
     actions.showNotification({
-      message: langProvider.oldTranslate('Contacts.PhoneNumber.NotRegistred'),
+      message: {
+        key: 'ContactsPhoneNumberNotRegistred',
+        options: { withNodes: true, withMarkdown: true, renderTextFilters: ['br', 'links'] },
+      },
       tabId,
     });
 
@@ -497,7 +499,10 @@ addActionHandler('reportSpam', async (global, actions, payload): Promise<void> =
   if (!result) return;
 
   actions.showNotification({
-    message: langProvider.oldTranslate('ReportPeer.AlertSuccess'),
+    message: {
+      key: 'ReportPeerAlertSuccess',
+      options: { withNodes: true, withMarkdown: true, renderTextFilters: ['br', 'links'] },
+    },
     tabId,
   });
 });

@@ -15,6 +15,7 @@ import {
   ACCOUNT_SLOT, getAccountSlots, getAccountSlotUrl, loadSlotSession,
 } from '../../../util/multiaccount';
 import { unsubscribe } from '../../../util/notifications';
+import { parseJsonWithBigInt } from '../../../util/numbers';
 import {
   abortPasscodeDisable,
   addPasskeyToMeta,
@@ -31,13 +32,16 @@ import {
   getDek,
   getDekGeneration,
   hasLegacyEncryptedSession,
+  hasOtherSlotWalletVaultSecrets,
   InvalidPasscodeError,
+  listWalletVaultSecrets,
   loadPasscodeMeta,
   markPasscodeLocked,
   PasscodeDataCorruptedError,
   readGlobalsVaultForSlot,
   refreshSessionsVault,
   removePasskeyFromMeta,
+  removeWalletVaultSecretsNow,
   requestPasscodeStateLock,
   resetInvalidPasscodeAttempts,
   restoreMissingSessionsFromVault,
@@ -89,6 +93,7 @@ import {
 } from '../../index';
 import { INITIAL_GLOBAL_STATE } from '../../initialState';
 import { clearGlobalForLockScreen, clearPasscodeSettings, updatePasscodeSettings } from '../../reducers';
+import { updateWallet } from '../../reducers/wallet';
 import { selectTabState } from '../../selectors';
 
 const WRONG_PASSCODE_ERROR: RegularLangFnParameters = { key: 'PasscodeWrong' };
@@ -167,11 +172,35 @@ addActionHandler('setPasscode', async (global, actions, payload): Promise<void> 
   }
 });
 
-addActionHandler('clearPasscode', async (global, actions): Promise<void> => {
+addActionHandler('clearPasscode', async (global, actions, payload): Promise<void> => {
+  const { shouldDropWalletKeys } = payload || {};
   let passkeyCredentialId: number[] | undefined;
   const isDisabled = await requestPasscodeStateLock(async () => {
     const generation = getDekGeneration();
     if (!generation) return false;
+
+    // The wallet phrases go only together with the passcode, under the same lock
+    const hasOwnWalletKeys = (await listWalletVaultSecrets(ACCOUNT_SLOT)).length > 0;
+
+    if (hasOwnWalletKeys && !shouldDropWalletKeys) {
+      actions.openWalletModal({ shouldReleaseKey: true, tabId: getCurrentTabId() });
+
+      return false;
+    }
+
+    // The passcode is shared by every account, so it stays until each of them has dropped its phrases
+    if (await hasOtherSlotWalletVaultSecrets(ACCOUNT_SLOT)) {
+      if (hasOwnWalletKeys) {
+        await removeWalletVaultSecretsNow(ACCOUNT_SLOT);
+        global = getGlobal();
+        global = updateWallet(global, { hasLocalSecret: false, savedWallets: undefined });
+        setGlobal(global);
+      }
+
+      actions.showNotification({ message: { key: 'PasscodeWalletKeyOtherAccounts' }, tabId: getCurrentTabId() });
+
+      return false;
+    }
 
     global = getGlobal();
     await writeGlobalsVaultForSlot(ACCOUNT_SLOT, serializeGlobal(global));
@@ -210,6 +239,13 @@ addActionHandler('clearPasscode', async (global, actions): Promise<void> => {
         tabId: getCurrentTabId(),
       });
       return false;
+    }
+
+    // The phrases went with the vault the commit above dropped
+    if (hasOwnWalletKeys) {
+      global = getGlobal();
+      global = updateWallet(global, { hasLocalSecret: false, savedWallets: undefined });
+      setGlobal(global);
     }
 
     localStorage.removeItem(IS_SCREEN_LOCKED_CACHE_KEY);
@@ -695,11 +731,11 @@ async function unlockLegacySession(passcode: string) {
   const sharedState = parseLegacySharedState(sharedStateJson);
   let migrationGeneration: string | undefined;
   try {
-    const legacyGlobal = JSON.parse(globalJson) as GlobalState;
+    const legacyGlobal = parseJsonWithBigInt<GlobalState>(globalJson);
     migrateCache(legacyGlobal, cloneDeep(INITIAL_GLOBAL_STATE));
     if (sharedState) legacyGlobal.sharedState = sharedState;
     if (sharedState) await cacheSharedState(sharedState);
-    const session = JSON.parse(sessionJson) as Parameters<typeof storeSession>[0] & { userId?: string };
+    const session = parseJsonWithBigInt<Parameters<typeof storeSession>[0] & { userId?: string }>(sessionJson);
     enableEncryptedSessionStore(collectSessionStorageSnapshot());
     await storeSession(session);
     if (session.userId) await updateSessionUserId(session.userId);
@@ -800,7 +836,7 @@ function parseLegacySharedState(sharedStateJson?: string): GlobalState['sharedSt
   if (!sharedStateJson) return undefined;
 
   try {
-    return JSON.parse(sharedStateJson) as GlobalState['sharedState'];
+    return parseJsonWithBigInt<GlobalState['sharedState']>(sharedStateJson);
   } catch (err) {
     return undefined;
   }
@@ -850,7 +886,7 @@ async function restoreGlobalCaches(currentGlobal: GlobalState) {
       global = currentGlobal;
     } else {
       const globalJson = await readGlobalsVaultForSlot(slot);
-      global = globalJson ? JSON.parse(globalJson) as GlobalState : cloneDeep(INITIAL_GLOBAL_STATE);
+      global = globalJson ? parseJsonWithBigInt<GlobalState>(globalJson) : cloneDeep(INITIAL_GLOBAL_STATE);
       if (!globalJson) global.currentUserId = session!.userId;
       global.sharedState = currentGlobal.sharedState;
       migrateCache(global, cloneDeep(INITIAL_GLOBAL_STATE));
@@ -862,32 +898,70 @@ async function restoreGlobalCaches(currentGlobal: GlobalState) {
   await Promise.all(globalsBySlot.map(({ global, slot }) => cacheGlobalForSlot(slot, global)));
 }
 
+// Under the same attempt limit as the lock screen, or the wallet screens would let the passcode be guessed freely.
+// The whole check runs under the lock. Tabs checking at once would otherwise all pass the timeout and try their
+// passcodes before any attempt is counted. The lock is not reentrant, so the records are updated directly.
+export function verifyPasscodeWithLimit(
+  passcode: string,
+): Promise<'PASSCODE_INVALID' | 'PASSCODE_LOCKED' | undefined> {
+  return requestPasscodeStateLock(async () => {
+    const meta = await loadPasscodeMeta();
+    if (!meta) return 'PASSCODE_INVALID';
+
+    if (meta.timeoutUntil && Date.now() < meta.timeoutUntil) return 'PASSCODE_LOCKED';
+
+    try {
+      await unlockDekWithPasscode(passcode);
+    } catch (err) {
+      if (err instanceof InvalidPasscodeError) {
+        await recordInvalidAttempt(meta.generation).catch(() => undefined);
+      }
+
+      return 'PASSCODE_INVALID';
+    }
+
+    // A bookkeeping failure must not turn a right passcode into a refusal
+    if (meta.invalidAttemptsCount) {
+      await updatePasscodeMeta({ invalidAttemptsCount: 0, timeoutUntil: undefined }, meta.generation)
+        .catch(() => undefined);
+    }
+
+    return undefined;
+  });
+}
+
 async function logInvalidAttempt(generation: string) {
-  let invalidAttempt: ReturnType<typeof buildInvalidAttempt>;
-  let isUpdated: boolean;
-  try {
-    isUpdated = await requestPasscodeStateLock(() => (
-      updatePasscodeMeta((meta) => {
-        invalidAttempt = buildInvalidAttempt(meta.invalidAttemptsCount);
-        return {
-          invalidAttemptsCount: invalidAttempt.invalidAttemptsCount,
-          timeoutUntil: invalidAttempt.timeoutUntil,
-        };
-      }, generation)
-    ));
-  } catch (err) {
-    setPasscodeSettings({ isLoading: false, errorKey: SOMETHING_WENT_WRONG_ERROR });
-    return;
-  }
-  if (!isUpdated) {
+  const invalidAttempt = await registerInvalidAttempt(generation);
+
+  if (!invalidAttempt) {
     setPasscodeSettings({ isLoading: false, errorKey: SOMETHING_WENT_WRONG_ERROR });
     return;
   }
 
-  setPasscodeSettings({
-    ...invalidAttempt!,
-    isLoading: false,
-  });
+  setPasscodeSettings({ ...invalidAttempt, isLoading: false });
+}
+
+async function registerInvalidAttempt(generation: string) {
+  try {
+    return await requestPasscodeStateLock(() => recordInvalidAttempt(generation));
+  } catch (err) {
+    return undefined;
+  }
+}
+
+// The caller holds the passcode state lock
+async function recordInvalidAttempt(generation: string) {
+  let invalidAttempt: ReturnType<typeof buildInvalidAttempt> | undefined;
+
+  const isUpdated = await updatePasscodeMeta((meta) => {
+    invalidAttempt = buildInvalidAttempt(meta.invalidAttemptsCount);
+    return {
+      invalidAttemptsCount: invalidAttempt.invalidAttemptsCount,
+      timeoutUntil: invalidAttempt.timeoutUntil,
+    };
+  }, generation);
+
+  return isUpdated ? invalidAttempt : undefined;
 }
 
 function buildInvalidAttempt(previousAttemptsCount = 0) {
@@ -917,7 +991,7 @@ async function applyUnlockedState(
   let global = getGlobal();
   const beforeTabStates = Object.values(global.byTabId);
   const previousGlobal = global;
-  global = JSON.parse(globalJson) as GlobalState;
+  global = parseJsonWithBigInt<GlobalState>(globalJson);
   global.byTabId = previousGlobal.byTabId;
   global.sharedState = sharedState || previousGlobal.sharedState;
   migrateCache(global, cloneDeep(INITIAL_GLOBAL_STATE));

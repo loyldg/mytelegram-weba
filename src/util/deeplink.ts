@@ -1,21 +1,69 @@
-import { getActions } from '../global';
+import { getActions, getGlobal } from '../global';
 
 import type {
   ApiChatType, ApiFormattedText, LinkContext,
 } from '../api/types';
 import type { DeepLinkMethod } from './deepLinkParser';
-import { LeftColumnContent, SettingsScreens } from '../types';
+import { LeftColumnContent } from '../types';
 
-import { API_CHAT_TYPES, RE_TG_LINK, TON_CURRENCY_CODE } from '../config';
+import {
+  API_CHAT_TYPES, RE_TG_LINK, TON_CURRENCY_CODE, WALLET_BOT_USERNAME,
+} from '../config';
 import { IS_BAD_URL_PARSER } from './browser/globalEnvironment';
-import { tryParseDeepLink } from './deepLinkParser';
+import { RE_TON_TRANSFER_LINK, tryParseDeepLink } from './deepLinkParser';
+import { parseTonTransferLink } from './tonAddress';
+import { buildTonConnectLinkFromStartApp, isTonConnectLink, parseTonConnectLink } from './tonConnectLink';
+
+function openTonConnectLink(url: string) {
+  const actions = getActions();
+
+  void parseTonConnectLink(url).then((request) => {
+    actions.openWalletTonConnect(request);
+  }).catch(() => {
+    actions.showNotification({ message: { key: 'WalletConnectInvalid' } });
+  });
+}
 
 export const processDeepLink = (url: string, linkContext?: LinkContext): boolean => {
   const actions = getActions();
 
+  // Claimed even without the wallet, or `ton://…` would go through the `https` parsing
+  const isWalletAvailable = getGlobal().appConfig.isWalletAvailable;
+
+  if (isTonConnectLink(url)) {
+    if (isWalletAvailable) openTonConnectLink(url);
+
+    return true;
+  }
+
+  const transferLink = parseTonTransferLink(url);
+
+  if (transferLink) {
+    if (!isWalletAvailable) return true;
+
+    actions.openWalletModal({
+      initialRecipient: transferLink.address ?? '',
+      initialAmount: transferLink.amount,
+      initialComment: transferLink.comment,
+      isInitialCommentEncrypted: transferLink.isCommentEncrypted,
+    });
+
+    return true;
+  }
+
+  // Must not fall through to the `t.me` parsing, which would read the path as the `transfer` username
+  if (RE_TON_TRANSFER_LINK.test(url)) {
+    if (isWalletAvailable) actions.showNotification({ message: { key: 'WalletSendInvalidAddress' } });
+
+    return true;
+  }
+
   const parsedLink = tryParseDeepLink(url);
   if (parsedLink) {
     switch (parsedLink.type) {
+      case 'languageLink':
+        actions.openLanguageModal({ langCode: parsedLink.langCode });
+        return true;
       case 'privateMessageLink':
         actions.openPrivateChannel({
           id: parsedLink.channelId,
@@ -38,6 +86,16 @@ export const processDeepLink = (url: string, linkContext?: LinkContext): boolean
         return true;
       }
       case 'publicUsernameOrBotLink': {
+        // A dApp addresses the wallet through the wallet bot's link; without the wallet it opens the bot
+        const tonConnectUrl = isWalletAvailable && parsedLink.username.toLowerCase() === WALLET_BOT_USERNAME
+          && parsedLink.startApp ? buildTonConnectLinkFromStartApp(parsedLink.startApp) : undefined;
+
+        if (tonConnectUrl) {
+          openTonConnectLink(tonConnectUrl);
+
+          return true;
+        }
+
         const choose = parseChooseParameter(parsedLink.choose);
 
         actions.openChatByUsername({
@@ -85,41 +143,65 @@ export const processDeepLink = (url: string, linkContext?: LinkContext): boolean
       case 'giftAuctionLink':
         actions.openGiftAuctionBySlug({ slug: parsedLink.slug });
         return true;
-      case 'settings':
-        if (!parsedLink.screen) {
+      case 'settings': {
+        switch (parsedLink.path?.split('/')[0]) {
+          case 'premium':
+            actions.openPremiumModal();
+            return true;
+          case 'stars':
+            actions.openStarsBalanceModal({});
+            return true;
+          case 'ton':
+            actions.openStarsBalanceModal({ currency: TON_CURRENCY_CODE });
+            return true;
+          case 'send-gift':
+            actions.openGiftRecipientPicker();
+            return true;
+        }
+
+        if (parsedLink.path) {
+          actions.openSettingsLink({ path: parsedLink.path });
+        } else {
           actions.openLeftColumnContent({ contentKey: LeftColumnContent.Settings });
-          return true;
         }
-        switch (parsedLink.screen) {
-          case 'editProfile':
-            actions.openSettingsScreen({ screen: SettingsScreens.EditProfile });
-            return true;
-          case 'language':
-            actions.openSettingsScreen({ screen: SettingsScreens.Language });
-            return true;
-          case 'devices':
-            actions.openSettingsScreen({ screen: SettingsScreens.ActiveSessions });
-            return true;
-          case 'privacy':
-            actions.openSettingsScreen({ screen: SettingsScreens.Privacy });
-            return true;
-          case 'folders':
-            actions.openSettingsScreen({ screen: SettingsScreens.Folders });
-            return true;
-          case 'theme':
-            actions.openSettingsScreen({ screen: SettingsScreens.General });
-            return true;
-        }
-        break;
+        return true;
+      }
       case 'stars':
         actions.openStarsBalanceModal({});
         return true;
       case 'ton':
         actions.openStarsBalanceModal({ currency: TON_CURRENCY_CODE });
         return true;
+      case 'sendGramsLink': {
+        if (!isWalletAvailable) break;
+
+        const tonConnectUrl = parsedLink.startApp ? buildTonConnectLinkFromStartApp(parsedLink.startApp) : undefined;
+
+        if (tonConnectUrl) {
+          openTonConnectLink(tonConnectUrl);
+
+          return true;
+        }
+
+        actions.openWalletTransferLink({
+          to: parsedLink.to,
+          amount: parsedLink.amount,
+          comment: parsedLink.comment,
+          isCommentEncrypted: parsedLink.isCommentEncrypted,
+        });
+
+        return true;
+      }
       case 'oauth':
         if (linkContext?.type !== 'inner') return false;
         actions.requestLinkUrlAuth({ url: parsedLink.url });
+        return true;
+      case 'newBotLink':
+        actions.openBotCreationModal({
+          managerUsername: parsedLink.managerUsername,
+          suggestedName: parsedLink.name,
+          suggestedUsername: parsedLink.username,
+        });
         return true;
       default:
         break;

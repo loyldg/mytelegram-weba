@@ -4,7 +4,7 @@ import { getActions } from '../../global';
 import { TME_LINK_PREFIX } from '../../config';
 import { isMessageFromIframe } from '../../util/browser/iframe';
 
-import useOldLang from '../../hooks/useOldLang';
+import useLang from '../../hooks/useLang';
 
 import './ConfirmPayment.scss';
 
@@ -18,10 +18,7 @@ export type OwnProps = {
 export interface PaymentFormSubmitEvent {
   eventType: 'payment_form_submit';
   eventData: {
-    credentials: {
-      token: string;
-      type: string;
-    };
+    credentials: AnyLiteral;
     title: string;
   };
 }
@@ -40,7 +37,7 @@ const ConfirmPayment = ({
 }: OwnProps) => {
   const { openTelegramLink } = getActions();
 
-  const lang = useOldLang();
+  const lang = useLang();
   const frameRef = useRef<HTMLIFrameElement>();
 
   const handleMessage = useCallback((event: MessageEvent<string>) => {
@@ -64,9 +61,6 @@ const ConfirmPayment = ({
             onPaymentFormSubmit(eventData);
           }
           break;
-        default:
-          onClose();
-          break;
       }
     } catch (err) {
       // Ignore other messages
@@ -83,7 +77,7 @@ const ConfirmPayment = ({
       <iframe
         ref={frameRef}
         src={url}
-        title={lang('Checkout.WebConfirmation.Title')}
+        title={lang('CheckoutWebConfirmationTitle')}
         allow="payment"
         sandbox="allow-modals allow-forms allow-scripts allow-same-origin"
         className="ConfirmPayment__content"

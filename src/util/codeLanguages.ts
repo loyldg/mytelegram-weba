@@ -1,8 +1,10 @@
+import type { LangFn } from './localization';
+
 const CODE_LANGUAGE_ALIASES: Record<string, string[]> = {
   '1c': ['1с'], // Allow cyrillic
   ada: [],
   arduino: ['ino'],
-  arm: [],
+  armasm: ['arm'],
   bash: ['sh'],
   basic: [],
   c: ['h'],
@@ -54,7 +56,7 @@ const PRETTY_LANGUAGE_NAMES: Record<string, string | undefined> = {
   '1c': '1C',
   ada: 'Ada',
   arduino: 'Arduino',
-  arm: 'ARM Assembly',
+  armasm: 'ARM Assembly',
   bash: 'Bash',
   basic: 'BASIC',
   c: 'C',
@@ -83,7 +85,6 @@ const PRETTY_LANGUAGE_NAMES: Record<string, string | undefined> = {
   objectivec: 'Objective-C',
   perl: 'Perl',
   php: 'PHP',
-  plaintext: 'Plain text',
   powershell: 'PowerShell',
   python: 'Python',
   r: 'R',
@@ -104,8 +105,9 @@ const PRETTY_LANGUAGE_NAMES: Record<string, string | undefined> = {
 
 export const SUPPORTED_CODE_LANGUAGES = Object.keys(CODE_LANGUAGE_ALIASES);
 
-export function getPrettyCodeLanguageName(codeLanguage: string) {
+export function getPrettyCodeLanguageName(lang: LangFn, codeLanguage: string) {
   const languageName = getCodeLanguageName(codeLanguage.toLowerCase()) || codeLanguage;
+  if (languageName === 'plaintext') return lang('CodeLanguagePlainText');
   return PRETTY_LANGUAGE_NAMES[languageName] ?? languageName;
 }
 

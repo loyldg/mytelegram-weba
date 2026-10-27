@@ -41,7 +41,8 @@ import type { RichEditorTooltipsConfig } from '../../../common/tooltips/types';
 import type { RichEditorMediaEditHandler, RichEditorMediaFilesHandler } from '../richEditorTypes';
 
 import { requestMutation } from '../../../../lib/fasterdom/fasterdom';
-import { lowlight } from '../../../../util/highlightCode';
+import { validateFiles } from '../../../../util/files';
+import { CODE_HIGHLIGHTING_CHANGED_META, lowlight } from '../../../../util/highlightCode';
 import { addLocalizationCallback, getTranslationFn } from '../../../../util/localization';
 import {
   CustomEmojiNode,
@@ -149,7 +150,6 @@ const ORDERED_LIST_REVERSED_ATTR = 'reversed';
 const DEFAULT_TEXT_BLOCK_NODE_TYPE = 'paragraph';
 const RICH_TEXT_INLINE_CONTENT = 'inline*';
 const REFRESH_LANG = 'refreshLang';
-const renderListItemMarkdown = ListItem.config.renderMarkdown!;
 const getFalse = () => false;
 const ignoreMediaEdit = () => undefined;
 const ignoreMediaFiles = () => undefined;
@@ -600,8 +600,12 @@ function handleRichEditorDrop(
   getIsRichInputExpanded: () => boolean,
   onMediaFiles: RichEditorMediaFilesHandler,
 ) {
-  const files = Array.from(event.dataTransfer?.files || []);
-  if (!getIsRichInputExpanded() || !files.length) {
+  if (!event.dataTransfer || !getIsRichInputExpanded()) {
+    return false;
+  }
+
+  const files = validateFiles(event.dataTransfer.files);
+  if (!files?.length) {
     return false;
   }
 
@@ -1018,6 +1022,31 @@ function wrapRichOnlyInputRules(
 }
 
 const RichEditorCodeBlock = CodeBlockLowlightExtension.extend({
+  addProseMirrorPlugins() {
+    const plugins = this.parent!();
+    // The last plugin owns the syntax decorations
+    const plugin = plugins.pop()!;
+    const stateField = plugin.spec.state!;
+    let currentConfig: Parameters<typeof stateField.init>[0];
+
+    plugins.push(new Plugin({
+      ...plugin.spec,
+      state: {
+        init(config, state) {
+          currentConfig = config;
+          return stateField.init.call(plugin, config, state);
+        },
+        apply(transaction, value, oldState, newState) {
+          if (transaction.getMeta(CODE_HIGHLIGHTING_CHANGED_META)) {
+            return stateField.init.call(plugin, currentConfig, newState);
+          }
+          return stateField.apply.call(plugin, transaction, value, oldState, newState);
+        },
+      },
+    }));
+    return plugins;
+  },
+
   addKeyboardShortcuts() {
     return {
       ...this.parent?.(),
@@ -1257,7 +1286,7 @@ const RichEditorListItem = ListItem.extend({
 
   renderMarkdown(node, helpers, context) {
     if (!node.attrs?.[LIST_ITEM_CHECKBOX_ATTR]) {
-      return renderListItemMarkdown(node, helpers, context);
+      return this.parent!(node, helpers, context);
     }
 
     return renderNestedMarkdownContent(

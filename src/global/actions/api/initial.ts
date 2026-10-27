@@ -3,7 +3,6 @@ import { ManagementProgress } from '../../../types';
 
 import {
   IS_SCREEN_LOCKED_CACHE_KEY,
-  LANG_CACHE_NAME,
   MEDIA_CACHE_NAME,
   MEDIA_CACHE_NAME_AVATARS,
   MEDIA_PROGRESSIVE_CACHE_NAME,
@@ -22,11 +21,11 @@ import {
 } from '../../../util/multiaccount';
 import { unsubscribe } from '../../../util/notifications';
 import {
-  clearPasscodeStore, removeGlobalsVaultForSlot, requestPasscodeStateLock,
+  clearPasscodeStore, removeGlobalsVaultForSlot, removeWalletVaultSecrets, requestPasscodeStateLock,
 } from '../../../util/passcode';
 import { broadcastPasscodeReset } from '../../../util/passcode/channel';
 import {
-  consumeInvalidWebLogin, getPendingWebLogin, parseInitialLocationHash, resetInitialLocationHash, resetLocationHash,
+  consumeInvalidWebLogin, getPendingWebLogin, resetInitialLocationHash, resetLocationHash,
 } from '../../../util/routing';
 import { pause } from '../../../util/schedulers';
 import {
@@ -78,7 +77,6 @@ addActionHandler('initApi', async (global, actions): Promise<void> => {
     // Clearing the token marks it as dispatched so `interruptWebLogin()` rejects interrupted logins and prevents replay
     if (token) request!.token = undefined;
 
-    const initialLocationHash = parseInitialLocationHash();
     const {
       shouldAllowHttpTransport,
       shouldForceHttpTransport,
@@ -105,7 +103,6 @@ addActionHandler('initApi', async (global, actions): Promise<void> => {
       webAuthToken: token,
       webAuthUserId: token ? request!.userId : undefined,
       dcId: token ? request!.dcId : undefined,
-      mockScenario: initialLocationHash?.mockScenario,
       shouldAllowHttpTransport,
       shouldForceHttpTransport,
       shouldDebugExportedSenders,
@@ -287,12 +284,6 @@ addActionHandler('reset', async (global, actions): Promise<void> => {
     await clearWallpaperBlobs();
   }
 
-  const langCachePrefix = LANG_CACHE_NAME.replace(/\d+$/, '');
-  const langCacheVersion = Number((LANG_CACHE_NAME.match(/\d+$/) || ['0'])[0]);
-  for (let i = 0; i < langCacheVersion; i++) {
-    void cacheApi.clear(`${langCachePrefix}${i === 0 ? '' : i}`);
-  }
-
   updateAppBadge(0);
 
   if (hasAccounts) {
@@ -314,6 +305,7 @@ function resetStorage() {
   resetStoragePromise = Promise.all([
     clearSessionPromise,
     clearGlobalsVaultPromise,
+    removeWalletVaultSecrets(ACCOUNT_SLOT),
     removeGlobalFromCache(),
   ]).then(async () => {
     const hasAccounts = Boolean(Object.values(getAccountsInfo()).length);

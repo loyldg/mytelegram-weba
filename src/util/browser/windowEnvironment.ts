@@ -1,6 +1,7 @@
 import {
   IS_TEST, PRODUCTION_HOSTNAME, SVG_NAMESPACE, VIDEO_RECORDING_MIME_TYPE,
 } from '../../config';
+import { requestForcedReflow, requestMutation } from '../../lib/fasterdom/fasterdom.ts';
 import { IS_TAURI } from './globalEnvironment';
 
 const MIN_CHROMIUM_TUCK_VERSION = 149;
@@ -90,7 +91,7 @@ export const IS_CANVAS_FILTER_SUPPORTED = (
   !IS_TEST && 'filter' in (document.createElement('canvas').getContext('2d') || {})
 );
 export const IS_REQUEST_FULLSCREEN_SUPPORTED = 'requestFullscreen' in document.createElement('div');
-export const ARE_CALLS_SUPPORTED = !IS_FIREFOX;
+export const ARE_CALLS_SUPPORTED = true;
 
 export const IS_WAVE_TRANSFORM_SUPPORTED = !IS_MOBILE
   && !IS_FIREFOX // https://bugzilla.mozilla.org/show_bug.cgi?id=1961378
@@ -139,18 +140,24 @@ export const IS_WEBAUTHN_SIGNAL_API_SUPPORTED = IS_WEBAUTHN_SUPPORTED
 
 export const MESSAGE_LIST_SENSITIVE_AREA = 750;
 
-export const SCROLLBAR_WIDTH = (() => {
+export function setScrollbarWidthProperty() {
   const el = document.createElement('div');
-  el.style.cssText = 'overflow:scroll; visibility:hidden; position:absolute;';
+  el.style.cssText = 'overflow-x: hidden; overflow-y: scroll; visibility:hidden; position:absolute;';
   el.classList.add('custom-scroll');
-  document.body.appendChild(el);
-  const width = el.offsetWidth - el.clientWidth;
-  el.remove();
 
-  document.documentElement.style.setProperty('--scrollbar-width', `${width}px`);
+  requestMutation(() => {
+    document.body.appendChild(el);
 
-  return width;
-})();
+    requestForcedReflow(() => {
+      const width = el.offsetWidth - el.clientWidth;
+
+      return () => {
+        document.documentElement.style.setProperty('--scrollbar-width', `${width}px`);
+        el.remove();
+      };
+    });
+  });
+}
 
 export const MAX_BUFFER_SIZE = (IS_MOBILE ? 512 : 2000) * 1024 ** 2; // 512 OR 2000 MB
 

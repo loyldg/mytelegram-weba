@@ -54,18 +54,19 @@ export function selectProviderPublicToken<T extends GlobalState>(
   return selectTabState(global, tabId).payment.form?.nativeParams.publicToken;
 }
 
-export function selectStripeCredentials<T extends GlobalState>(
+export function selectPaymentCredentialsData<T extends GlobalState>(
   global: T,
   ...[tabId = getCurrentTabId()]: TabArgs<T>
 ) {
-  return selectTabState(global, tabId).payment.stripeCredentials;
-}
-
-export function selectSmartGlocalCredentials<T extends GlobalState>(
-  global: T,
-  ...[tabId = getCurrentTabId()]: TabArgs<T>
-) {
-  return selectTabState(global, tabId).payment.smartGlocalCredentials;
+  const payment = selectTabState(global, tabId).payment;
+  switch (payment.form?.nativeProvider) {
+    case 'stripe':
+      return payment.stripeCredentials;
+    case 'smartglocal':
+      return payment.smartGlocalCredentials;
+    default:
+      return payment.webFormCredentials;
+  }
 }
 
 export function selectCanUseGiftProfileAdminFilter<T extends GlobalState>(
@@ -109,9 +110,5 @@ export function selectActiveGiftsCollectionId<T extends GlobalState>(
 
 export function selectStarsGiftResaleCommission<T extends GlobalState>(global: T) {
   const permille = global.appConfig?.starsStargiftResaleCommissionPermille;
-  return permille !== undefined ? permille / 1000 : undefined;
-}
-export function selectTonGiftResaleCommission<T extends GlobalState>(global: T) {
-  const permille = global.appConfig?.tonStargiftResaleCommissionPermille;
   return permille !== undefined ? permille / 1000 : undefined;
 }

@@ -1,19 +1,18 @@
-import type { ReactNode } from 'react';
-import type { FC } from '../../../lib/teact/teact';
 import { memo } from '../../../lib/teact/teact';
 
 import type {
   ApiBoostStatistics, ApiChannelMonetizationStatistics,
-  ApiChannelStatistics, ApiGroupStatistics, ApiPostStatistics, StatisticsOverviewItem,
+  ApiChannelStatistics, ApiGroupStatistics, ApiPostStatistics, ApiTypeCurrencyAmount, StatisticsOverviewItem,
 } from '../../../api/types';
+import type { RegularLangKey } from '../../../types/language';
 
+import { TON_CURRENCY_CODE } from '../../../config';
 import buildClassName from '../../../util/buildClassName';
-import { formatFullDate } from '../../../util/dates/oldDateFormat';
 import { convertTonFromNanos } from '../../../util/formatCurrency';
+import { formatDateTime, secondsToDate } from '../../../util/localization/dateFormat';
 import { formatInteger, formatIntegerCompact } from '../../../util/textFormat';
 
 import useLang from '../../../hooks/useLang';
-import useOldLang from '../../../hooks/useOldLang';
 
 import GramIcon from '../../common/icons/GramIcon';
 
@@ -21,7 +20,7 @@ import styles from './StatisticsOverview.module.scss';
 
 type OverviewCell = {
   name: string;
-  title: string;
+  title: RegularLangKey;
   isPercentage?: boolean;
   withAbsoluteValue?: boolean;
   isPlain?: boolean;
@@ -30,72 +29,72 @@ type OverviewCell = {
 
 const CHANNEL_OVERVIEW: OverviewCell[][] = [
   [
-    { name: 'followers', title: 'ChannelStats.Overview.Followers' },
-    { name: 'enabledNotifications', title: 'ChannelStats.Overview.EnabledNotifications', isPercentage: true },
+    { name: 'followers', title: 'ChannelStatsOverviewFollowers' },
+    { name: 'enabledNotifications', title: 'ChannelStatsOverviewEnabledNotifications', isPercentage: true },
   ],
   [
-    { name: 'viewsPerPost', title: 'ChannelStats.Overview.ViewsPerPost' },
-    { name: 'viewsPerStory', title: 'ChannelStats.Overview.ViewsPerStory' },
+    { name: 'viewsPerPost', title: 'ChannelStatsOverviewViewsPerPost' },
+    { name: 'viewsPerStory', title: 'ChannelStatsOverviewViewsPerStory' },
   ],
   [
-    { name: 'sharesPerPost', title: 'ChannelStats.Overview.SharesPerPost' },
-    { name: 'sharesPerStory', title: 'ChannelStats.Overview.SharesPerStory' },
+    { name: 'sharesPerPost', title: 'ChannelStatsOverviewSharesPerPost' },
+    { name: 'sharesPerStory', title: 'ChannelStatsOverviewSharesPerStory' },
   ],
   [
-    { name: 'reactionsPerPost', title: 'ChannelStats.Overview.ReactionsPerPost' },
-    { name: 'reactionsPerStory', title: 'ChannelStats.Overview.ReactionsPerStory' },
+    { name: 'reactionsPerPost', title: 'ChannelStatsOverviewReactionsPerPost' },
+    { name: 'reactionsPerStory', title: 'ChannelStatsOverviewReactionsPerStory' },
   ],
 ];
 
 const GROUP_OVERVIEW: OverviewCell[][] = [
   [
-    { name: 'members', title: 'Stats.GroupMembers' },
-    { name: 'messages', title: 'Stats.GroupMessages' },
+    { name: 'members', title: 'StatsGroupMembers' },
+    { name: 'messages', title: 'StatsGroupMessages' },
   ],
   [
-    { name: 'viewers', title: 'Stats.GroupViewers' },
-    { name: 'posters', title: 'Stats.GroupPosters' },
+    { name: 'viewers', title: 'StatsGroupViewers' },
+    { name: 'posters', title: 'StatsGroupPosters' },
   ],
 ];
 
 const MESSAGE_OVERVIEW: OverviewCell[][] = [
   [
-    { name: 'viewsCount', title: 'Stats.Message.Views', isPlain: true },
-    { name: 'publicForwards', title: 'Stats.Message.PublicShares', isPlain: true },
+    { name: 'viewsCount', title: 'StatsMessageViews', isPlain: true },
+    { name: 'publicForwards', title: 'StatsMessagePublicShares', isPlain: true },
   ],
   [
-    { name: 'reactionsCount', title: 'Channel.Stats.Overview.Reactions', isPlain: true },
+    { name: 'reactionsCount', title: 'Reactions', isPlain: true },
     {
-      name: 'forwardsCount', title: 'Stats.Message.PrivateShares', isPlain: true, isApproximate: true,
+      name: 'forwardsCount', title: 'StatsMessagePrivateShares', isPlain: true, isApproximate: true,
     },
   ],
 ];
 
 const STORY_OVERVIEW: OverviewCell[][] = [
   [
-    { name: 'viewsCount', title: 'Channel.Stats.Overview.Views', isPlain: true },
-    { name: 'publicForwards', title: 'PublicShares', isPlain: true },
+    { name: 'viewsCount', title: 'ChannelStatsOverviewViews', isPlain: true },
+    { name: 'publicForwards', title: 'StatsMessagePublicShares', isPlain: true },
   ],
   [
-    { name: 'reactionsCount', title: 'Channel.Stats.Overview.Reactions', isPlain: true },
-    { name: 'forwardsCount', title: 'PrivateShares', isPlain: true },
+    { name: 'reactionsCount', title: 'Reactions', isPlain: true },
+    { name: 'forwardsCount', title: 'StatsMessagePrivateShares', isPlain: true },
   ],
 ];
 
 const BOOST_OVERVIEW: OverviewCell[][] = [
   [
-    { name: 'level', title: 'Stats.Boosts.Level', isPlain: true },
+    { name: 'level', title: 'StatsBoostsLevel', isPlain: true },
     {
       name: 'premiumSubscribers',
-      title: 'Stats.Boosts.PremiumSubscribers',
+      title: 'StatsBoostsPremiumSubscribers',
       isPercentage: true,
       isApproximate: true,
       withAbsoluteValue: true,
     },
   ],
   [
-    { name: 'boosts', title: 'Stats.Boosts.ExistingBoosts', isPlain: true },
-    { name: 'remainingBoosts', title: 'Stats.Boosts.BoostsToLevelUp', isPlain: true },
+    { name: 'boosts', title: 'StatsBoostsExistingBoosts', isPlain: true },
+    { name: 'remainingBoosts', title: 'StatsBoostsBoostsToLevelUp', isPlain: true },
   ],
 ];
 
@@ -114,18 +113,17 @@ export type OwnProps = {
     ApiPostStatistics |
     ApiBoostStatistics |
     ApiChannelMonetizationStatistics;
-  subtitle?: ReactNode;
+  subtitle?: React.ReactNode;
 };
 
-const StatisticsOverview: FC<OwnProps> = ({
+const StatisticsOverview = ({
   title,
   type,
   statistics,
   isToncoin,
   className,
   subtitle,
-}) => {
-  const oldLang = useOldLang();
+}: OwnProps) => {
   const lang = useLang();
 
   const renderOverviewItemValue = ({ change, percentage }: StatisticsOverviewItem) => {
@@ -152,7 +150,7 @@ const StatisticsOverview: FC<OwnProps> = ({
     );
   };
 
-  const renderBalanceCell = (balance: number, usdRate: number, text: string) => {
+  const renderBalanceCell = (balance: number, usdRate: number, text: RegularLangKey) => {
     const [integerTonPart, decimalTonPart] = balance.toFixed(4).split('.');
     const [integerUsdPart, decimalUsdPart] = (balance * usdRate).toFixed(2).split('.');
     return (
@@ -174,7 +172,7 @@ const StatisticsOverview: FC<OwnProps> = ({
             {decimalUsdPart}
           </span>
         </span>
-        <h3 className={styles.tableHeading}>{oldLang(text)}</h3>
+        <h3 className={styles.tableHeading}>{lang(text)}</h3>
       </div>
     );
   };
@@ -195,10 +193,10 @@ const StatisticsOverview: FC<OwnProps> = ({
 
         {period && (
           <div className={styles.caption}>
-            {formatFullDate(oldLang, period.minDate * 1000)}
+            {formatDateTime(lang, secondsToDate(period.minDate), { date: 'numeric' })}
             {' '}
             —
-            {formatFullDate(oldLang, period.maxDate * 1000)}
+            {formatDateTime(lang, secondsToDate(period.maxDate), { date: 'numeric' })}
           </div>
         )}
       </div>
@@ -208,19 +206,19 @@ const StatisticsOverview: FC<OwnProps> = ({
           <tr>
             <td className={styles.tableCell}>
               {renderBalanceCell(
-                balances?.availableBalance ? convertTonFromNanos(balances.availableBalance.amount) : 0,
+                convertBalanceToGrams(balances?.availableBalance),
                 usdRate || 0,
-                'lng_channel_earn_available',
+                'ChannelEarnAvailable',
               )}
               {renderBalanceCell(
-                balances?.currentBalance ? convertTonFromNanos(balances.currentBalance.amount) : 0,
+                convertBalanceToGrams(balances?.currentBalance),
                 usdRate || 0,
-                'lng_channel_earn_reward',
+                'ChannelEarnReward',
               )}
               {renderBalanceCell(
-                balances?.overallRevenue ? convertTonFromNanos(balances.overallRevenue.amount) : 0,
+                convertBalanceToGrams(balances?.overallRevenue),
                 usdRate || 0,
-                'lng_channel_earn_total',
+                'ChannelEarnTotal',
               )}
             </td>
           </tr>
@@ -235,7 +233,7 @@ const StatisticsOverview: FC<OwnProps> = ({
                     <b className={styles.tableValue}>
                       {`${cell.isApproximate ? '≈ ' : ''}${formatInteger(field ?? DEFAULT_VALUE)}`}
                     </b>
-                    <h3 className={styles.tableHeading}>{oldLang(cell.title)}</h3>
+                    <h3 className={styles.tableHeading}>{lang(cell.title)}</h3>
                   </td>
                 );
               }
@@ -255,7 +253,7 @@ const StatisticsOverview: FC<OwnProps> = ({
                       {percentage}
                       %
                     </span>
-                    <h3 className={styles.tableHeading}>{oldLang(cell.title)}</h3>
+                    <h3 className={styles.tableHeading}>{lang(cell.title)}</h3>
                   </td>
                 );
               }
@@ -267,7 +265,7 @@ const StatisticsOverview: FC<OwnProps> = ({
                   </b>
                   {' '}
                   {renderOverviewItemValue(field)}
-                  <h3 className={styles.tableHeading}>{oldLang(cell.title)}</h3>
+                  <h3 className={styles.tableHeading}>{lang(cell.title)}</h3>
                 </td>
               );
             })}
@@ -279,6 +277,10 @@ const StatisticsOverview: FC<OwnProps> = ({
     </div>
   );
 };
+
+function convertBalanceToGrams(balance?: ApiTypeCurrencyAmount) {
+  return balance?.currency === TON_CURRENCY_CODE ? convertTonFromNanos(balance.amount) : 0;
+}
 
 function getSchemaByType(type: StatisticsType) {
   switch (type) {

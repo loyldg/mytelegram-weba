@@ -1,28 +1,32 @@
-import type { FC } from '../../../lib/teact/teact';
 import {
-  memo, useEffect, useMemo, useState,
+  memo, useEffect, useMemo, useRef, useState,
 } from '../../../lib/teact/teact';
-import { getActions, withGlobal } from '../../../global';
+import { getActions, getPromiseActions, withGlobal } from '../../../global';
 
 import type { SharedSettings } from '../../../global/types';
-import type { AccountSettings, LangCode } from '../../../types';
+import type { AccountSettings } from '../../../types';
 import { SettingsScreens } from '../../../types';
 
 import { selectIsCurrentUserPremium } from '../../../global/selectors';
 import { selectSharedSettings } from '../../../global/selectors/sharedState';
 import { IS_TRANSLATION_SUPPORTED } from '../../../util/browser/windowEnvironment';
-import { oldSetLanguage } from '../../../util/oldLangProvider';
+import { copyTextToClipboard } from '../../../util/clipboard';
+import { getTranslationFn } from '../../../util/localization';
 
 import useFlag from '../../../hooks/useFlag';
 import useHistoryBack from '../../../hooks/useHistoryBack';
+import useLang from '../../../hooks/useLang';
 import useLastCallback from '../../../hooks/useLastCallback';
-import useOldLang from '../../../hooks/useOldLang';
 
 import ItemPicker, { type ItemPickerOption } from '../../common/pickers/ItemPicker';
+import PickerItem from '../../common/pickers/PickerItem';
 import Island, { IslandDescription, IslandTitle } from '../../gili/layout/Island';
 import Checkbox from '../../ui/Checkbox';
+import DropdownMenu from '../../ui/DropdownMenu';
 import ListItem from '../../ui/ListItem';
 import Loading from '../../ui/Loading';
+import MenuItem from '../../ui/MenuItem';
+import Radio from '../../ui/Radio';
 import Transition from '../../ui/Transition';
 
 type OwnProps = {
@@ -33,32 +37,35 @@ type OwnProps = {
 type StateProps = {
   isCurrentUserPremium: boolean;
 } & Pick<AccountSettings, 'canTranslate' | 'canTranslateChats' | 'doNotTranslate'>
-& Pick<SharedSettings, 'language' | 'languages'>;
+& Pick<SharedSettings, 'language' | 'languages' | 'customLanguages'>;
 
-const SettingsLanguage: FC<OwnProps & StateProps> = ({
+const SettingsLanguage = ({
   isActive,
   isCurrentUserPremium,
   languages,
   language,
+  customLanguages,
   canTranslate,
   canTranslateChats,
   doNotTranslate,
   onReset,
-}) => {
+}: OwnProps & StateProps) => {
   const {
     loadLanguages,
     setSettingOption,
-    setSharedSettingOption,
+    removeCustomLanguage,
+    showNotification,
     openPremiumModal,
     openSettingsScreen,
   } = getActions();
 
+  const lang = useLang();
+
   const [selectedLanguage, setSelectedLanguage] = useState<string>(language);
   const [isLoading, markIsLoading, unmarkIsLoading] = useFlag();
+  const languageRequestRef = useRef(0);
 
   const canTranslateChatsEnabled = isCurrentUserPremium && canTranslateChats;
-
-  const lang = useOldLang();
 
   useEffect(() => {
     if (!languages?.length) {
@@ -66,15 +73,33 @@ const SettingsLanguage: FC<OwnProps & StateProps> = ({
     }
   }, [languages]);
 
-  const handleChange = useLastCallback((langCode: string) => {
+  const handleChange = useLastCallback(async (langCode: string) => {
+    const newLanguage = languages?.find((item) => item.langCode === langCode)
+      || customLanguages?.find((item) => item.langCode === langCode);
+    if (!newLanguage) return;
+
+    const requestId = ++languageRequestRef.current;
     setSelectedLanguage(langCode);
     markIsLoading();
 
-    void oldSetLanguage(langCode as LangCode, () => {
-      unmarkIsLoading();
+    try {
+      await getPromiseActions().applyLanguage({ language: newLanguage });
+    } finally {
+      if (requestId === languageRequestRef.current) {
+        setSelectedLanguage(getTranslationFn().rawCode);
+        unmarkIsLoading();
+      }
+    }
+  });
 
-      setSharedSettingOption({ language: langCode });
-    });
+  const savedLanguages = useMemo(() => customLanguages?.filter(({ langCode }) => (
+    !languages?.some((item) => item.langCode === langCode)
+  )), [customLanguages, languages]);
+
+  const handleCopyLink = useLastCallback((langCode: string) => {
+    if (copyTextToClipboard(`https://t.me/setlanguage/${encodeURIComponent(langCode)}`)) {
+      showNotification({ message: { key: 'LinkCopied' } });
+    }
   });
 
   const options = useMemo(() => {
@@ -114,12 +139,12 @@ const SettingsLanguage: FC<OwnProps & StateProps> = ({
     }
 
     if (doNotTranslate.length === 1) {
-      const originalNames = new Intl.DisplayNames([language], { type: 'language' });
+      const originalNames = new Intl.DisplayNames([lang.code], { type: 'language' });
       return originalNames.of(doNotTranslate[0])!;
     }
 
-    return lang('Languages', doNotTranslate.length);
-  }, [doNotTranslate, lang, language]);
+    return lang('Languages', { count: doNotTranslate.length }, { pluralValue: doNotTranslate.length });
+  }, [doNotTranslate, lang]);
 
   const handleDoNotSelectOpen = useLastCallback(() => {
     openSettingsScreen({ screen: SettingsScreens.DoNotTranslate });
@@ -159,26 +184,58 @@ const SettingsLanguage: FC<OwnProps & StateProps> = ({
             )}
           </Island>
           <IslandDescription>
-            {lang('lng_translate_settings_about')}
+            {lang('TranslateSettingsAbout')}
           </IslandDescription>
         </>
       )}
 
+      <IslandTitle>{lang('LocalizationInterfaceLanguage')}</IslandTitle>
+      {Boolean(savedLanguages?.length) && (
+        <Island>
+          {savedLanguages.map((savedLanguage) => (
+            <div className="settings-custom-language" key={savedLanguage.langCode}>
+              <PickerItem
+                title={savedLanguage.nativeName}
+                subtitle={savedLanguage.name}
+                inputElement={(
+                  <Radio
+                    checked={language === savedLanguage.langCode}
+                    isLoading={isLoading && selectedLanguage === savedLanguage.langCode}
+                    onlyInput
+                  />
+                )}
+                ripple
+                onClick={() => handleChange(savedLanguage.langCode)}
+              />
+              <DropdownMenu positionX="right" withPortal>
+                <MenuItem icon="link" onClick={() => handleCopyLink(savedLanguage.langCode)}>
+                  {lang('CopyLink')}
+                </MenuItem>
+                <MenuItem
+                  icon="delete"
+                  destructive
+                  disabled={language === savedLanguage.langCode}
+                  onClick={() => removeCustomLanguage({ langCode: savedLanguage.langCode })}
+                >
+                  {lang('BoxRemove')}
+                </MenuItem>
+              </DropdownMenu>
+            </div>
+          ))}
+        </Island>
+      )}
       <Transition activeKey={options ? 1 : 0} name="fade" className="settings-language-transition">
         {options ? (
-          <>
-            <IslandTitle>{lang('Localization.InterfaceLanguage')}</IslandTitle>
-            <Island>
-              <ItemPicker
-                items={options}
-                selectedValue={selectedLanguage}
-                forceRenderAllItems
-                onSelectedValueChange={handleChange}
-                itemInputType="radio"
-                className="settings-picker"
-              />
-            </Island>
-          </>
+          <Island>
+            <ItemPicker
+              items={options}
+              selectedValue={isLoading ? selectedLanguage : language}
+              forceRenderAllItems
+              onSelectedValueChange={handleChange}
+              itemInputType="radio"
+              className="settings-picker"
+            />
+          </Island>
         ) : (
           <Loading />
         )}
@@ -192,7 +249,7 @@ export default memo(withGlobal<OwnProps>(
     const {
       canTranslate, canTranslateChats, doNotTranslate,
     } = global.settings.byKey;
-    const { language, languages } = selectSharedSettings(global);
+    const { language, languages, customLanguages } = selectSharedSettings(global);
 
     const isCurrentUserPremium = selectIsCurrentUserPremium(global);
 
@@ -200,6 +257,7 @@ export default memo(withGlobal<OwnProps>(
       isCurrentUserPremium,
       languages,
       language,
+      customLanguages,
       canTranslate,
       canTranslateChats,
       doNotTranslate,

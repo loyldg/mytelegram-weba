@@ -138,6 +138,7 @@ export interface ApiCommunityLinkedPeer {
 }
 
 export interface ApiChatFullInfo {
+  isCache?: boolean;
   about?: string;
   ttlPeriod?: number;
   onlineCount?: number;
@@ -228,6 +229,7 @@ export interface ApiChatAdminRights {
   deleteStories?: true;
   manageDirectMessages?: true;
   manageRanks?: true;
+  manageLinkedPeers?: true;
   manageWelcomeMessages?: true;
 }
 

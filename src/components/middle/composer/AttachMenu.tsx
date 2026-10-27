@@ -18,17 +18,18 @@ import {
   getMessagePhoto,
   getMessageVideo, getMessageVoice,
 } from '../../../global/helpers';
+import { selectOldWalletBotId } from '../../../global/selectors';
 import { IS_TOUCH_ENV } from '../../../util/browser/windowEnvironment';
 import buildClassName from '../../../util/buildClassName';
 import { getDebugLogs } from '../../../util/debugConsole';
 import { validateFiles } from '../../../util/files';
 import { openSystemFilesDialog } from '../../../util/systemFilesDialog';
 
+import useSelector from '../../../hooks/data/useSelector';
 import useFlag from '../../../hooks/useFlag';
 import useLang from '../../../hooks/useLang';
 import useLastCallback from '../../../hooks/useLastCallback';
 import useMouseInside from '../../../hooks/useMouseInside';
-import useOldLang from '../../../hooks/useOldLang';
 
 import Icon from '../../common/icons/Icon';
 import Menu from '../../ui/Menu';
@@ -54,6 +55,7 @@ export type OwnProps = {
   canSendAudios: boolean;
   isScheduled?: boolean;
   attachBots?: GlobalState['attachMenu']['bots'];
+  canSendMoney?: boolean;
   peerType?: ApiAttachMenuPeerType;
   shouldCollectDebugLogs?: boolean;
   theme: ThemeKey;
@@ -86,6 +88,7 @@ const AttachMenu = ({
   canSendDocuments,
   canSendAudios,
   attachBots,
+  canSendMoney,
   peerType,
   isScheduled,
   theme,
@@ -107,8 +110,11 @@ const AttachMenu = ({
 }: OwnProps) => {
   const {
     openPollModal,
+    openMusicPicker,
     updateAttachmentSettings,
+    openWalletTransferLink,
   } = getActions();
+  const oldWalletBotId = useSelector(selectOldWalletBotId);
   const [isAttachMenuOpen, openAttachMenu, closeAttachMenu] = useFlag();
   const [handleMouseEnter, handleMouseLeave, markMouseInside] = useMouseInside(isAttachMenuOpen, closeAttachMenu);
   const [isDateModalOpen, openDateModal, closeDateModal] = useFlag();
@@ -182,7 +188,8 @@ const AttachMenu = ({
   const bots = useMemo(() => {
     return attachBots
       ? Object.values(attachBots).filter((bot) => {
-        if (!peerType || !bot.isForAttachMenu) return false;
+        if (!peerType || !bot.isForAttachMenu || bot.id === oldWalletBotId) return false;
+
         if (peerType === 'bots' && bot.id === chatId
           && bot.attachMenuPeerTypes && bot.attachMenuPeerTypes.includes('self')) {
           return true;
@@ -190,9 +197,8 @@ const AttachMenu = ({
         return bot.attachMenuPeerTypes!.includes(peerType);
       })
       : undefined;
-  }, [attachBots, chatId, peerType]);
+  }, [attachBots, chatId, peerType, oldWalletBotId]);
 
-  const oldLang = useOldLang();
   const lang = useLang();
 
   const handleDateMenuClick = useLastCallback(() => {
@@ -200,9 +206,21 @@ const AttachMenu = ({
     openDateModal();
   });
 
+  const handleMusicSelect = useLastCallback(() => {
+    closeAttachMenu();
+    openMusicPicker({
+      chatId, threadId, messageListType, shouldInsertToRichInput: isRichInputExpanded,
+    });
+  });
+
   const handlePollCreate = useLastCallback(() => {
     closeAttachMenu();
     openPollModal({ chatId, threadId, messageListType });
+  });
+
+  const handleSendGram = useLastCallback(() => {
+    closeAttachMenu();
+    openWalletTransferLink({ userId: chatId, shouldCloseAfterSend: true });
   });
 
   if (!isButtonVisible && !isDateModalOpen) {
@@ -221,7 +239,7 @@ const AttachMenu = ({
                 round
                 color="translucent"
                 onActivate={handleToggleAttachMenu}
-                ariaLabel="Replace an attachment"
+                ariaLabel={lang('AriaReplaceAttachment')}
                 ariaControls="replace-menu-controls"
                 hasPopup
               >
@@ -235,7 +253,7 @@ const AttachMenu = ({
                 round
                 color="translucent"
                 onActivate={handleToggleAttachMenu}
-                ariaLabel="Add an attachment"
+                ariaLabel={lang('AriaAddAttachment')}
                 ariaControls="attach-menu-controls"
                 hasPopup
               >
@@ -272,19 +290,22 @@ const AttachMenu = ({
               <>
                 {canSendVideoOrPhoto && !isFile && (
                   <MenuItem icon="media" onClick={handleQuickSelect}>
-                    {oldLang(canSendVideoAndPhoto ? 'AttachmentMenu.PhotoOrVideo'
-                      : (canSendPhotos ? 'InputAttach.Popover.Photo' : 'InputAttach.Popover.Video'))}
+                    {lang(canSendVideoAndPhoto ? 'AttachmentMenuPhotoOrVideo'
+                      : (canSendPhotos ? 'AttachPhoto' : 'AttachVideo'))}
                   </MenuItem>
                 )}
                 {((canSendDocuments || canSendAudios) && !isPhotoOrVideo)
                   && (
                     <MenuItem icon="document" onClick={handleDocumentSelect}>
-                      {oldLang(!canSendDocuments && canSendAudios ? 'InputAttach.Popover.Music' : 'AttachDocument')}
+                      {lang(!canSendDocuments && canSendAudios ? 'InputAttachPopoverMusic' : 'AttachDocument')}
                     </MenuItem>
                   )}
+                {canSendAudios && !editingMessage && (
+                  <MenuItem icon="music" onClick={handleMusicSelect}>{lang('AttachMusic')}</MenuItem>
+                )}
                 {canSendDocuments && shouldCollectDebugLogs && (
                   <MenuItem icon="bug" onClick={handleSendLogs}>
-                    {oldLang('DebugSendLogs')}
+                    {lang('DebugSendLogs')}
                   </MenuItem>
                 )}
               </>
@@ -300,6 +321,9 @@ const AttachMenu = ({
             )}
             {canExpandRichInput && (
               <MenuItem icon="article" onClick={onRichInputExpand}>{lang('AttachmentMenuArticle')}</MenuItem>
+            )}
+            {canSendMoney && !editingMessage && (
+              <MenuItem icon="gram-outline" onClick={handleSendGram}>{lang('WalletSendMoney')}</MenuItem>
             )}
 
             {!editingMessage && !canEditMedia && !isScheduled && Boolean(bots?.length) && (

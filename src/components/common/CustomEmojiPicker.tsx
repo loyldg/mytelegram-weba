@@ -27,7 +27,7 @@ import {
   selectIsChatWithSelf,
   selectIsCurrentUserPremium,
 } from '../../global/selectors';
-import { selectSharedSettings } from '../../global/selectors/sharedState';
+import { selectLanguageCode } from '../../global/selectors/settings';
 import animateHorizontalScroll from '../../util/animateHorizontalScroll';
 import { IS_TOUCH_ENV } from '../../util/browser/windowEnvironment';
 import buildClassName from '../../util/buildClassName';
@@ -43,7 +43,6 @@ import useHorizontalScroll from '../../hooks/useHorizontalScroll';
 import { useIntersectionObserver } from '../../hooks/useIntersectionObserver';
 import useLang from '../../hooks/useLang';
 import useLastCallback from '../../hooks/useLastCallback';
-import useOldLang from '../../hooks/useOldLang';
 import usePrevDuringAnimation from '../../hooks/usePrevDuringAnimation';
 import useScrolledState from '../../hooks/useScrolledState';
 import useEmojiSearch from '../middle/composer/hooks/useEmojiSearch';
@@ -196,7 +195,6 @@ const CustomEmojiPicker = ({
 
   const canLoadAndPlay = usePrevDuringAnimation(loadAndPlay || undefined, SLIDE_TRANSITION_DURATION);
 
-  const oldLang = useOldLang();
   const lang = useLang();
 
   const areAddedLoaded = Boolean(addedCustomEmojiIds);
@@ -209,7 +207,7 @@ const CustomEmojiPicker = ({
         defaultSets.push({
           id: TOP_SYMBOL_SET_ID,
           accessHash: '',
-          title: oldLang('PremiumPreviewTags'),
+          title: lang('PremiumPreviewTags'),
           reactions: defaultTagReactions,
           count: defaultTagReactions.length,
           isEmoji: true,
@@ -226,7 +224,7 @@ const CustomEmojiPicker = ({
         defaultSets.push({
           id: TOP_SYMBOL_SET_ID,
           accessHash: '',
-          title: oldLang('Reactions'),
+          title: lang('Reactions'),
           reactions: topReactionsSlice,
           count: topReactionsSlice.length,
           isEmoji: true,
@@ -249,7 +247,7 @@ const CustomEmojiPicker = ({
         defaultSets.push({
           id: isPopular ? POPULAR_SYMBOL_SET_ID : RECENT_SYMBOL_SET_ID,
           accessHash: '',
-          title: oldLang(isPopular ? 'PopularReactions' : 'RecentStickers'),
+          title: lang(isPopular ? 'PopularReactions' : 'RecentStickers'),
           reactions: allRecentReactions,
           count: allRecentReactions.length,
           isEmoji: true,
@@ -266,7 +264,7 @@ const CustomEmojiPicker = ({
           stickers,
           count: stickers.length,
           id: RECENT_SYMBOL_SET_ID,
-          title: oldLang('RecentStickers'),
+          title: lang('RecentStickers'),
           isEmoji: true,
         });
       }
@@ -286,14 +284,14 @@ const CustomEmojiPicker = ({
         defaultSets.push({
           ...defaultTopicIconsPack,
           id: RECENT_SYMBOL_SET_ID,
-          title: oldLang('RecentStickers'),
+          title: lang('RecentStickers'),
         });
       }
     } else if (recentCustomEmojis?.length) {
       defaultSets.push({
         id: RECENT_SYMBOL_SET_ID,
         accessHash: '0',
-        title: oldLang('RecentStickers'),
+        title: lang('RecentStickers'),
         stickers: recentCustomEmojis,
         count: recentCustomEmojis.length,
         isEmoji: true,
@@ -315,9 +313,9 @@ const CustomEmojiPicker = ({
     ];
   }, [
     addedCustomEmojiIds, isReactionPicker, isStatusPicker, withDefaultTopicIcons, recentCustomEmojis,
-    customEmojiFeaturedIds, stickerSetsById, topReactions, availableReactions, oldLang, recentReactions,
+    customEmojiFeaturedIds, stickerSetsById, topReactions, availableReactions, lang, recentReactions,
     defaultStatusIconsId, defaultTopicIconsId, isSavedMessages, defaultTagReactions, chatEmojiSetId,
-    isWithPaidReaction, collectibleStatusEmojis, lang,
+    isWithPaidReaction, collectibleStatusEmojis,
   ]);
 
   const noPopulatedSets = useMemo(() => (
@@ -518,7 +516,7 @@ const CustomEmojiPicker = ({
       {!shouldRenderContent && !noPopulatedSets ? (
         <Loading />
       ) : !shouldRenderContent && noPopulatedSets ? (
-        <div className={pickerStyles.pickerDisabled}>{oldLang('NoStickers')}</div>
+        <div className={pickerStyles.pickerDisabled}>{lang('NoStickers')}</div>
       ) : (
         <div
           className={buildClassName(
@@ -641,7 +639,7 @@ export default memo(withGlobal<OwnProps>(
     const isSavedMessages = Boolean(chatId && selectIsChatWithSelf(global, chatId));
     const chatFullInfo = chatId ? selectChatFullInfo(global, chatId) : undefined;
     const collectibleStatuses = global.collectibleEmojiStatuses?.statuses;
-    const { language } = selectSharedSettings(global);
+    const language = selectLanguageCode(global);
     const baseEmojiKeywords = global.emojiKeywords[BASE_EMOJI_KEYWORD_LANG];
     const emojiKeywords = language !== BASE_EMOJI_KEYWORD_LANG ? global.emojiKeywords[language] : undefined;
 

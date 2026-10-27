@@ -1,0 +1,309 @@
+.root {
+  cursor: var(--custom-cursor, pointer);
+
+  position: relative;
+
+  display: flex;
+  gap: 0.75rem;
+
+  padding: 0.5rem 0.75rem 0.4375rem 0.5rem;
+  border-radius: 0.5rem;
+
+  transition: background-color 0.25s ease-out, box-shadow 0.35s ease-out;
+
+  &:hover {
+    background-color: var(--color-chat-hover);
+  }
+}
+
+.pending {
+  background-color: var(--color-background);
+  box-shadow: 0 0.125rem 0.5rem var(--color-default-shadow);
+}
+
+$sheen-cycle: 2.5s;
+$sheen-lead: -0.2s;
+
+.sheen {
+  --sheen-light: 92, 204, 255;
+  --sheen-deep: 48, 161, 245;
+
+  pointer-events: none;
+
+  position: absolute;
+  inset: 0;
+
+  overflow: hidden;
+
+  border-radius: inherit;
+
+  animation: sheen-fade $sheen-cycle linear $sheen-lead infinite;
+
+  &::before {
+    background-image:
+      linear-gradient(
+        105deg,
+        transparent 40%,
+        rgba(var(--sheen-light), 0.07) 46%,
+        rgba(var(--sheen-deep), 0.12) 50%,
+        rgba(var(--sheen-light), 0.07) 54%,
+        transparent 60%
+      );
+  }
+}
+
+.sheenRing {
+  position: absolute;
+  inset: 0;
+
+  padding: 0.0625rem;
+  border-radius: inherit;
+
+  mask-image: linear-gradient(#000 0 0), linear-gradient(#000 0 0);
+  mask-clip: content-box, border-box;
+  mask-composite: exclude;
+
+  &::before {
+    background-image: linear-gradient(105deg, transparent 42%, rgba(var(--sheen-deep), 0.85) 50%, transparent 58%);
+  }
+}
+
+// The bands move by `transform`, which the compositor animates. With `background-position` Safari restyles and repaints
+// the page in every frame while the transfer is pending.
+.sheen::before,
+.sheenRing::before {
+  content: "";
+
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+
+  width: 250%;
+
+  animation: sheen-pass $sheen-cycle ease-in-out $sheen-lead infinite;
+}
+
+.pendingDiamond {
+  margin: -0.5rem 0 -0.5rem 0.125rem;
+}
+
+.preview {
+  position: relative;
+  flex-shrink: 0;
+  width: 2.625rem;
+  height: 2.625rem;
+}
+
+.pendingBadge {
+  position: absolute;
+  z-index: 1;
+  right: -0.1875rem;
+  bottom: -0.1875rem;
+
+  border-radius: 50%;
+
+  font-size: 1.0625rem;
+  color: var(--color-primary);
+
+  background-color: var(--color-background);
+}
+
+.direction {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+
+  color: var(--color-white);
+}
+
+// Gradient pairs from the mockup; the incoming one is the same pair rotated to green
+.directionOut {
+  background-image: linear-gradient(180deg, #70a7db, #408acf);
+}
+
+.directionIn {
+  background-image: linear-gradient(180deg, #70db83, #40ce58);
+}
+
+.directionIcon {
+  font-size: 1.75rem;
+}
+
+// The glyph only points up
+.directionIconDown {
+  transform: rotate(180deg);
+}
+
+.info {
+  display: flex;
+  flex-direction: column;
+  flex-grow: 1;
+  min-width: 0;
+}
+
+.title,
+.description,
+.date {
+  margin-bottom: 0;
+}
+
+.title,
+.description {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.title {
+  font-size: 1rem;
+  font-weight: var(--font-weight-medium);
+  line-height: 1.3125rem;
+}
+
+.description,
+.date {
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+}
+
+.date {
+  color: var(--color-text-secondary);
+}
+
+.after {
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  gap: 0.125rem;
+  align-items: flex-end;
+}
+
+.amount {
+  display: flex;
+  gap: 0.125rem;
+  align-items: center;
+
+  font-size: 1rem;
+  font-weight: var(--font-weight-medium);
+  line-height: 1.3125rem;
+}
+
+.amountPending {
+  font-size: 1.4375rem;
+  line-height: 1.75rem;
+}
+
+.collectible {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  margin-top: 0.25rem;
+}
+
+.collectibleImage {
+  flex-shrink: 0;
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: 0.5rem;
+}
+
+.collectibleInfo {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.collectibleName,
+.collectibleKind {
+  overflow: hidden;
+
+  font-size: 0.875rem;
+  line-height: 1.125rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.collectibleName {
+  font-weight: var(--font-weight-medium);
+}
+
+.collectibleKind {
+  color: var(--color-text-secondary);
+}
+
+.collectibleIcon {
+  margin-left: 0.125rem;
+  font-size: 0.875rem;
+}
+
+.status {
+  font-size: 0.8125rem;
+  color: var(--color-text-secondary);
+}
+
+.statusFailed {
+  color: var(--color-error);
+}
+
+.gramIconBox {
+  display: flex;
+}
+
+// Pops out of the diamond as it would shrink into the badge
+.gramIconPop {
+  animation: gram-icon-appear 0.45s cubic-bezier(0.34, 1.9, 0.5, 1) 0.32s both;
+}
+
+.gramIcon {
+  height: 0.875rem;
+  margin: 0.0625rem 0 0 0.125rem;
+  vertical-align: 0 !important;
+}
+
+.positive {
+  color: var(--color-success);
+}
+
+.negative {
+  color: var(--color-text);
+}
+
+@keyframes gram-icon-appear {
+  from {
+    transform: scale(0.2);
+    opacity: 0;
+  }
+
+  to {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+@keyframes sheen-pass {
+  from {
+    transform: translateX(-60%);
+  }
+
+  60%,
+  to {
+    transform: none;
+  }
+}
+
+@keyframes sheen-fade {
+  from,
+  60%,
+  to {
+    opacity: 0;
+  }
+
+  30% {
+    opacity: 1;
+  }
+}

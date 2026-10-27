@@ -4,6 +4,7 @@ import type {
   ApiBotInlineResult,
   ApiWebDocument,
 } from './bots';
+import type { ApiChatAdminRights } from './chats';
 import type { ApiInstantViewPage } from './instantView';
 import type { ApiMessageAction } from './messageActions';
 import type { ApiAttachment, ApiPeerNotifySettings, ApiRestrictionReason } from './misc';
@@ -250,6 +251,8 @@ export interface ApiMessagePoll {
 export interface ApiInvoice {
   prices: ApiLabeledPrice[];
   totalAmount: number;
+  // Set for an invoice in Stars or TON. TON is counted in nanotons, which `totalAmount` cannot hold exactly.
+  totalPrice?: ApiTypeCurrencyAmount;
   currency: string;
   isTest?: boolean;
   isRecurring?: boolean;
@@ -666,6 +669,7 @@ export enum ApiMessageEntityTypes {
   DiffInsert = 'MessageEntityDiffInsert',
   DiffReplace = 'MessageEntityDiffReplace',
   DiffDelete = 'MessageEntityDiffDelete',
+  TonAddress = 'MessageEntityTonAddress',
 }
 
 export interface ApiFormattedText {
@@ -1025,9 +1029,30 @@ export interface ApiKeyboardButtonStyle {
   iconId?: string;
 }
 
+export type ApiRequestPeerType = {
+  type: 'user';
+  isBot?: boolean;
+  isPremium?: boolean;
+} | {
+  type: 'group';
+  isCreator?: boolean;
+  isBotParticipant?: boolean;
+  hasUsername?: boolean;
+  isForum?: boolean;
+  userAdminRights?: ApiChatAdminRights;
+  botAdminRights?: ApiChatAdminRights;
+} | {
+  type: 'channel';
+  isCreator?: boolean;
+  hasUsername?: boolean;
+  userAdminRights?: ApiChatAdminRights;
+  botAdminRights?: ApiChatAdminRights;
+};
+
 export type ApiReplyButtonAction =
   { type: 'command' | 'requestPhone' | 'unsupported' }
   | { type: 'requestPoll'; isQuiz?: boolean }
+  | { type: 'requestPeer'; buttonId: number; maxQuantity: number; peerType: ApiRequestPeerType }
   | { type: 'simpleWebView'; url: string };
 
 export type ApiInlineButtonAction =

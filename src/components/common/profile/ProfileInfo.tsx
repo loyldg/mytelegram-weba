@@ -44,6 +44,7 @@ import { IS_TOUCH_ENV } from '../../../util/browser/windowEnvironment';
 import buildClassName from '../../../util/buildClassName';
 import buildStyle from '../../../util/buildStyle';
 import { captureEvents, SwipeDirection } from '../../../util/captureEvents';
+import { formatTonShortParts } from '../../../util/localization/format';
 import { MEMO_EMPTY_ARRAY } from '../../../util/memo';
 import { resolveTransitionName } from '../../../util/resolveTransitionName';
 import { REM } from '../helpers/mediaDimensions.ts';
@@ -53,7 +54,6 @@ import { useVtn } from '../../../hooks/animations/useVtn';
 import useIntervalForceUpdate from '../../../hooks/schedulers/useIntervalForceUpdate';
 import useLang from '../../../hooks/useLang';
 import useLastCallback from '../../../hooks/useLastCallback';
-import useOldLang from '../../../hooks/useOldLang';
 import usePreviousDeprecated from '../../../hooks/usePreviousDeprecated';
 import useCustomEmoji from '../hooks/useCustomEmoji';
 import usePhotosPreload from '../hooks/usePhotosPreload';
@@ -61,6 +61,7 @@ import usePhotosPreload from '../hooks/usePhotosPreload';
 import Transition from '../../ui/Transition.tsx';
 import Avatar from '../Avatar.tsx';
 import FullNameTitle from '../FullNameTitle.tsx';
+import GramIcon from '../icons/GramIcon';
 import Icon from '../icons/Icon.tsx';
 import TopicIcon from '../TopicIcon.tsx';
 import ProfileMusicStrip from './ProfileMusicStrip';
@@ -74,6 +75,7 @@ import styles from './ProfileInfo.module.scss';
 type OwnProps = {
   isExpanded?: boolean;
   isActive?: boolean;
+  isOwnProfile?: boolean;
   peerId: string;
   isForSettings?: boolean;
   canPlayVideo: boolean;
@@ -113,9 +115,13 @@ const STATUS_UPDATE_INTERVAL = 1000 * 60; // 1 min
 
 const PATTERN_Y_SHIFT = 8 * REM;
 
+// 0.01 Gram
+const MIN_SHOWN_WALLET_NANOS = 10_000_000n;
+
 const ProfileInfo = ({
   isExpanded,
   isActive,
+  isOwnProfile,
   isForSettings,
   canPlayVideo,
   user,
@@ -150,11 +156,15 @@ const ProfileInfo = ({
     openUniqueGiftBySlug,
     openProfileRatingModal,
     loadPeerSavedGifts,
+    openWalletCardModal,
   } = getActions();
 
   const savedMusic = userFullInfo?.savedMusic;
+  const walletBalance = userFullInfo?.walletCard?.balance;
+  // Not in Saved Messages or the settings, which also show the current user
+  const hasWalletBalance = Boolean(user && (!user.isSelf || isOwnProfile) && walletBalance !== undefined
+    && walletBalance >= MIN_SHOWN_WALLET_NANOS);
 
-  const oldLang = useOldLang();
   const lang = useLang();
 
   useIntervalForceUpdate(user ? STATUS_UPDATE_INTERVAL : undefined);
@@ -182,6 +192,8 @@ const ProfileInfo = ({
       return {
         bgColors: [collectibleEmojiStatus.centerColor, collectibleEmojiStatus.edgeColor],
         storyColors: [collectibleEmojiStatus.textColor, collectibleEmojiStatus.textColor],
+        buttonBaseColor:
+          `color-mix(in srgb, ${collectibleEmojiStatus.edgeColor} 90%, ${collectibleEmojiStatus.centerColor})`,
       };
     }
 
@@ -193,6 +205,7 @@ const ProfileInfo = ({
     return {
       bgColors: [...colors.bgColors].reverse(),
       storyColors: [...colors.storyColors].reverse(),
+      buttonBaseColor: colors.bgColors[0],
     };
   }, [profileColorOption, theme, collectibleEmojiStatus]);
 
@@ -250,6 +263,10 @@ const ProfileInfo = ({
       mediaIndex: currentPhotoIndex,
       origin: isForSettings ? MediaViewerOrigin.SettingsAvatar : MediaViewerOrigin.ProfileAvatar,
     });
+  });
+
+  const handleWalletBalanceClick = useLastCallback(() => {
+    openWalletCardModal({ userId: user!.id });
   });
 
   const handleStatusClick = useLastCallback(() => {
@@ -347,7 +364,9 @@ const ProfileInfo = ({
         />
         <h3 className={styles.topicTitle} dir={lang.isRtl ? 'rtl' : undefined}>{renderText(topic!.title)}</h3>
         <p className={styles.topicMessagesCounter}>
-          {messagesCount ? oldLang('Chat.Title.Topic', messagesCount, 'i') : oldLang('lng_forum_no_messages')}
+          {messagesCount ? lang('Messages', {
+            count: lang.number(messagesCount),
+          }, { pluralValue: messagesCount }) : lang('ForumNoMessages')}
         </p>
       </div>
     );
@@ -428,6 +447,35 @@ const ProfileInfo = ({
     );
   }
 
+  function renderWalletBalance() {
+    const [whole, fraction] = formatTonShortParts(lang, walletBalance!);
+
+    return (
+      <button
+        type="button"
+        className={styles.walletBalance}
+        style={createVtnStyle('walletBalance', true)}
+        data-wallet-card-origin={user!.id}
+        onClick={handleWalletBalanceClick}
+      >
+        <span className={styles.walletLabel}>
+          {lang('WalletSendBalance', {
+            amount: (
+              <span className={styles.walletAmount}>
+                <GramIcon isMono withWhiteStar={!isExpanded} className={styles.walletIcon} />
+                <span>
+                  {whole}
+                  {fraction && <span className={styles.walletFraction}>{fraction}</span>}
+                </span>
+              </span>
+            ),
+          }, { withNodes: true })}
+        </span>
+        <Icon name="next" className={styles.walletChevron} />
+      </button>
+    );
+  }
+
   function renderStatus() {
     const isAnonymousForwards = isAnonymousForwardsChat(peerId);
     const isSystemBotChat = isSystemBot(peerId);
@@ -457,11 +505,11 @@ const ProfileInfo = ({
         >
           {renderUserRating()}
           <span className={styles.userStatus} dir="auto">
-            {getUserStatus(oldLang, user, userStatus)}
+            {getUserStatus(lang, user, userStatus)}
           </span>
           {userStatus?.isReadDateRestrictedByMe && !isSystemAccount && (
             <span className={styles.getStatus} onClick={handleOpenGetReadDateModal}>
-              <span>{oldLang('StatusHiddenShow')}</span>
+              <span>{lang('StatusHiddenShow')}</span>
             </span>
           )}
         </div>
@@ -476,8 +524,12 @@ const ProfileInfo = ({
       >
         {
           isChatChannel(chat!)
-            ? oldLang('Subscribers', chat!.membersCount ?? 0, 'i')
-            : oldLang('Members', chat!.membersCount ?? 0, 'i')
+            ? lang('Subscribers', {
+              count: lang.number(chat!.membersCount ?? 0),
+            }, { pluralValue: chat!.membersCount ?? 0 })
+            : lang('NMembers', {
+              count: lang.number(chat!.membersCount ?? 0),
+            }, { pluralValue: chat!.membersCount ?? 0 })
         }
       </span>
     );
@@ -495,11 +547,13 @@ const ProfileInfo = ({
         !isExpanded && styles.minimized,
         isPlain && styles.plain,
         hasPatternBackground && styles.withBackground,
+        hasWalletBalance && styles.hasWalletBalance,
         savedMusic && styles.hasMusic,
       )}
       style={buildStyle(
         profileColorSet && `--rating-outline-color: ${isExpanded ? 'transparent' : profileColorSet?.bgColors[0]}`,
         profileColorSet && !isExpanded && `--rating-text-color: ${profileColorSet?.bgColors[0]}`,
+        profileColorSet && `--profile-button-base: ${profileColorSet.buttonBaseColor}`,
         createVtnStyle('profileInfo', true),
       )}
       dir={lang.isRtl ? 'rtl' : undefined}
@@ -533,7 +587,7 @@ const ProfileInfo = ({
             )}
             >
               <div className={styles.fallbackPhotoContents}>
-                {oldLang(profilePhotos.personalPhoto.isVideo ? 'UserInfo.CustomVideo' : 'UserInfo.CustomPhoto')}
+                {lang(profilePhotos.personalPhoto.isVideo ? 'UserInfoCustomVideo' : 'UserInfoCustomPhoto')}
               </div>
             </div>
           )}
@@ -551,7 +605,7 @@ const ProfileInfo = ({
                     size="mini"
                   />
                 )}
-                {oldLang(profilePhotos.fallbackPhoto.isVideo ? 'UserInfo.PublicVideo' : 'UserInfo.PublicPhoto')}
+                {lang(profilePhotos.fallbackPhoto.isVideo ? 'UserInfoPublicVideo' : 'UserInfoPublicPhoto')}
               </div>
             </div>
           )}
@@ -567,7 +621,7 @@ const ProfileInfo = ({
               type="button"
               dir={lang.isRtl ? 'rtl' : undefined}
               className={buildClassName(styles.navigation, styles.navigation_prev)}
-              aria-label={oldLang('AccDescrPrevious')}
+              aria-label={lang('AccDescrPrevious')}
               onClick={selectPreviousMedia}
             />
           )}
@@ -576,7 +630,7 @@ const ProfileInfo = ({
               type="button"
               dir={lang.isRtl ? 'rtl' : undefined}
               className={buildClassName(styles.navigation, styles.navigation_next)}
-              aria-label={oldLang('Next')}
+              aria-label={lang('Next')}
               onClick={selectNextMedia}
             />
           )}
@@ -617,12 +671,14 @@ const ProfileInfo = ({
           />
         )}
         {renderStatus()}
+        {hasWalletBalance && renderWalletBalance()}
       </div>
       {savedMusic && (
         <ProfileMusicStrip
           audio={savedMusic}
           peerId={peerId}
-          className={isExpanded ? styles.musicOverlay : undefined}
+          isOverlay={isExpanded || !isPlain}
+          className={styles.musicBand}
           style={createVtnStyle('music', true)}
         />
       )}

@@ -22,7 +22,9 @@ import {
   INITIAL_PERFORMANCE_STATE_MED,
   INITIAL_PERFORMANCE_STATE_MIN,
 } from '../../../global/initialState';
-import { selectTabState, selectTheme, selectUser } from '../../../global/selectors';
+import {
+  selectOldWalletBotId, selectTabState, selectTheme, selectUser,
+} from '../../../global/selectors';
 import { selectPremiumLimit } from '../../../global/selectors/limits';
 import { selectSharedSettings } from '../../../global/selectors/sharedState';
 import { IS_MULTIACCOUNT_SUPPORTED, IS_TAURI } from '../../../util/browser/globalEnvironment';
@@ -50,6 +52,7 @@ type OwnProps = {
   onSelectArchived: NoneToVoidFunction;
   onBotMenuOpened: NoneToVoidFunction;
   onBotMenuClosed: NoneToVoidFunction;
+  onSwitchAccount: (url: string) => void;
   footer?: string;
 };
 
@@ -61,6 +64,8 @@ type StateProps = {
   attachBots: GlobalState['attachMenu']['bots'];
   accountsTotalLimit: number;
   hasPasscode?: boolean;
+  isWalletAvailable?: boolean;
+  oldWalletBotId?: string;
 } & Pick<GlobalState, 'currentUserId' | 'archiveSettings'>;
 
 const LeftSideMenuItems = ({
@@ -73,11 +78,14 @@ const LeftSideMenuItems = ({
   currentUser,
   accountsTotalLimit,
   hasPasscode,
+  isWalletAvailable,
+  oldWalletBotId,
   onSelectArchived,
   onSelectContacts,
   onSelectSettings,
   onBotMenuOpened,
   onBotMenuClosed,
+  onSwitchAccount,
   footer,
 }: OwnProps & StateProps) => {
   const {
@@ -88,6 +96,7 @@ const LeftSideMenuItems = ({
     openUrl,
     openChatWithInfo,
     openSettingsScreen,
+    openWalletModal,
   } = getActions();
   const lang = useLang();
   const [isSwitchToWebKDialogOpen, openSwitchToWebKDialog, closeSwitchToWebKDialog] = useFlag();
@@ -99,7 +108,13 @@ const LeftSideMenuItems = ({
 
   const archivedUnreadChatsCount = useFolderManagerForUnreadCounters()[ARCHIVED_FOLDER_ID]?.chatsCount || 0;
 
-  const bots = useMemo(() => Object.values(attachBots).filter((bot) => bot.isForSideMenu), [attachBots]);
+  const bots = useMemo(() => Object.values(attachBots).filter((bot) => (
+    bot.isForSideMenu && bot.id !== oldWalletBotId
+  )), [attachBots, oldWalletBotId]);
+
+  const handleOpenWallet = useLastCallback(() => {
+    openWalletModal();
+  });
 
   const handleSelectMyProfile = useLastCallback(() => {
     openChatWithInfo({ id: currentUserId, shouldReplaceHistory: true, isOwnProfile: true });
@@ -168,6 +183,7 @@ const LeftSideMenuItems = ({
             currentUser={currentUser}
             totalLimit={accountsTotalLimit}
             onSelectCurrent={onSelectSettings}
+            onSwitchAccount={onSwitchAccount}
           />
           <MenuSeparator />
         </>
@@ -201,6 +217,15 @@ const LeftSideMenuItems = ({
       >
         {lang('MenuContacts')}
       </MenuItem>
+      {isWalletAvailable && (
+        <MenuItem
+          icon="gram-outline"
+          onClick={handleOpenWallet}
+        >
+          {lang('WalletMenuItem')}
+          <span className="menu-item-badge">{lang('New')}</span>
+        </MenuItem>
+      )}
       {bots.map((bot) => (
         <AttachBotItem
           bot={bot}
@@ -316,6 +341,8 @@ export default memo(withGlobal<OwnProps>(
       attachBots,
       accountsTotalLimit: selectPremiumLimit(global, 'moreAccounts'),
       hasPasscode: global.passcode.hasPasscode,
+      isWalletAvailable: Boolean(global.appConfig.isWalletAvailable),
+      oldWalletBotId: selectOldWalletBotId(global),
     };
   },
 )(LeftSideMenuItems));

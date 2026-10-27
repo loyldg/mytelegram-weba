@@ -7,7 +7,6 @@ import {
 import { getActions } from '../../global';
 
 import type { ApiNotification } from '../../api/types';
-import { isLangFnParam } from '../../util/localization/types';
 
 import { ANIMATION_END_DELAY } from '../../config';
 import buildClassName from '../../util/buildClassName';
@@ -28,6 +27,8 @@ import Portal from './Portal';
 import RoundTimer from './RoundTimer';
 
 import './Notification.scss';
+
+const OPEN_DIALOG_SELECTOR = 'dialog[open]';
 
 type OwnProps = {
   notification: ApiNotification;
@@ -62,9 +63,30 @@ const Notification = ({
     containerSelector,
   } = notification;
 
-  const isMessageLangFnParam = isLangFnParam(message);
+  const isMessageLangFnParam = typeof message === 'object';
 
   const [isOpen, setIsOpen] = useState(true);
+
+  // A modal `<dialog>` sits in the top layer, so a toast over it has to render inside the topmost one.
+  // Picked once, on mount: moving the toast to another portal would restart its animation.
+  const [portalElement, setPortalElement] = useState(() => {
+    if (containerSelector) return undefined;
+
+    const dialogs = document.querySelectorAll<HTMLDialogElement>(OPEN_DIALOG_SELECTOR);
+
+    return dialogs[dialogs.length - 1];
+  });
+
+  // The dialog would take the toast away with it when it closes, so the toast moves to the regular portal
+  useEffect(() => {
+    if (!portalElement) return undefined;
+
+    const handleDialogClose = () => setPortalElement(undefined);
+    portalElement.addEventListener('close', handleDialogClose);
+
+    return () => portalElement.removeEventListener('close', handleDialogClose);
+  }, [portalElement]);
+
   const actionActivationRef = useRef<boolean>(false);
   const timerRef = useRef<number | undefined>();
   const { transitionClassNames } = useShowTransitionDeprecated(isOpen);
@@ -146,12 +168,11 @@ const Notification = ({
 
   const renderedTitle = useMemo(() => {
     if (!title) return undefined;
-    if (isLangFnParam(title)) {
+    if (typeof title === 'object') {
       return lang.with(title);
     }
 
     return renderText(title, ['simple_markdown', 'emoji', 'br', 'links']);
-  // @ts-expect-error -- Lang Parameters are too complex
   }, [lang, title]);
 
   const renderedMessage = useMemo(() => {
@@ -170,12 +191,11 @@ const Notification = ({
     }
 
     return message;
-  // @ts-expect-error -- Lang Parameters are too complex
   }, [isMessageLangFnParam, lang, message, notification.messageEntities]);
 
   const renderedActionText = useMemo(() => {
     if (!actionText) return undefined;
-    if (isLangFnParam(actionText)) {
+    if (typeof actionText === 'object') {
       return lang.with(actionText);
     }
 
@@ -205,7 +225,11 @@ const Notification = ({
   }, [customEmojiIconId, icon, shouldUseCustomIcon]);
 
   return (
-    <Portal className="Notification-container" containerSelector={containerSelector}>
+    <Portal
+      className={buildClassName('Notification-container', portalElement && 'in-dialog')}
+      containerSelector={containerSelector}
+      containerElement={portalElement}
+    >
       <div
         className={buildClassName('Notification', transitionClassNames, className)}
         onClick={handleClick}

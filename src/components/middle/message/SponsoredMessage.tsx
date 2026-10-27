@@ -25,8 +25,8 @@ import { preventMessageInputBlur } from '../helpers/preventMessageInputBlur';
 
 import useContextMenuHandlers from '../../../hooks/useContextMenuHandlers';
 import { type ObserveFn, useIntersectionObserver } from '../../../hooks/useIntersectionObserver';
+import useLang from '../../../hooks/useLang';
 import useLastCallback from '../../../hooks/useLastCallback';
-import useOldLang from '../../../hooks/useOldLang';
 
 import Avatar from '../../common/Avatar';
 import BadgeButton from '../../common/BadgeButton';
@@ -77,7 +77,7 @@ const SponsoredMessage = ({
     openAboutAdsModal,
   } = getActions();
 
-  const lang = useOldLang();
+  const lang = useLang();
   const contentRef = useRef<HTMLDivElement>();
   const ref = useRef<HTMLDivElement>();
   const shouldObserve = Boolean(message);
@@ -222,7 +222,8 @@ const SponsoredMessage = ({
     >
       <div
         className={buildClassName(
-          'message-content media has-adaptive-width has-shadow has-solid-background has-appendix',
+          'message-content media has-shadow has-solid-background has-appendix',
+          hasMedia && 'has-adaptive-width',
           hasWideMedia && 'with-wide-media',
         )}
         dir="auto"
@@ -239,7 +240,7 @@ const SponsoredMessage = ({
             />
           )}
           <span className={buildClassName('message-title message-type', hasMedia && 'has-media')}>
-            {message.isRecommended ? lang('Message.RecommendedLabel') : lang('SponsoredMessage')}
+            {message.isRecommended ? lang('MessageRecommendedLabel') : lang('SponsoredMessage')}
             <BadgeButton onClick={handleOpenAboutAdsModal} className="ad-about">
               {lang('SponsoredMessageAdWhatIsThis')}
             </BadgeButton>
@@ -266,7 +267,7 @@ const SponsoredMessage = ({
                   round
                   iconName="more"
                   iconClassName="sponsored-action-icon"
-                  ariaLabel={lang('More')}
+                  ariaLabel={lang('MenuMore')}
                   onClick={handleContextMenu}
                   onContextMenu={handleContextMenu}
                 />

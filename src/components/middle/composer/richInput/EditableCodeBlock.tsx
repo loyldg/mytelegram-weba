@@ -39,7 +39,7 @@ const EditableCodeBlock = ({
   const lang = useLang();
 
   const language = typeof node.attrs.language === 'string' ? node.attrs.language : undefined;
-  const languageLabel = language ? getPrettyCodeLanguageName(language) : lang('RichEditorCodeLanguageAuto');
+  const languageLabel = language ? getPrettyCodeLanguageName(lang, language) : lang('RichEditorCodeLanguageAuto');
   const isCodeBlockEmpty = !node.textContent;
   const codeBlockClassName = buildClassName(
     styles.codeBlock,
@@ -60,7 +60,12 @@ const EditableCodeBlock = ({
   useEffect(() => {
     if (language) {
       void ensureCodeLanguage(language);
+      return;
     }
+
+    SUPPORTED_CODE_LANGUAGES.forEach((langCode) => {
+      void ensureCodeLanguage(langCode);
+    });
   }, [language]);
 
   const handleTriggerMouseDown = useLastCallback((e: React.MouseEvent<HTMLButtonElement>) => {
@@ -206,7 +211,7 @@ const EditableCodeBlock = ({
               withPreventDefaultOnMouseDown
               onClick={() => handleSetLanguage(langCode)}
             >
-              {getPrettyCodeLanguageName(langCode)}
+              {getPrettyCodeLanguageName(lang, langCode)}
             </MenuItem>
           ))}
         </div>

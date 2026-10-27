@@ -28,6 +28,7 @@ import {
   buildApiProfileTab,
   buildAvatarPhotoId,
 } from './peers';
+import { buildApiWalletCard } from './wallet';
 
 export function buildApiUserFullInfo(mtpUserFull: GramJs.users.UserFull): ApiUserFullInfo {
   const {
@@ -40,7 +41,7 @@ export function buildApiUserFullInfo(mtpUserFull: GramJs.users.UserFull): ApiUse
       botCanManageEmojiStatus, settings, sendPaidMessagesStars, displayGiftsButton, disallowedGifts,
       starsRating, starsMyPendingRating, starsMyPendingRatingDate, mainTab, savedMusic, note,
       noforwardsMyEnabled, noforwardsPeerEnabled, unofficialSecurityRisk, privateForwardName,
-      ttlPeriod,
+      ttlPeriod, botManagerId, walletCard,
     },
     users,
   } = mtpUserFull;
@@ -87,6 +88,8 @@ export function buildApiUserFullInfo(mtpUserFull: GramJs.users.UserFull): ApiUse
     noForwardsMyEnabled: noforwardsMyEnabled,
     noForwardsPeerEnabled: noforwardsPeerEnabled,
     isUnofficialSecurityRisk: unofficialSecurityRisk,
+    botManagerId: botManagerId !== undefined ? buildApiPeerId(botManagerId, 'user') : undefined,
+    walletCard: walletCard && buildApiWalletCard(walletCard),
   };
 }
 
@@ -123,7 +126,7 @@ export function buildApiUser(mtpUser: GramJs.TypeUser): ApiUser | undefined {
     id, firstName, lastName, fake, scam, support, closeFriend, storiesUnavailable,
     botActiveUsers, botVerificationIcon, botInlinePlaceholder, botAttachMenu, botCanEdit,
     sendPaidMessagesStars, profileColor, botForumView, botForumCanManageTopics, botGuestchat,
-    botGuard,
+    botGuard, botCanManageBots,
   } = mtpUser;
   const storiesMaxId = mtpUser.storiesMaxId?.maxId;
   const hasVideoAvatar = mtpUser.photo instanceof GramJs.UserProfilePhoto ? Boolean(mtpUser.photo.hasVideo) : undefined;
@@ -169,6 +172,7 @@ export function buildApiUser(mtpUser: GramJs.TypeUser): ApiUser | undefined {
     paidMessagesStars: toJSNumber(sendPaidMessagesStars),
     isBotForum: botForumView,
     canManageBotForumTopics: botForumCanManageTopics,
+    canManageBots: botCanManageBots,
     isGuestChatBot: botGuestchat,
     isGuardBot: botGuard || undefined,
   };

@@ -144,6 +144,9 @@ const BASE64_VALUES = buildBase64Values();
 
 const textEncoder = new TextEncoder();
 const textDecoder = new TextDecoder();
+const GRAPHEME_SEGMENTER = typeof Intl.Segmenter === 'function'
+  ? new Intl.Segmenter(undefined, { granularity: 'grapheme' })
+  : undefined;
 
 export function bufferFromHex(hex: string): Uint8Array<ArrayBuffer> {
   if (typeof Uint8Array.fromHex === 'function') {
@@ -227,12 +230,40 @@ export function bufferFromBase64(base64: string): Uint8Array<ArrayBuffer> {
   return bytes;
 }
 
+// Spreading a whole 1 MiB BOC into `fromCharCode` overflows the call stack
+const BASE64_CHUNK_SIZE = 0x8000;
+
+export function bufferToBase64(buffer: Uint8Array): string {
+  if (typeof buffer.toBase64 === 'function') {
+    return buffer.toBase64();
+  }
+
+  let binary = '';
+
+  for (let offset = 0; offset < buffer.length; offset += BASE64_CHUNK_SIZE) {
+    binary += String.fromCharCode(...buffer.subarray(offset, offset + BASE64_CHUNK_SIZE));
+  }
+
+  return btoa(binary);
+}
+
 export function bufferFromUtf8(value: string): Uint8Array<ArrayBuffer> {
   return textEncoder.encode(value);
 }
 
 export function bufferToUtf8(bytes: Uint8Array): string {
   return textDecoder.decode(bytes);
+}
+
+// `encodeInto` stops before a code point that does not fit, and the cut moves back to the start of its grapheme
+// so emoji sequences and combining marks stay whole
+export function truncateUtf8(value: string, maxBytes: number): string {
+  const { read } = textEncoder.encodeInto(value, new Uint8Array(maxBytes));
+  if (read === value.length) return value;
+
+  const end = GRAPHEME_SEGMENTER?.segment(value).containing(read)!.index ?? read;
+
+  return value.slice(0, end);
 }
 
 function checkBounds(buffer: Uint8Array, offset: number, byteLength: number) {

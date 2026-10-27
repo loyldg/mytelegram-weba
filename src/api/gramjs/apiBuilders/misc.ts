@@ -6,7 +6,6 @@ import type {
   ApiConfig,
   ApiCountry,
   ApiLanguage,
-  ApiOldLangString,
   ApiPasskey,
   ApiPendingSuggestion,
   ApiPrivacyKey,
@@ -21,13 +20,10 @@ import type {
   LangPackStringValue,
 } from '../../types';
 
-import {
-  omit, omitUndefined, pick,
-} from '../../../util/iteratees';
+import { omitUndefined, pick } from '../../../util/iteratees';
 import { toJSNumber } from '../../../util/numbers';
 import { addUserToLocalDb } from '../helpers/localDb';
 import { buildApiFormattedText } from './common';
-import { omitVirtualClassFields } from './helpers';
 import { buildApiDocument, buildMessageTextContent } from './messageContent';
 import { buildApiPeerId, getApiChatIdFromMtpPeer } from './peers';
 import { buildApiReaction } from './reactions';
@@ -204,7 +200,7 @@ export function buildApiUrlAuthResult(result: GramJs.TypeUrlAuthResult): ApiUrlA
   if (result instanceof GramJs.UrlAuthResultRequest) {
     const {
       bot, domain, requestWriteAccess, requestPhoneNumber, browser, platform, ip, region, matchCodes,
-      matchCodesFirst, userIdHint, isApp, verifiedAppName,
+      matchCodesFirst, userIdHint, isApp, verifiedAppName, requestWallet, tcSessionId, tcClientId,
     } = result;
     const user = buildApiUser(bot);
     if (!user) return undefined;
@@ -226,6 +222,10 @@ export function buildApiUrlAuthResult(result: GramJs.TypeUrlAuthResult): ApiUrlA
       matchCodesFirst,
       userIdHint: userIdHint?.toString(),
       verifiedAppName,
+      // Without the session and the key the login goes on as a plain one
+      walletRequest: requestWallet && tcSessionId !== undefined && tcClientId
+        ? { sessionId: tcSessionId.toString(), clientId: tcClientId }
+        : undefined,
     };
   }
 
@@ -288,21 +288,6 @@ function buildApiPendingSuggestion(pendingSuggestion: GramJs.TypePendingSuggesti
   };
 }
 
-export function oldBuildLangPack(mtpLangPack: GramJs.LangPackDifference) {
-  return mtpLangPack.strings.reduce<Record<string, ApiOldLangString | undefined>>((acc, mtpString) => {
-    acc[mtpString.key] = oldBuildLangPackString(mtpString);
-    return acc;
-  }, {});
-}
-
-function oldBuildLangPackString(mtpString: GramJs.TypeLangPackString) {
-  return mtpString instanceof GramJs.LangPackString
-    ? mtpString.value
-    : mtpString instanceof GramJs.LangPackStringPluralized
-      ? omit(omitVirtualClassFields(mtpString), ['key'])
-      : undefined;
-}
-
 export function buildLangStrings(strings: GramJs.TypeLangPackString[]) {
   const keysToRemove: string[] = [];
   const apiStrings = strings.reduce<Record<string, LangPackStringValue>>((acc, mtpString) => {
@@ -336,12 +321,14 @@ export function buildLangStrings(strings: GramJs.TypeLangPackString[]) {
 
 export function buildApiLanguage(lang: GramJs.TypeLangPackLanguage): ApiLanguage {
   const {
-    name, nativeName, langCode, pluralCode, rtl, stringsCount, translatedCount, translationsUrl, beta, official,
+    name, nativeName, langCode, baseLangCode, pluralCode, rtl, stringsCount, translatedCount,
+    translationsUrl, beta, official,
   } = lang;
   return {
     name,
     nativeName,
     langCode,
+    baseLangCode,
     pluralCode,
     isRtl: rtl,
     isBeta: beta,
@@ -382,7 +369,7 @@ export function buildApiCollectibleInfo(info: GramJs.fragment.TypeCollectibleInf
   return {
     amount: toJSNumber(amount),
     currency,
-    cryptoAmount: toJSNumber(cryptoAmount),
+    cryptoAmount,
     cryptoCurrency,
     purchaseDate,
     url,

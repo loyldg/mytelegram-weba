@@ -16,7 +16,6 @@ export const WEB_VERSION_BASE = 'https://web.telegram.org/'; // Used to redirect
 export const BASE_URL = import.meta.env.TG_PUBLIC_URL;
 export const ACCOUNT_QUERY = 'account';
 
-export const IS_MOCKED_CLIENT = import.meta.env.TG_APP_MOCKED_CLIENT === '1';
 export const IS_TEST = APP_ENV === 'test';
 export const IS_PERF = APP_ENV === 'perf';
 export const IS_BETA = APP_ENV === 'staging';
@@ -32,17 +31,13 @@ export const FORCE_FALLBACK_LANG = DEBUG;
 
 export const BETA_CHANGELOG_URL = 'https://telegra.ph/WebA-Beta-03-20';
 
-export const DEBUG_ALERT_MSG = 'Shoot!\nSomething went wrong, please see the error details in Dev Tools Console.';
 export const DEBUG_GRAMJS = false;
 
 export const PAGE_TITLE = import.meta.env.TG_APP_TITLE;
 export const PAGE_TITLE_TAURI = 'Telegram Air';
-export const INACTIVE_MARKER = '[Inactive]';
 export const TELEGRAM_API_ID = Number(import.meta.env.TG_TELEGRAM_API_ID);
 export const TELEGRAM_API_HASH = import.meta.env.TG_TELEGRAM_API_HASH;
 export const TEST_SESSION = import.meta.env.TG_TEST_SESSION;
-
-export const DEBUG_PAYMENT_SMART_GLOCAL = false;
 
 export const SESSION_LEGACY_USER_KEY = 'user_auth';
 export const SESSION_ACCOUNT_PREFIX = 'account';
@@ -57,7 +52,7 @@ export const GLOBAL_STATE_CACHE_ARCHIVED_CHAT_LIST_LIMIT = 10;
 export const GLOBAL_STATE_CACHE_CUSTOM_EMOJI_LIMIT = 150;
 
 export const IS_SCREEN_LOCKED_CACHE_KEY = 'tt-is-screen-locked';
-export const SHOULD_DELETE_LEGACY_PASSCODE_DATA = false;
+export const SHOULD_DELETE_LEGACY_PASSCODE_DATA = true;
 
 export const MEDIA_CACHE_DISABLED = false;
 export const MEDIA_CACHE_NAME = 'tt-media';
@@ -66,7 +61,6 @@ export const MEDIA_PROGRESSIVE_CACHE_DISABLED = false;
 export const MEDIA_PROGRESSIVE_CACHE_NAME = 'tt-media-progressive';
 export const MEDIA_CACHE_MAX_BYTES = 512 * 1024; // 512 KB
 export const CUSTOM_BG_CACHE_NAME = 'tt-custom-bg';
-export const LANG_CACHE_NAME = 'tt-lang-packs-v52';
 export const ASSET_CACHE_NAME = 'tt-assets';
 export const AUTODOWNLOAD_FILESIZE_MB_LIMITS = [1, 5, 10, 50, 100, 500];
 export const DATA_BROADCAST_CHANNEL_PREFIX = 'tt-global';
@@ -102,6 +96,8 @@ export const GLOBAL_TOPIC_SEARCH_SLICE = 5;
 export const MEMBERS_SLICE = 30;
 export const PROFILE_POLLS_SLICE = 20;
 export const SAVED_MUSIC_SLICE = 30;
+export const MUSIC_PICKER_SEARCH_DEBOUNCE = 300;
+export const MUSIC_PICKER_GLOBAL_MIN_QUERY_LENGTH = 3;
 export const MEMBERS_LOAD_SLICE = 200;
 export const PROFILE_SENSITIVE_AREA = 500;
 export const TOPIC_LIST_SENSITIVE_AREA = 600;
@@ -140,7 +136,7 @@ export const DEFAULT_MAXIMUM_CHARGE_FOR_MESSAGES = 10000;
 
 export const DEFAULT_VOLUME = 1;
 export const DEFAULT_PLAYBACK_RATE = 1;
-export const PLAYBACK_RATE_FOR_AUDIO_MIN_DURATION = 20 * 60; // 20 min
+export const PLAYBACK_RATE_FOR_AUDIO_MIN_DURATION = 8 * 60; // 8 min
 export const PREVIOUS_RESTART_THRESHOLD = 5;
 export const SHUFFLE_PLAYLIST_LIMIT = 10000;
 export const SHUFFLE_PRELOAD_THRESHOLD = 40;
@@ -155,6 +151,7 @@ export const ANIMATION_LEVEL_DEFAULT = ANIMATION_LEVEL_MED;
 export const DEFAULT_MESSAGE_TEXT_SIZE_PX = 16;
 export const IOS_DEFAULT_MESSAGE_TEXT_SIZE_PX = 17;
 export const MACOS_DEFAULT_MESSAGE_TEXT_SIZE_PX = 15;
+export const RICH_CONTENT_BODY_FONT_SIZE_PX = 18;
 export const INSTANT_VIEW_FONT_SIZE_ADJUST_DEFAULT = 1;
 export const INSTANT_VIEW_FONT_SIZE_ADJUST_MIN = 0.5;
 export const INSTANT_VIEW_FONT_SIZE_ADJUST_MAX = 1.5;
@@ -350,6 +347,28 @@ export const RE_TME_LINK = /^(https?:\/\/)?(?:([-a-zA-Z0-9@:%_+~#=]{1,32}\.)?t\.
 export const RE_TELEGRAM_LINK = /^(https?:\/\/)?telegram\.org\//i;
 export const TME_LINK_PREFIX = 'https://t.me/';
 export const BOT_FATHER_USERNAME = 'botfather';
+// Gram Wallet
+export const WALLET_BOT_USERNAME = 'walt';
+export const DEFAULT_OLD_WALLET_BOT_USERNAME = 'wallet';
+export const WALLET_SEND_LINK_DOMAIN = 'sendgrams';
+// An address or `transaction/<hash>` is appended as is
+export const DEFAULT_TON_EXPLORER_URL = 'https://tonviewer.com/';
+export const USD_CURRENCY_CODE = 'USD';
+// The Android client's limit on an encrypted comment, in UTF-8 bytes
+export const WALLET_COMMENT_MAX_BYTES = 960;
+// The most `wallet.sendTransfer` takes in one data field: Android and tdesktop hardcode the same limit
+export const WALLET_TRANSFER_DATA_MAX_BYTES = 16 * 1024;
+// Nanotons, used until the fee estimate arrives
+export const GRAM_TRANSFER_FEE_RESERVE = 15_000_000n;
+export const WALLET_FIRST_TRANSFER_SUGGESTION = 'WALLET_FIRST_INCOMING_TRANSFER';
+// The item contract takes its fees from the attached amount, forwards the second one and returns the rest
+export const NFT_TRANSFER_ATTACHED_NANOS = 100_000_000n;
+export const NFT_TRANSFER_FORWARD_NANOS = 10_000_000n;
+export const TON_CONNECT_BAD_REQUEST_ERROR_CODE = 1;
+export const TON_CONNECT_MANIFEST_CONTENT_ERROR_CODE = 3;
+export const TON_CONNECT_UNKNOWN_APP_ERROR_CODE = 100;
+export const TON_CONNECT_USER_DECLINED_ERROR_CODE = 300;
+export const TON_CONNECT_UNSUPPORTED_METHOD_ERROR_CODE = 400;
 export const USERNAME_PURCHASE_ERROR = 'USERNAME_PURCHASE_AVAILABLE';
 export const MESSAGE_ID_REQUIRED_ERROR = 'MESSAGE_ID_REQUIRED';
 export const PURCHASE_USERNAME = 'auction';
@@ -390,7 +409,6 @@ export const DELETED_COMMENTS_CHANNEL_ID = (-CHANNEL_ID_BASE - 777n).toString();
 export const MAX_MEDIA_FILES_FOR_ALBUM = 10;
 export const MAX_ACTIVE_PINNED_CHATS = 5;
 export const SCHEDULED_WHEN_ONLINE = 0x7FFFFFFE;
-export const LANG_PACKS = ['android', 'ios', 'tdesktop', 'macos'] as const;
 export const FEEDBACK_URL = 'https://bugs.telegram.org/?tag_ids=41&sort=time';
 export const FAQ_URL = 'https://telegram.org/faq';
 export const PRIVACY_URL = 'https://telegram.org/privacy';

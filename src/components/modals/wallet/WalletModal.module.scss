@@ -1,0 +1,256 @@
+.dialog {
+  --modal-content-block-padding: 0;
+}
+
+// The screens scroll on under the header, so it keeps no background of its own until they do. The fading strip
+// carries no `backdrop-filter`: under the squircle clip of the modal Chrome ignores the mask a blur needs to fade.
+.header {
+  isolation: isolate;
+  position: relative;
+  background-color: transparent;
+  transition: background-color 0.2s ease;
+}
+
+.header::before {
+  pointer-events: none;
+  content: "";
+
+  position: absolute;
+  z-index: -1;
+  inset: 0 0 -1.5rem;
+
+  opacity: 0;
+  background-image:
+    linear-gradient(
+      to bottom,
+      color-mix(in srgb, var(--modal-background-color) 94%, transparent) 0%,
+      color-mix(in srgb, var(--modal-background-color) 80%, transparent) 50%,
+      transparent 100%
+    );
+
+  transition: opacity 0.2s ease-in-out;
+}
+
+.headerScrolled::before {
+  opacity: 1;
+}
+
+// The wallet keeps the blue of the light theme in every theme
+.headerOnAccent {
+  --color-primary: var(--color-telegram-blue);
+
+  color: var(--color-white);
+  background-color: var(--color-primary);
+
+  .headerButton :global(.animated-close-icon) {
+    &,
+    &::before,
+    &::after {
+      background-color: var(--color-white);
+    }
+  }
+}
+
+// The modal is transformed, so the menu's fixed backdrop would stretch it
+.headerMenu :global(.backdrop) {
+  position: absolute;
+  inset: 0;
+}
+
+// Laid over the header rather than in its grid: mid-animation both titles leave the flow, and a grid
+// column measured on them collapses. The sides stay equal, so the title stays centered beside a wide action.
+.headerTitleBox {
+  position: absolute;
+  inset: 0 max(3.5rem, calc(var(--header-action-width, 0px) + 1.25rem));
+}
+
+.headerTitleBoxUnmeasured {
+  visibility: hidden;
+}
+
+.headerTitle :global(.Transition_slide) {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.headerTitleText {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.headerTitle:global(.Transition-slideVerticalFade) {
+  > :global(.Transition_slide-to) {
+    transform: translateY(50%);
+    animation-name: title-in;
+  }
+
+  > :global(.Transition_slide-from) {
+    animation-name: title-out;
+  }
+}
+
+.headerTitle:global(.Transition-slideVerticalFadeBackwards) {
+  > :global(.Transition_slide-to) {
+    transform: translateY(-50%);
+    animation-name: title-in-backwards;
+  }
+
+  > :global(.Transition_slide-from) {
+    animation-name: title-out-backwards;
+  }
+}
+
+@keyframes title-in {
+  from {
+    transform: translateY(50%);
+    opacity: 0;
+  }
+
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+@keyframes title-out {
+  from {
+    transform: translateY(0);
+    opacity: 1;
+  }
+
+  to {
+    transform: translateY(-50%);
+    opacity: 0;
+  }
+}
+
+@keyframes title-in-backwards {
+  from {
+    transform: translateY(-50%);
+    opacity: 0;
+  }
+
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+@keyframes title-out-backwards {
+  from {
+    transform: translateY(0);
+    opacity: 1;
+  }
+
+  to {
+    transform: translateY(50%);
+    opacity: 0;
+  }
+}
+
+// The container keeps one height so the dialog does not resize under every step. Its negative margin takes
+// back the room the modal leaves for the header, and `.slideContent` pads it instead, so the screens scroll
+// under the header.
+.transition {
+  --slide-background-color: var(--modal-background-color);
+  --slide-height: min(calc(41.5rem + var(--modal-header-height)), var(--modal-max-height));
+
+  height: var(--slide-height);
+  margin-top: calc(-1 * var(--modal-header-height));
+}
+
+// The gutter is held with or without the bar, so a longer screen does not nudge the content sideways.
+// The tilted wallet card reaches into it, which must not scroll the screen sideways.
+.slide {
+  scrollbar-gutter: stable;
+  scroll-padding-top: var(--modal-header-height);
+
+  overflow-x: hidden;
+  overflow-y: auto;
+
+  height: 100%;
+}
+
+// A grid stretches its single item, so `margin-top: auto` pins an action to the bottom of a short screen
+.slideContent {
+  display: grid;
+  // Capped at the slide width for long unbreakable text
+  grid-template-columns: minmax(0, 1fr);
+
+  box-sizing: border-box;
+  min-height: 100%;
+  padding-top: var(--modal-header-height);
+}
+
+.slideAccent {
+  --color-primary: var(--color-telegram-blue);
+
+  background-color: var(--color-primary);
+}
+
+.headerOnSurface,
+.slideSurface {
+  --modal-background-color: var(--color-background);
+}
+
+.slideSurface {
+  background-color: var(--color-background);
+}
+
+.loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.wrongPhraseAddress {
+  margin-top: 1rem;
+
+  font-family: var(--font-family-monospace);
+  font-size: 0.8125rem;
+  line-height: 1.45;
+  text-align: center;
+  white-space: pre-line;
+}
+
+.wrongPhraseGroupMuted {
+  color: var(--color-text-secondary);
+}
+
+.headerBalance {
+  cursor: var(--custom-cursor, pointer);
+
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+
+  // Two lines are taller than the header row, so they reach into its padding
+  margin-block: -0.5625rem;
+  padding: 0.3125rem 0.5rem;
+  border: none;
+  border-radius: 0.75rem;
+
+  line-height: 1.3125rem;
+  color: var(--color-text);
+  white-space: nowrap;
+
+  background: none;
+
+  &:hover {
+    background-color: var(--color-interactive-element-hover);
+  }
+}
+
+.headerBalanceLabel {
+  margin-bottom: -0.125rem;
+  font-size: 0.875rem;
+}
+
+.headerBalanceAmount {
+  display: inline-flex;
+  align-items: center;
+  font-size: 1rem;
+  font-weight: var(--font-weight-medium);
+}

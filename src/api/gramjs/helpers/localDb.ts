@@ -1,7 +1,7 @@
 import { Api as GramJs } from '../../../lib/gramjs';
 
 import { buildApiPeerId, getApiChatIdFromMtpPeer } from '../apiBuilders/peers';
-import localDb, { type RepairInfo } from '../localDb';
+import localDb, { type InlineBotRepairInfo, type RepairInfo } from '../localDb';
 
 export type MessageRepairContext = Pick<GramJs.TypeMessage, 'peerId' | 'id'>;
 export type MediaRepairContext = MessageRepairContext;
@@ -115,6 +115,10 @@ export function addStoryToLocalDb(story: GramJs.TypeStoryItem, peerId: string) {
       }
     }
   }
+
+  if (story.music instanceof GramJs.Document) {
+    addDocumentToLocalDb(addStoryRepairInfo(story.music, peerId, story));
+  }
 }
 
 export function addPhotoToLocalDb(photo: GramJs.TypePhoto) {
@@ -176,6 +180,16 @@ export function addSavedMusicRepairInfo<T extends GramJs.TypeDocument>(
     type: 'savedMusic',
     peerId,
   };
+  return repairableMedia;
+}
+
+export function addInlineBotRepairInfo<T extends GramJs.TypeDocument>(
+  media: T, repairInfo: InlineBotRepairInfo,
+): T & RepairInfo {
+  if (!(media instanceof GramJs.Document)) return media;
+
+  const repairableMedia = media as T & RepairInfo;
+  repairableMedia.localRepairInfo = repairInfo;
   return repairableMedia;
 }
 

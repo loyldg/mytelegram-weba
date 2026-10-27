@@ -1,20 +1,18 @@
 import { addCallback } from '../../../lib/teact/teactn';
 
 import type { ApiNotification } from '../../../api/types';
-import type { LangCode } from '../../../types';
 import type { ActionReturnType, GlobalState } from '../../types';
 
 import { requestMutation } from '../../../lib/fasterdom/fasterdom';
 import { IS_ELECTRON, IS_MULTIACCOUNT_SUPPORTED, IS_TAURI } from '../../../util/browser/globalEnvironment';
 import {
   IS_ANDROID, IS_IOS, IS_LINUX,
-  IS_MAC_OS, IS_SAFARI, IS_TOUCH_ENV, IS_WINDOWS,
+  IS_MAC_OS, IS_SAFARI, IS_TOUCH_ENV, IS_WINDOWS, setScrollbarWidthProperty,
 } from '../../../util/browser/windowEnvironment';
 import { getCurrentTabId } from '../../../util/establishMultitabRole';
 import generateUniqueId from '../../../util/generateUniqueId';
-import { setTimeFormat as setLocalizedTimeFormat } from '../../../util/localization';
+import { setTimeFormat } from '../../../util/localization';
 import { subscribe, unsubscribe } from '../../../util/notifications';
-import { oldSetLanguage } from '../../../util/oldLangProvider';
 import { applyPerformanceSettings } from '../../../util/perfomanceSettings';
 import { hasStoredSession } from '../../../util/sessions';
 import switchTheme from '../../../util/switchTheme';
@@ -129,7 +127,7 @@ addCallback((global: GlobalState) => {
   }, tabState.id);
 
   const {
-    messageTextSize, language, shouldUseSystemTheme, timeFormat,
+    messageTextSize, shouldUseSystemTheme, timeFormat,
   } = selectSharedSettings(global);
 
   const globalTheme = selectTheme(global);
@@ -138,8 +136,7 @@ addCallback((global: GlobalState) => {
 
   const performanceType = selectPerformanceSettings(global);
 
-  void oldSetLanguage(language as LangCode, undefined);
-  setLocalizedTimeFormat(timeFormat);
+  setTimeFormat(timeFormat);
 
   requestMutation(() => {
     document.documentElement.style.setProperty(
@@ -177,6 +174,8 @@ addCallback((global: GlobalState) => {
   const canAnimate = selectCanAnimateInterface(global);
 
   switchTheme(theme, canAnimate);
+  setScrollbarWidthProperty();
+
   // Make sure global has the latest theme. Will cause `switchTheme` on change
   global = updateSharedSettings(global, { theme });
 

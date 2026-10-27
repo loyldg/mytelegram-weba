@@ -74,7 +74,6 @@ import useForceUpdate from '../../hooks/useForceUpdate';
 import useHistoryBack from '../../hooks/useHistoryBack';
 import useLang from '../../hooks/useLang';
 import useLastCallback from '../../hooks/useLastCallback';
-import useOldLang from '../../hooks/useOldLang';
 import usePrevDuringAnimation from '../../hooks/usePrevDuringAnimation';
 import usePreviousDeprecated from '../../hooks/usePreviousDeprecated';
 import { useResize } from '../../hooks/useResize';
@@ -181,6 +180,7 @@ function isVideo(item: DataTransferItem) {
 
 const LAYER_ANIMATION_DURATION_MS = 450 + ANIMATION_END_DELAY;
 const KEYBOARD_SETTLE_DURATION = 400;
+const DROP_AREA_HIDE_TIMEOUT_MS = 150;
 
 function MiddleColumn({
   leftColumnRef,
@@ -259,7 +259,6 @@ function MiddleColumn({
 
   const { isTablet, isDesktop } = useAppLayout();
 
-  const oldLang = useOldLang();
   const lang = useLang();
   const [dropAreaState, setDropAreaState] = useState(DropAreaState.None);
   const [isScrollDownNeeded, setIsScrollDownNeeded] = useState(false);
@@ -307,6 +306,7 @@ function MiddleColumn({
   );
 
   const middleColumnRef = useRef<HTMLDivElement>();
+  const dropAreaHideTimeoutRef = useRef<number>();
   const isViewportAnimatingRef = useRef(false);
   const getIsKeyboardAnimating = useLastCallback(() => isViewportAnimatingRef.current);
 
@@ -439,6 +439,8 @@ function MiddleColumn({
   }), resetLeftColumnWidth, leftColumnWidth, '--left-column-width');
 
   const handleDragEnter = useLastCallback((e: React.DragEvent<HTMLDivElement>) => {
+    window.clearTimeout(dropAreaHideTimeoutRef.current);
+
     if (isRichInputExpanded) {
       setDropAreaState(DropAreaState.None);
       return;
@@ -458,6 +460,18 @@ function MiddleColumn({
 
   const handleHideDropArea = useLastCallback(() => {
     setDropAreaState(DropAreaState.None);
+  });
+
+  const handleDragLeave = useLastCallback((e: React.DragEvent<HTMLDivElement>) => {
+    const { relatedTarget } = e;
+    if (relatedTarget instanceof Node && middleColumnRef.current!.contains(relatedTarget)) return;
+
+    window.clearTimeout(dropAreaHideTimeoutRef.current);
+    dropAreaHideTimeoutRef.current = window.setTimeout(handleHideDropArea, DROP_AREA_HIDE_TIMEOUT_MS);
+  });
+
+  const handleDragOver = useLastCallback(() => {
+    window.clearTimeout(dropAreaHideTimeoutRef.current);
   });
 
   const handleOpenUnpinModal = useLastCallback(() => {
@@ -489,10 +503,10 @@ function MiddleColumn({
   );
 
   const messageSendingRestrictionReason = getMessageSendingRestrictionReason(
-    oldLang, currentUserBannedRights, defaultBannedRights,
+    lang, currentUserBannedRights, defaultBannedRights,
   );
   const forumComposerPlaceholder = getForumComposerPlaceholder(
-    oldLang, chat, threadId, topics, Boolean(draftReplyInfo),
+    lang, chat, threadId, topics, Boolean(draftReplyInfo),
   );
 
   const composerRestrictionMessage = messageSendingRestrictionReason
@@ -562,6 +576,9 @@ function MiddleColumn({
       id="MiddleColumn"
       className={className}
       onClick={(isTablet && isLeftColumnShown) ? handleTabletFocus : undefined}
+      onDragLeave={handleDragLeave}
+      onDragOver={handleDragOver}
+      onDrop={handleHideDropArea}
     >
       {isDesktop && (
         <div

@@ -21,6 +21,7 @@ import AudioPlaylistModal from './audioPlaylist/AudioPlaylistModal.async';
 import AutoDeleteTimerModal from './autoDeleteTimer/AutoDeleteTimerModal.async';
 import BirthdaySetupModal from './birthday/BirthdaySetupModal.async';
 import BoostModal from './boost/BoostModal.async';
+import BotCreationModal from './botCreation/BotCreationModal.async';
 import BrowserModal from './browser/BrowserModal.async';
 import ChatInviteModal from './chatInvite/ChatInviteModal.async';
 import ChatlistModal from './chatlist/ChatlistModal.async';
@@ -58,9 +59,11 @@ import GiftInfoValueModal from './gift/value/GiftInfoValueModal.async';
 import GiftWithdrawModal from './gift/withdraw/GiftWithdrawModal.async';
 import GiftCodeModal from './giftcode/GiftCodeModal.async';
 import InviteViaLinkModal from './inviteViaLink/InviteViaLinkModal.async';
+import LanguageModal from './language/LanguageModal.async';
 import LeaveGroupModal from './leaveGroup/LeaveGroupModal.async';
 import LocationAccessModal from './locationAccess/LocationAccessModal.async';
 import MapModal from './map/MapModal.async';
+import MusicPickerModal from './musicPicker/MusicPickerModal.async';
 import OneTimeMediaModal from './oneTimeMedia/OneTimeMediaModal.async';
 import PaidReactionModal from './paidReaction/PaidReactionModal.async';
 import PasskeyModal from './passkey/PasskeyModal.async';
@@ -75,6 +78,7 @@ import EditRankModal from './rank/EditRankModal.async';
 import RankModal from './rank/RankModal.async';
 import ReportAdModal from './reportAd/ReportAdModal.async';
 import ReportModal from './reportModal/ReportModal.async';
+import RequestPeerModal from './requestPeer/RequestPeerModal.async';
 import SharePreparedMessageModal from './sharePreparedMessage/SharePreparedMessageModal.async';
 import ChatRefundModal from './stars/chatRefund/ChatRefundModal.async';
 import StarsGiftModal from './stars/gift/StarsGiftModal.async';
@@ -88,6 +92,8 @@ import SuggestedStatusModal from './suggestedStatus/SuggestedStatusModal.async';
 import SuggestMessageModal from './suggestMessage/SuggestMessageModal.async';
 import TwoFaCheckModal from './twoFaCheck/TwoFaCheckModal.async';
 import UrlAuthModal from './urlAuth/UrlAuthModal.async';
+import WalletCardModal from './wallet/WalletCardModal.async';
+import WalletModal from './wallet/WalletModal.async';
 
 // `Pick` used only to provide tab completion
 type ModalKey = keyof Pick<TabState,
@@ -105,10 +111,13 @@ type ModalKey = keyof Pick<TabState,
   'reportAdModal' |
   'reportModal' |
   'starsBalanceModal' |
+  'walletModal' |
+  'walletCardModal' |
   'starsPayment' |
   'starsTransactionModal' |
   'paidReactionModal' |
   'pollModal' |
+  'musicPicker' |
   'suggestMessageModal' |
   'suggestedPostApprovalModal' |
   'browser' |
@@ -143,6 +152,7 @@ type ModalKey = keyof Pick<TabState,
   'giftWithdrawModal' |
   'preparedMessageModal' |
   'sharePreparedMessageModal' |
+  'requestPeerModal' |
   'giftStatusInfoModal' |
   'giftTransferModal' |
   'giftTransferConfirmModal' |
@@ -169,9 +179,12 @@ type ModalKey = keyof Pick<TabState,
   'editRankModal' |
   'rankModal' |
   'aiTonePreviewModal' |
-  'autoDeleteTimerModal'
+  'languageModal' |
+  'autoDeleteTimerModal' |
+  'botCreationModal'
 >;
-type WrappedModalKey = 'pollModal' | 'mapModal' | 'safeLinkModalUrl' | 'autoDeleteTimerModal';
+type WrappedModalKey = 'pollModal' | 'musicPicker' | 'mapModal' | 'safeLinkModalUrl' | 'autoDeleteTimerModal'
+  | 'botCreationModal';
 type LegacyModalKey = Exclude<ModalKey, WrappedModalKey>;
 
 type ModalStateProps = {
@@ -196,12 +209,6 @@ type Entries<T> = {
 }[keyof T][];
 
 const WRAPPED_MODAL_CLOSE_DURATION = 200;
-const WRAPPED_MODAL_CLOSE_DURATIONS: Record<WrappedModalKey, number> = {
-  pollModal: WRAPPED_MODAL_CLOSE_DURATION,
-  mapModal: WRAPPED_MODAL_CLOSE_DURATION,
-  safeLinkModalUrl: WRAPPED_MODAL_CLOSE_DURATION,
-  autoDeleteTimerModal: WRAPPED_MODAL_CLOSE_DURATION,
-};
 
 type WrappedModalBoundaryProps<T> = {
   modal: T;
@@ -209,14 +216,12 @@ type WrappedModalBoundaryProps<T> = {
     modal: NonNullable<T>;
     isOpen: boolean;
   }>;
-  closeDuration: number;
   shouldAnimateInterface: boolean;
 };
 
 const WrappedModalBoundary = <T,>({
   modal,
   ModalComponent,
-  closeDuration,
   shouldAnimateInterface,
 }: WrappedModalBoundaryProps<T>) => {
   const isOpen = Boolean(modal);
@@ -224,7 +229,7 @@ const WrappedModalBoundary = <T,>({
   const { shouldRender } = useShowTransition({
     isOpen,
     withShouldRender: true,
-    closeDuration,
+    closeDuration: WRAPPED_MODAL_CLOSE_DURATION,
     noCloseTransition: !shouldAnimateInterface,
   });
 
@@ -250,6 +255,8 @@ const LEGACY_MODALS: LegacyModalRegistry = {
   collectibleInfoModal: CollectibleInfoModal,
   starsPayment: StarsPaymentModal,
   starsBalanceModal: StarsBalanceModal,
+  walletModal: WalletModal,
+  walletCardModal: WalletCardModal,
   starsTransactionModal: StarsTransactionInfoModal,
   chatInviteModal: ChatInviteModal,
   paidReactionModal: PaidReactionModal,
@@ -286,6 +293,7 @@ const LEGACY_MODALS: LegacyModalRegistry = {
   giftStatusInfoModal: GiftStatusInfoModal,
   preparedMessageModal: PreparedMessageModal,
   sharePreparedMessageModal: SharePreparedMessageModal,
+  requestPeerModal: RequestPeerModal,
   giftTransferModal: GiftTransferModal,
   giftTransferConfirmModal: GiftTransferConfirmModal,
   giftDescriptionRemoveModal: GiftDescriptionRemoveModal,
@@ -311,12 +319,15 @@ const LEGACY_MODALS: LegacyModalRegistry = {
   editRankModal: EditRankModal,
   rankModal: RankModal,
   aiTonePreviewModal: AiTonePreviewModal,
+  languageModal: LanguageModal,
 };
 const WRAPPED_MODALS: WrappedModalRegistry = {
   pollModal: PollModal,
+  musicPicker: MusicPickerModal,
   mapModal: MapModal,
   safeLinkModalUrl: SafeLinkModal,
   autoDeleteTimerModal: AutoDeleteTimerModal,
+  botCreationModal: BotCreationModal,
 };
 
 const LEGACY_MODAL_KEYS = Object.keys(LEGACY_MODALS) as LegacyModalKey[];
@@ -337,7 +348,6 @@ function renderWrappedModal<K extends WrappedModalKey>(
       key={key}
       modal={modal}
       ModalComponent={ModalComponent}
-      closeDuration={WRAPPED_MODAL_CLOSE_DURATIONS[key]}
       shouldAnimateInterface={shouldAnimateInterface}
     />
   );

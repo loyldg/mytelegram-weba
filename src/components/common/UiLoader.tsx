@@ -46,6 +46,7 @@ type OwnProps = {
 };
 
 type StateProps = Pick<TabState, 'uiReadyState' | 'shouldSkipHistoryAnimations'> & {
+  hasCachedChats: boolean;
   isRightColumnShown?: boolean;
   leftColumnWidth?: number;
   isFoldersSidebarShown?: boolean;
@@ -91,7 +92,6 @@ function preloadAvatars() {
 const preloadTasks = {
   main: () => Promise.all([
     preloadFonts(),
-    preloadAvatars(),
     preloadImage(spoilerMaskPath),
     preloadImage(starIconPath),
     preloadImage(playPreviewPath),
@@ -120,18 +120,24 @@ const UiLoader = ({
   shouldSkipHistoryAnimations,
   leftColumnWidth,
   isFoldersSidebarShown,
+  uiReadyState,
+  hasCachedChats,
 }: OwnProps & StateProps) => {
   const { setIsUiReady } = getActions();
 
   const [isReady, markReady] = useFlag();
+  const isReloading = isReady && uiReadyState === 0;
   const {
     shouldRender: shouldRenderMask, transitionClassNames,
-  } = useShowTransitionDeprecated(!isReady, undefined, true);
+  } = useShowTransitionDeprecated(!isReady || isReloading, undefined, true, 'fast', page === 'main' && hasCachedChats);
 
   useEffectOnce(() => {
     let timeout: number | undefined;
 
     const safePreload = async (currentPage: UiLoaderPage) => {
+      if (currentPage === 'main') {
+        void preloadAvatars()?.catch(() => undefined);
+      }
       try {
         await preloadTasks[currentPage]();
       } catch (err) {
@@ -167,8 +173,8 @@ const UiLoader = ({
   return (
     <>
       {children}
-      {shouldRenderMask && !shouldSkipHistoryAnimations && Boolean(page) && (
-        <div className={buildClassName(styles.mask, transitionClassNames)}>
+      {shouldRenderMask && (isReloading || !shouldSkipHistoryAnimations) && Boolean(page) && (
+        <div className={buildClassName(styles.mask, isReloading && styles.outgoing, transitionClassNames)}>
           {page === 'main' ? (
             <div className={buildClassName(styles.main, isFoldersSidebarShown && styles.foldersSidebarVisible)}>
               {isFoldersSidebarShown && <div className={styles.foldersSidebar} />}
@@ -197,6 +203,7 @@ export default withGlobal<OwnProps>(
     const { foldersPosition } = selectSharedSettings(global);
 
     return {
+      hasCachedChats: Boolean(global.chats.listIds.active),
       shouldSkipHistoryAnimations: tabState.shouldSkipHistoryAnimations,
       uiReadyState: tabState.uiReadyState,
       isRightColumnShown: selectIsRightColumnShown(global, isMobile),

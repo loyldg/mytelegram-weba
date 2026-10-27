@@ -10,22 +10,21 @@ import {
 } from '../../../global/helpers';
 import { getPeerTitle } from '../../../global/helpers/peers';
 import {
-  selectActiveDownloads, selectCanForwardMessage, selectChatMessageOrEphemeral, selectIsMessageProtected, selectSender,
+  selectActiveDownloads, selectCanForwardMessage, selectIsMessageProtected, selectSender,
   selectTabState,
 } from '../../../global/selectors';
 import {
-  selectCanGoNext, selectCanGoPrev, selectPlaybackMedia, selectPlaybackSource,
+  selectCanGoNext, selectCanGoPrev, selectPlaybackMedia, selectPlaybackMessage, selectPlaybackSource,
 } from '../../../global/selectors/audioPlayer';
 import { getProgressSignal } from '../../../util/audioPlayback/playbackController';
 import buildClassName from '../../../util/buildClassName';
-import { formatMediaDuration } from '../../../util/dates/oldDateFormat';
+import { formatMediaDuration } from '../../../util/dates/duration';
 import { getOrderButtonIcon, ORDER_BUTTON_ICONS } from '../../common/helpers/playbackOrder';
 import renderText from '../../common/helpers/renderText';
 
 import useLang from '../../../hooks/useLang';
 import useLastCallback from '../../../hooks/useLastCallback';
 import useMedia from '../../../hooks/useMedia';
-import useOldLang from '../../../hooks/useOldLang';
 
 import Icon from '../../common/icons/Icon';
 import PlayPauseIcon from '../../common/PlayPauseIcon';
@@ -100,18 +99,18 @@ const PlaylistControls = ({
   } = getActions();
 
   const lang = useLang();
-  const oldLang = useOldLang();
 
   const { voice, video } = message ? getMessageContent(message) : {};
   const coverBlobUrl = useMedia(audio && getMediaHash(audio, 'pictogram'), false, ApiMediaFormat.BlobUrl);
 
   const isMusicSaved = Boolean(audio && savedMusicById?.[audio.id]);
-  const canSaveToProfile = Boolean(audio && (!message || !isMessageLocal(message)) && savedMusicById);
+  const canSaveToProfile = Boolean(audio && !isMessageProtected
+    && (!message || !isMessageLocal(message)) && savedMusicById);
   const canShareTrack = Boolean(audio && canForwardMessage);
   const canDownload = Boolean(audio) && (!message || (!isMessageLocal(message) && !isMessageProtected));
   const canForward = canShareTrack || Boolean(savedMusicPeerId && audio);
 
-  const title = audio ? (audio.title || audio.fileName) : (sender && getPeerTitle(oldLang, sender));
+  const title = audio ? (audio.title || audio.fileName) : (sender && getPeerTitle(lang, sender));
   const subtitle = audio?.performer;
 
   const orderIcon = getOrderButtonIcon(orderMode, repeatMode);
@@ -349,8 +348,7 @@ const PlaylistControls = ({
 export default memo(withGlobal<OwnProps>(
   (global): Complete<StateProps> => {
     const { activeItem } = selectTabState(global).audioPlayer;
-    const message = activeItem?.type === 'message'
-      ? selectChatMessageOrEphemeral(global, activeItem.chatId, activeItem.messageId) : undefined;
+    const message = selectPlaybackMessage(global, activeItem);
     const playbackMedia = selectPlaybackMedia(global, activeItem);
     const audio = playbackMedia?.mediaType === 'audio' ? playbackMedia : undefined;
     const source = selectPlaybackSource(global);

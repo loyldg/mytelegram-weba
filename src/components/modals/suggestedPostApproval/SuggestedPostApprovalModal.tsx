@@ -5,21 +5,20 @@ import type { ApiMessage, ApiPeer } from '../../../api/types';
 import type { TabState } from '../../../global/types';
 
 import {
-  STARS_CURRENCY_CODE,
   TON_CURRENCY_CODE,
 } from '../../../config';
 import { getPeerFullTitle } from '../../../global/helpers/peers';
 import { selectChatMessage, selectIsMonoforumAdmin, selectSender } from '../../../global/selectors';
-import { formatScheduledDateTime, formatShortDuration } from '../../../util/dates/oldDateFormat';
-import { convertTonFromNanos } from '../../../util/formatCurrency';
+import { formatShortDuration } from '../../../util/dates/duration';
+import { formatCalendarDate, secondsToDate } from '../../../util/localization/dateFormat';
 import { formatStarsAsText, formatTonAsText } from '../../../util/localization/format';
+import { multiplyBigIntByPermille } from '../../../util/numbers';
 import { getServerTime } from '../../../util/serverTime';
 import renderText from '../../common/helpers/renderText';
 
 import useFlag from '../../../hooks/useFlag';
 import useLang from '../../../hooks/useLang';
 import useLastCallback from '../../../hooks/useLastCallback';
-import useOldLang from '../../../hooks/useOldLang';
 
 import CalendarModal from '../../common/CalendarModal';
 import ConfirmDialog from '../../ui/ConfirmDialog';
@@ -60,7 +59,7 @@ const SuggestedPostApprovalModal = ({
   } = getActions();
 
   const lang = useLang();
-  const oldLang = useOldLang();
+
   const [isCalendarOpened, openCalendar, closeCalendar] = useFlag();
 
   const now = getServerTime();
@@ -114,12 +113,10 @@ const SuggestedPostApprovalModal = ({
     return undefined;
   }
 
-  const senderName = sender ? getPeerFullTitle(oldLang, sender) : '';
+  const senderName = sender ? getPeerFullTitle(lang, sender) : '';
 
   const renderContent = () => {
     const price = message?.suggestedPostInfo?.price;
-    const amount = price?.amount;
-    const currency = price?.currency || STARS_CURRENCY_CODE;
 
     const question = lang(
       'SuggestedPostConfirmMessage',
@@ -127,23 +124,22 @@ const SuggestedPostApprovalModal = ({
       { withNodes: true, withMarkdown: true });
 
     const questionText = renderText(question);
-    if (!amount) {
+    if (!price?.amount) {
       return questionText;
     }
 
-    const currentCommissionPermille = currency === TON_CURRENCY_CODE ? tonCommissionPermille : commissionPermille;
-    const commission = (currentCommissionPermille / 10);
-    const amountWithCommission = amount / 100 * commission;
+    const isPriceInTon = price.currency === TON_CURRENCY_CODE;
+    const commission = (isPriceInTon ? tonCommissionPermille : commissionPermille) / 10;
 
-    const formattedAmount = currency === TON_CURRENCY_CODE
-      ? formatTonAsText(lang, convertTonFromNanos(amountWithCommission))
-      : formatStarsAsText(lang, amountWithCommission);
+    const formattedAmount = isPriceInTon
+      ? formatTonAsText(lang, multiplyBigIntByPermille(price.amount, tonCommissionPermille))
+      : formatStarsAsText(lang, price.amount / 100 * commission);
 
     const ageMinSeconds = minAge;
     const duration = formatShortDuration(lang, ageMinSeconds, true);
 
     if (scheduleDate) {
-      const time = formatScheduledDateTime(scheduleDate, lang, oldLang);
+      const time = formatCalendarDate(lang, secondsToDate(scheduleDate), { isShort: true, withTime: true });
 
       const key
         = isAdmin ? 'SuggestedPostConfirmDetailsWithTimeAdmin' : 'SuggestedPostConfirmDetailsWithTimeUser';
@@ -206,7 +202,7 @@ const SuggestedPostApprovalModal = ({
         onDateChange={handleCalendarDateChange}
         selectedAt={selectedScheduleDate * 1000}
         submitButtonLabel={lang('ButtonPublishAtTime', {
-          time: formatScheduledDateTime(selectedScheduleDate, lang, oldLang),
+          time: formatCalendarDate(lang, secondsToDate(selectedScheduleDate), { isShort: true, withTime: true }),
         })}
         secondButtonLabel={lang('PublishNow')}
         onSecondButtonClick={handlePublishNow}

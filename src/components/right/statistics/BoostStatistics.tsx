@@ -4,20 +4,22 @@ import { getActions, withGlobal } from '../../../global';
 import type { ApiBoost, ApiBoostStatistics, ApiTypePrepaidGiveaway } from '../../../api/types';
 import type { TabState } from '../../../global/types';
 import type { AnimationLevel, CustomPeer } from '../../../types';
+import type { IconBackdropColor } from '../../gili/primitives/IconBackdrop';
 
 import { GIVEAWAY_BOOST_PER_PREMIUM } from '../../../config';
 import { isChatChannel } from '../../../global/helpers';
 import { selectChat, selectIsGiveawayGiftsPurchaseAvailable, selectTabState } from '../../../global/selectors';
 import { selectSharedSettings } from '../../../global/selectors/sharedState.ts';
 import buildClassName from '../../../util/buildClassName';
-import { formatDateAtTime } from '../../../util/dates/oldDateFormat';
+import { formatCalendarDate, secondsToDate } from '../../../util/localization/dateFormat';
 import { resolveTransitionName } from '../../../util/resolveTransitionName.ts';
 import { formatInteger } from '../../../util/textFormat';
 import { getBoostProgressInfo } from '../../common/helpers/boostInfo';
 
+import useLang from '../../../hooks/useLang';
 import useLastCallback from '../../../hooks/useLastCallback';
-import useOldLang from '../../../hooks/useOldLang';
 
+import BadgeButton from '../../common/BadgeButton';
 import Icon from '../../common/icons/Icon';
 import LinkField from '../../common/LinkField';
 import PremiumProgress from '../../common/PremiumProgress';
@@ -32,11 +34,6 @@ import StatisticsOverview from './StatisticsOverview';
 
 import styles from './BoostStatistics.module.scss';
 
-import GiftBlueRound from '../../../assets/premium/GiftBlueRound.svg';
-import GiftGreenRound from '../../../assets/premium/GiftGreenRound.svg';
-import GiftRedRound from '../../../assets/premium/GiftRedRound.svg';
-import GiftStar from '../../../assets/premium/GiftStar.svg';
-
 type StateProps = {
   boostStatistics: TabState['boostStatistics'];
   isGiveawayAvailable?: boolean;
@@ -46,10 +43,10 @@ type StateProps = {
   animationLevel: AnimationLevel;
 };
 
-const GIVEAWAY_IMG_LIST: Partial<Record<number, string>> = {
-  3: GiftGreenRound,
-  6: GiftBlueRound,
-  12: GiftRedRound,
+const GIVEAWAY_COLOR_BY_MONTH: Partial<Record<number, IconBackdropColor>> = {
+  3: 'green',
+  6: 'blue',
+  12: 'red',
 };
 
 const CUSTOM_PEER_STAR_TEMPLATE: Omit<CustomPeer, 'title' | 'titleKey'> = {
@@ -76,7 +73,7 @@ const BoostStatistics = ({
   const {
     openChat, loadMoreBoosters, closeBoostStatistics, openGiveawayModal, showNotification,
   } = getActions();
-  const lang = useOldLang();
+  const lang = useLang();
   const transitionRef = useRef<HTMLDivElement>();
 
   const isLoaded = boostStatistics?.boostStatus;
@@ -86,6 +83,8 @@ const BoostStatistics = ({
     === boostStatistics?.giftedBoosts?.count;
   const shouldDisplayGiftList = !isGiftListEqual && boostStatistics?.giftedBoosts
     && boostStatistics?.giftedBoosts?.list?.length > 0;
+  const boostsCount = boostStatistics?.boosts?.count ?? 0;
+  const giftsCount = boostStatistics?.giftedBoosts?.count ?? 0;
 
   const {
     currentLevel,
@@ -124,16 +123,16 @@ const BoostStatistics = ({
       return [
         {
           type: 'boostList',
-          title: lang('BoostingBoostsCount', boostStatistics?.boosts?.count, 'i'),
+          title: lang('BoostingBoostsCount', { count: lang.number(boostsCount) }, { pluralValue: boostsCount }),
         },
         {
           type: 'giftedBoostList',
-          title: lang('BoostingGiftsCount', boostStatistics?.giftedBoosts?.count, 'i'),
+          title: lang('BoostingGiftsCount', { count: lang.number(giftsCount) }, { pluralValue: giftsCount }),
         },
       ];
     }
     return [];
-  }, [shouldDisplayGiftList, lang, boostStatistics?.boosts?.count, boostStatistics?.giftedBoosts?.count]);
+  }, [shouldDisplayGiftList, lang, boostsCount, giftsCount]);
 
   const initialTab = useMemo(() => {
     return boostStatistics?.boosts && boostStatistics.boosts?.list.length > 0 ? 1 : 0;
@@ -187,8 +186,7 @@ const BoostStatistics = ({
         >
           <Icon name="gift" className={styles.floatingBadgeIcon} />
           <div className={styles.floatingBadgeValue}>
-            {lang(boost.isFromGiveaway
-              ? 'BoostingGiveaway' : 'BoostingGift')}
+            {lang(boost.isFromGiveaway ? 'AttachGiveaway' : 'GiftInfoTitle')}
           </div>
         </div>
       </div>
@@ -213,7 +211,7 @@ const BoostStatistics = ({
     if (hasStars) {
       customPeer = {
         ...CUSTOM_PEER_STAR_TEMPLATE,
-        title: lang('Stars', boost.stars),
+        title: lang('StarsAmountText', { amount: boost.stars }, { pluralValue: boost.stars }),
       };
     }
 
@@ -230,7 +228,9 @@ const BoostStatistics = ({
           className={styles.user}
           userId={boost.userId}
           customPeer={customPeer}
-          status={lang('BoostExpireOn', formatDateAtTime(lang, boost.expires * 1000))}
+          status={lang('BoostExpireOn', { date: formatCalendarDate(lang, secondsToDate(boost.expires), {
+            variant: 'date', isShort: true, withTime: true,
+          }) })}
           noEmojiStatus
           forceShowSelf
           noFake
@@ -269,7 +269,7 @@ const BoostStatistics = ({
         ) : (
           <Icon name="down" className={styles.down} />
         )}
-        {lang('ShowVotes', boostersToLoadCount, 'i')}
+        {lang('ShowVotes', { count: lang.number(boostersToLoadCount) }, { pluralValue: boostersToLoadCount })}
       </ListItem>
     );
   }
@@ -301,8 +301,8 @@ const BoostStatistics = ({
         <>
           <Island>
             <PremiumProgress
-              leftText={lang('BoostsLevel', currentLevel)}
-              rightText={hasNextLevel ? lang('BoostsLevel', currentLevel + 1) : undefined}
+              leftText={lang('BoostsLevel', { level: currentLevel })}
+              rightText={hasNextLevel ? lang('BoostsLevel', { level: currentLevel + 1 }) : undefined}
               progress={levelProgress}
               floatingBadgeText={formatInteger(boosts)}
               floatingBadgeIcon="boost"
@@ -321,53 +321,35 @@ const BoostStatistics = ({
                   return (
                     <ListItem
                       key={prepaidGiveaway.id}
-                      className="chat-item-clickable"
-
+                      icon={isStarsGiveaway ? 'star' : 'gift-filled'}
+                      iconClassName={styles.prepaidIcon}
+                      iconBg={isStarsGiveaway ? 'orange'
+                        : GIVEAWAY_COLOR_BY_MONTH[prepaidGiveaway.months] || 'green'}
+                      multiline
+                      rightElement={(
+                        <BadgeButton className={styles.boostBadge}>
+                          <Icon name="boost" className="in-text-icon" />
+                          {isStarsGiveaway ? prepaidGiveaway.boosts
+                            : prepaidGiveaway.quantity * (giveawayBoostsPerPremium ?? GIVEAWAY_BOOST_PER_PREMIUM)}
+                        </BadgeButton>
+                      )}
                       onClick={() => launchPrepaidGiveawayHandler(prepaidGiveaway)}
                     >
-                      <div className={buildClassName(styles.status, 'status-clickable')}>
-                        <div>
-                          {isStarsGiveaway
-                            ? (
-                              <img
-                                src={GiftStar}
-                                className={styles.giveawayIcon}
-                                alt={lang('GiftStar')}
-                              />
-                            ) : (
-                              <img
-                                src={GIVEAWAY_IMG_LIST[prepaidGiveaway.months] || GIVEAWAY_IMG_LIST[3]}
-                                className={styles.giveawayIcon}
-                                alt={lang('Giveaway')}
-                              />
-                            )}
-                        </div>
-                        <div className={styles.info}>
-                          <h3>
-                            {isStarsGiveaway
-                              ? lang('Giveaway.Stars.Prepaid.Title', prepaidGiveaway.stars)
-                              : lang('BoostingTelegramPremiumCountPlural', prepaidGiveaway.quantity)}
-                          </h3>
-                          <p className={styles.month}>
-                            {
-                              isStarsGiveaway ? lang('Giveaway.Stars.Prepaid.Desc', prepaidGiveaway.quantity)
-                                : lang('PrepaidGiveawayMonths', prepaidGiveaway.months)
-                            }
-                          </p>
-                        </div>
-                        <div className={styles.quantity}>
-                          <div className={buildClassName(styles.floatingBadge,
-                            styles.floatingBadgeButtonColor,
-                            styles.floatingBadgeButton)}
-                          >
-                            <Icon name="boost" className={styles.floatingBadgeIcon} />
-                            <div className={styles.floatingBadgeValue} dir={lang.isRtl ? 'rtl' : undefined}>
-                              {isStarsGiveaway ? prepaidGiveaway.boosts
-                                : prepaidGiveaway.quantity * (giveawayBoostsPerPremium ?? GIVEAWAY_BOOST_PER_PREMIUM)}
-                            </div>
-                          </div>
-                        </div>
-                      </div>
+                      <span className="title list-item-ellipsis">
+                        {isStarsGiveaway
+                          ? lang('GiveawayStarsPrepaidTitle', { count: prepaidGiveaway.stars })
+                          : lang('BoostingTelegramPremiumCountPlural', {
+                            count: prepaidGiveaway.quantity,
+                          }, { pluralValue: prepaidGiveaway.quantity })}
+                      </span>
+                      <span className="subtitle">
+                        {isStarsGiveaway ? lang('GiveawayStarsPrepaidDesc', {
+                          count: prepaidGiveaway.quantity,
+                        }, { pluralValue: prepaidGiveaway.quantity })
+                          : lang('PrepaidGiveawayMonths', {
+                            count: prepaidGiveaway.months,
+                          }, { pluralValue: prepaidGiveaway.months })}
+                      </span>
                     </ListItem>
                   );
                 })}
@@ -395,7 +377,7 @@ const BoostStatistics = ({
           ) : (
             <>
               <IslandTitle dir={lang.isRtl ? 'rtl' : undefined}>
-                {lang('BoostingBoostsCount', boostStatistics?.boosts?.count)}
+                {lang('BoostingBoostsCount', { count: boostsCount }, { pluralValue: boostsCount })}
               </IslandTitle>
               {!boostStatistics?.boosts?.list?.length ? (
                 <IslandDescription>
@@ -425,9 +407,7 @@ const BoostStatistics = ({
                 </ListItem>
               </Island>
               <IslandDescription>
-                {lang(
-                  isChannel ? 'BoostingGetMoreBoosts' : 'BoostingGetMoreBoostsGroup',
-                )}
+                {lang(isChannel ? 'BoostingGetMoreBoosts' : 'BoostingGetMoreBoostsGroup')}
               </IslandDescription>
             </>
           )}
